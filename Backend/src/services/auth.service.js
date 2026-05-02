@@ -5,9 +5,10 @@ import userModel from "../models/user.model.js";
 import sessionModel from "../models/session.model.js";
 import config from "../config/config.js";
 import otpModel from "../models/otp.model.js";
-import { generateOTP, getOtpHtml } from "../utlis/utils.js";
+import { generateOTP, getOtpHtml } from "../utils/utils.js";
+import { ApiError } from "../utils/apiError.js"
 import { sendEmail } from "../services/email.service.js";
-import { generateAccessToken, generateRefreshToken } from "../utlis/token.utils.js";
+import { generateAccessToken, generateRefreshToken } from "../utils/token.utils.js";
 
 export async function registerUser({ username, email, password }) {
 
@@ -20,9 +21,9 @@ export async function registerUser({ username, email, password }) {
 
     if (isAlreadyExist) {
         if (!isAlreadyExist.verified) {
-            throw new Error("User already exist but not verified. Please verify your email");
+            throw new ApiError(400, "User exists but not verified. Please verify your email");
         }
-        throw new Error("Username or email already exist!");
+        throw new ApiError(409, "Username or email already exists");
     }
 
     const hashedPassword = await bcrypt.hash(password, 10)
@@ -58,29 +59,30 @@ export async function registerUser({ username, email, password }) {
     return user;
 }
 
+
 export async function loginUser({ email, password, ip, userAgent }) {
 
     const user = await userModel.findOne({ email })
     if (!user) {
-        throw new Error("Invalid Email!");
+        throw new ApiError(401, "Invalid credentials");
     }
 
     if (user.accountStatus === "PENDING") {
-        throw new Error("Please verify your email first.");
+        throw new ApiError(403, "Please verify your email first.");
     }
 
     if (user.accountStatus === "SUSPENDED") {
-        throw new Error("Your account is temporarily suspended. Contact support.");
+        throw new ApiError(403, "Your account is temporarily suspended. Contact support.");
     }
 
     if (user.accountStatus === "BLOCKED") {
-        throw new Error("Your account has been permanently blocked.");
+        throw new ApiError(403, "Your account has been permanently blocked.");
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password)
 
     if (!isPasswordValid) {
-        throw new Error("Invalid Password!");
+        throw new ApiError(401, "Invalid Password!");
     }
 
     //   Refresh and Access tokens for auth 
@@ -131,7 +133,7 @@ export async function refreshUserToken(oldRefreshToken) {
                     revoked: true
                 })
         }
-        throw new Error("Refresh token reuse detected. All sessions revoked.");
+        throw new ApiError(401, "Refresh token reuse detected. All sessions revoked.");
     }
 
     // Now we will verify
@@ -159,9 +161,7 @@ export async function refreshUserToken(oldRefreshToken) {
 
 export async function logoutUser(RefreshToken) {
     if (!RefreshToken) {
-        return res.status(400).json({
-            message: "Refresh Token not found!"
-        })
+        throw new ApiError(400, "Refresh Token not found!")
     }
 
     const refreshTokenHash = crypto.createHash("sha256").update(RefreshToken).digest("hex")
@@ -172,9 +172,7 @@ export async function logoutUser(RefreshToken) {
     })
 
     if (!session) {
-        return res.status(400).json({
-            message: "Invalid Refresh Token!"
-        })
+        throw new ApiError(400, "Invalid Refresh Token!")
     }
 
     session.revoked = true;
@@ -184,9 +182,7 @@ export async function logoutUser(RefreshToken) {
 
 export async function logoutAllDevices(RefreshToken) {
     if (!RefreshToken) {
-        return res.status(400).json({
-            message: "Refresh Token not found!"
-        })
+        throw new ApiError(400, "Refresh Token not found!")
     }
 
     const decoded = jwt.verify(RefreshToken, config.JWT_SECRET)
@@ -207,20 +203,14 @@ export async function verifyUserEmail(otp, email) {
         otpHash
     })
 
-    // console.log("ExpiresAt", otpDoc.expiresAt)
-    // console.log("Now", new Date())
 
     if (!otpDoc) {
-        return res.status(400).json({
-            message: "Invalid OTP"
-        })
+        throw new ApiError(400, "Invalid OTP")
     }
 
     // Check for expiry
     if (otpDoc.expiresAt < new Date()) {
-        return res.status(400).json({
-            message: "OTP expired"
-        })
+        throw new ApiError(400, "OTP expired")
     }
 
     const user = await userModel.findByIdAndUpdate(otpDoc.user,
@@ -236,7 +226,7 @@ export async function verifyUserEmail(otp, email) {
         user: otpDoc.user
     })
 
-   return user;
+    return user;
 }
 
 export async function resendOTP(email) {
@@ -246,7 +236,7 @@ export async function resendOTP(email) {
     if (existingOtp) {
         const diff = Date.now() - existingOtp.createdAt.getTime()
         if (diff < 60 * 1000) {
-            throw new Error("Please wait before requesting another OTP")
+            throw new ApiError(429, "Too many requests. Please wait before requesting another OTP");
         }
     }
 
@@ -255,12 +245,12 @@ export async function resendOTP(email) {
 
     const user = await userModel.findOne({ email })
     if (!user) {
-        throw new Error("User not found")
+        throw new ApiError(404, "User not found");
     }
 
     // In case user is already verified
     if (user.verified) {
-        throw new Error("User already Verified");
+        throw new ApiError(400, "User already verified");
     }
 
     const otp = generateOTP();
@@ -285,13 +275,13 @@ export async function changePassword(userId, oldPassword, newPassword) {
     const user = await userModel.findById(userId);
 
     if (!user) {
-        throw new Error("User not found")
+        throw new ApiError(404, "User not found");
     }
 
     const isMatch = await bcrypt.compare(oldPassword, user.password);
 
     if (!isMatch) {
-        throw new Error("Old Password is incorrect");
+        throw new ApiError(401, "Invalid credentials");
     }
 
     const newPasswordHash = await bcrypt.hash(newPassword, 10);
@@ -323,12 +313,12 @@ export async function requestEmailChange(userId, newEmail, password) {
     const user = await userModel.findById(userId)
 
     if (!user) {
-        throw new Error("User not found!")
+        throw new ApiError(404, "User not found");
     }
 
     const isMatch = await bcrypt.compare(password, user.password)
     if (!isMatch) {
-        throw new Error("Invalid Password");
+        throw new ApiError(401, "Invalid credentials");
     }
 
     const existing = await userModel.findOne(
@@ -336,7 +326,7 @@ export async function requestEmailChange(userId, newEmail, password) {
             email: newEmail
         })
     if (existing) {
-        throw new Error("Email already in use");
+        throw new ApiError(409, "Email already in use");
     }
 
     // We will save new email in pending email, if the real user is not requesting for email change user can change it
@@ -373,11 +363,11 @@ export async function requestEmailChange(userId, newEmail, password) {
     )
 }
 
-export async function confirmEmailChange(userId, otp){
+export async function confirmEmailChange(userId, otp) {
     const user = await userModel.findById(userId)
 
-    if(!user || !user.pendingEmail){
-        throw new Error("No email change request found");
+    if (!user || !user.pendingEmail) {
+        throw new ApiError(400, "No email change request found");
     }
 
     const otpHash = crypto.createHash("sha256").update(otp).digest("hex")
@@ -387,12 +377,12 @@ export async function confirmEmailChange(userId, otp){
         otpHash
     })
 
-    if(!otpDoc){
-        throw new Error("Invalid OTP")
+    if (!otpDoc) {
+        throw new ApiError(400, "Invalid OTP");
     }
 
-    if(otpDoc.expiresAt < new Date()){
-        throw new Error("OTP expired")
+    if (otpDoc.expiresAt < new Date()) {
+        throw new ApiError(400, "OTP expired");
     }
 
     // finally update email
@@ -401,22 +391,23 @@ export async function confirmEmailChange(userId, otp){
 
     await user.save();
 
-    await otpModel.deleteMany({user: userId})
+    await otpModel.deleteMany({ user: userId })
 
     return user
 }
 
-export async function cancelEmailChange(userId){
+
+export async function cancelEmailChange(userId) {
     const user = await userModel.findById(userId)
 
-    if(!user || !user.pendingEmail){
-        throw new Error("No Email change request found")
+    if (!user || !user.pendingEmail) {
+        throw new ApiError(400, "No email change request found");
     }
 
     user.pendingEmail = null;
     await user.save();
 
     // delete all otps, so the hacker's otp will not be found also not the pendingEmail
-    await otpModel.deleteMany({user: userId})
+    await otpModel.deleteMany({ user: userId })
 }
 
