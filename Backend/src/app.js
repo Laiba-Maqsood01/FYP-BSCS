@@ -1,0 +1,40 @@
+import authRouter from "./routes/auth.routes.js";
+import cookieParser from "cookie-parser";
+import { apiLimiter } from "./middlewares/rateLimit.middleware.js";
+import express from "express";
+import morgan from "morgan";
+import helmet from "helmet";
+import cors from "cors";
+
+const app = express()
+
+
+// Rate limiter FIRST (global protection)
+app.use(apiLimiter);
+
+//for now just use 
+app.use(cors());
+
+// app.use(cors({
+//   origin: "http://localhost:5173", // useful when frontend is integrated
+//   credentials: true
+// }));
+
+
+// Helmet for securing extra information, like hackers can check our tool(express) then can find the vulnerability and attack our website.
+//It's Standard security headers
+app.use(helmet());
+
+// express middleware
+app.use(express.json());
+
+// morgan middleware for logging
+app.use(morgan("dev"));
+
+// use cookieParser
+app.use(cookieParser());
+
+// All routes starting with /api/auth
+app.use("/api/auth", authRouter)
+
+export default app
