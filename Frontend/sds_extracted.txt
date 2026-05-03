@@ -1,0 +1,562 @@
+BSCS FINAL PROJECT
+Software Design Specification
+Vehicle Trading & Inspection System
+Project Advisor
+Prof. Fahad Shahzad
+Presented by:
+Group ID: F22BSCS003
+R2F22UBSCS001                      Laiba Maqsood
+R2F22UBSCS008                      Sana Hassan
+R2F22UBSCS009Nimra Bibi
+Faculty of Information Technology & Computer Science
+University of Central Punjab
+Software Design Specification
+SDP Phase II
+Vehicle Trading & Inspection System
+Advisor: Prof. Fahad Shahzad
+Team 03
+Table of Contents
+Table of Contentsi
+Revision Historyii
+Previous Phases Feedbackii
+Abstractiii
+1.Introduction1
+1.1Product1
+1.2Background1
+1.3Objective(s)/Aim(s)/Target(s)2
+1.4Scope2
+1.5Business Goals3
+1.6Document Conventions3
+1.7Miscellaneous3
+2.Overall Description4
+2.1Product Features4
+2.2Functional Description5
+2.3Non-Functional Description5
+2.4User Classes and Characteristics6
+2.5Design and Implementation Constraints7
+2.6Assumptions and Dependencies7
+3.Technical Architecture8
+3.1Application and Data Architecture8
+3.2Component Interactions and Collaborations11
+3.3Design Reuse and Design Patterns14
+3.4Technology Architecture14
+3.5Use Cases14
+3.6Classes & Objects14
+4.Screenshots/Prototype5
+4.1Workflow5
+4.2Screens5
+4.3Additional Information5
+5.Other Design Details5
+6.Revised Project Plan5
+7.References5
+Appendix A: Glossary6
+Appendix B: IV & V Report7
+Revision History
+Previous Phases Feedback
+Idea Defence Feedback (Screenshot)
+Abstract
+The Vehicle Trading & Inspection System is a web-based platform designed to improve trust, transparency, and reliability in used vehicle transactions within local markets. In many regional vehicle markets, buyers rely on informal inspections and unsecured payment practices, which often lead to misrepresentation, disputes, and financial loss. This project addresses these challenges by integrating verified vehicle inspections and structured service payment mechanisms, combining online and physical payment methods depending on the service type. The system allows sellers to list used vehicles through structured online listings, while administrators conduct physical inspections and upload verified inspection reports supported by images and PDF. Buyers can browse vehicle listings, review inspection details, and make informed decisions based on reliable and documented vehicle condition data. To support real-world deployment, the system incorporates secure payment gateway integration for featured listing services, while inspection and managed sale payments are handled physically according to real marketplace practices. The project applies core software engineering principles, web application development techniques, and role-based access control to ensure system reliability and usability. The expected outcome is a scalable and commercially viable platform that reduces fraud, enhances buyer confidence, and establishes a trusted digital environment for vehicle trading and inspection services in local markets.
+Introduction
+Product
+The product being specified is a web-based Vehicle Trading & Inspection System designed for real-world deployment and commercial use. The system aims to facilitate the buying and selling of used vehicles by combining traditional online listings with a structured and verifiable vehicle inspection mechanism. It specifically targets local car markets, such as Rahim Yar Khan (RYK), where vehicle transactions are common but reliable inspection and verification facilities are limited.
+The proposed system provides a centralized digital platform where vehicle listings are supported by administrator-managed inspection reports. These reports include documented inspection summaries along with supporting images and a structured PDF inspection report, allowing buyers to assess vehicle condition more accurately before proceeding with a transaction. In addition to inspection integration, the system incorporates payment support for different services within the platform. Online payment gateway integration is used for featured vehicle listings, enabling secure and transparent digital transactions. For inspection services and managed sale transactions, payments are handled physically to reflect real-world marketplace practices, where inspection teams collect fees on-site and managed sale payments are processed during the final deal between buyer and seller.
+By integrating vehicle listings, verified inspections, and secure payment mechanisms into a single platform, the product moves beyond a simple advertisement-based marketplace. This raises an important question that defines the purpose of the proposed system:
+How can a local vehicle trading platform establish trust, transparency, and transactional reliability when buyers must rely on informal inspections and unsecured payment practices?
+The proposed Vehicle Trading & Inspection System seeks to address this challenge by making verified inspection and secure payment handling fundamental components of the vehicle trading process rather than optional external steps.
+Background
+The evolution of web-based marketplaces has significantly changed how goods and services are exchanged, offering wider reach, convenience, and improved access to information. In the automotive domain, online vehicle trading platforms have enabled buyers and sellers to connect more efficiently than traditional physical markets. These platforms have introduced features such as detailed listings, search filters, and in some cases, professional vehicle inspection services to enhance buyer confidence.
+Despite these advancements, the benefits of inspection-integrated vehicle trading are not evenly distributed across all regions. In local markets such as Rahim Yar Khan (RYK), vehicle transactions are still largely driven by informal practices, personal trust, and limited technical verification. Buyers often depend on seller-provided information or basic visual checks, which rarely reflect the true mechanical and structural condition of a vehicle. This environment increases the likelihood of disputes, mispricing, and financial loss.
+National-level platforms have demonstrated the value of structured inspection reports and secure digital processes; however, their services are typically concentrated in major cities and may not effectively address the needs of smaller markets. As a result, a gap exists between technologically advanced vehicle trading solutions and the realities of local market practices. This gap highlights the
+need for a localized system that combines vehicle trading, verified inspection, and secure payment handling in a manner that is accessible, trustworthy, and suitable for real-world adoption.
+Objective(s)/Aim(s)/Target(s)
+The primary objective of this project is to design and develop a web-based Vehicle Trading & Inspection System that supports transparent, secure, and trustworthy vehicle transactions in local markets. The system is intended to address the limitations of existing local marketplaces by integrating verified inspection data and real payment mechanisms into the vehicle trading process.
+The specific objectives of the project are as follows:
+To develop a digital platform that enables users to buy and sell vehicles through structured online listings.
+To integrate administrator-managed vehicle inspection reports, including documented summaries and images.
+To provide buyers with reliable and verifiable information to support informed purchasing decisions.
+To incorporate real payment gateway integration for featured services, ensuring secure and traceable transactions.
+To design a system suitable for real-world deployment with potential for commercial use beyond academic requirements.
+These objectives are defined to be achievable within the project timeframe while maintaining alignment with academic standards and supporting future scalability of the system.
+Scope
+The scope of this project covers the design and development of a web-based Vehicle Trading & Inspection System intended for real-world usage in local markets. The system supports core functionalities related to vehicle listing, inspection report management, user interaction, and secure payment processing for featured listing services. It is designed to serve three primary user roles: buyers, sellers, and administrators.
+Within the defined scope, sellers can create and manage vehicle listings, while administrators are responsible for conducting inspections and uploading verified inspection reports that include documents and images. Buyers can browse available vehicles and view inspection reports. Inspection services can be requested through the platform, with fees collected physically during the on-site inspection. The system also supports secure online payment gateway integration for featured vehicle listing services.
+The scope of the project is limited to used cars only. The system does not include motorcycle trading, vehicle accessories, automated or AI-based inspection, or advanced analytical features in the current phase. These components are considered outside the scope of this project and may be explored as future enhancements.
+Business Goals
+The proposed Vehicle Trading & Inspection System is designed with clear business-oriented goals alongside its academic objectives. One of the primary business goals is to establish a trusted digital platform for vehicle trading in local markets, where transparency and verification are currently lacking. By integrating structured vehicle inspection reports and clearly defined service payment processes, the system aims to reduce uncertainty and build confidence among buyers and sellers.
+Another key business goal is to minimize fraud, disputes, and misrepresentation in vehicle transactions by providing verified inspection evidence in the form of documents and images. This approach supports fair pricing and improves the overall credibility of the marketplace. The system also supports structured payment processes, including online payments for featured listings and physical payments for inspection services and managed sale transactions.
+The project also aims to create a commercially viable product that can be offered to individual users, local dealers, and inspection service providers. By focusing on scalability and real-world applicability, the system establishes a foundation for future expansion into additional regions, vehicle categories, and value-added services.
+Document Conventions
+This Software Design Specification (SDS) document follows standard documentation conventions as recommended by the University and established software engineering practices. The document is structured into clearly numbered chapters and sections to maintain consistency and readability. Each section addresses a specific aspect of the system design and development.
+Technical terms are used consistently throughout the document, and abbreviations are defined where necessary to avoid ambiguity. Diagrams, figures, and tables—where applicable—are labelled, numbered, and referenced within the text to support clarity and understanding. The language used in this document is formal, precise, and intended to be understandable by both technical and non-technical stakeholders involved in the development and evaluation of the system.
+Miscellaneous
+No additional information is required for this section at the current stage of the project. This section is intentionally left blank.
+Overall Description
+Product Features
+The Vehicle Trading & Inspection System (AutoHub) is a web-based platform designed to improve transparency and trust in localized vehicle markets through structured inspection and role-based vehicle trading. The system provides distinct features for user (who can act as both buyers and sellers) and administrators, ensuring controlled operations and clear responsibility boundaries.
+Vehicle Listing and Browsing
+The system allows users to browse vehicle listings through a dedicated “Browse Cars” page. Each listing displays essential vehicle information, including price, model year, fuel type, mileage, and location. Advanced filtering options such as price range, manufacturing year, fuel type, and inspection status enable users to efficiently narrow down search results according to their preferences.
+Featured Vehicles Display
+The landing page includes a featured vehicles section highlighting promoted listings. This feature improves visibility for important or promoted listings and enhances user engagement. A “View All Cars” option allows users to navigate directly to the complete listings page.
+Vehicle Detail View
+Each vehicle has a dedicated detail page accessible to all users. This page presents comprehensive vehicle information, including images, badges indicating inspection and featured status, detailed specifications, and seller information. The same view is shared by buyers, sellers, and administrators to ensure consistency and transparency.
+Inspection Report Management
+A core feature of the system is the integration of structured inspection reports. After a vehicle inspection is completed by the inspection team, administrators upload the inspection report to the system. The report consists of a PDF document, supporting images, and mechanic observations. Completed inspection reports are displayed on the vehicle detail page, allowing buyers to make informed decisions.
+User Dashboard (My Listings)
+Registered users have access to a unified dashboard where they can manage the vehicle listings they create. Through the My Listings section, users can create, edit, or delete their vehicle listings.
+Each listing is categorized based on its current status within the system. The dashboard organizes listings into the following categories:
+Pending Listings: Listings that have been created by the user and are awaiting administrator approval.
+Active Listings: Listings that have been approved by the administrator and are visible to buyers on the platform.
+Sold Listings: Listings that have been marked as sold after a successful transaction.
+Removed Listings: Listings that are no longer active because they were deleted by the user or removed by the administrator.
+This categorization helps users track the lifecycle and current status of their vehicle listings more efficiently.
+Admin Inspection Management
+The admin panel includes an inspections module that allows administrators to manage inspection records within the system. After a vehicle inspection is conducted by the inspection team, administrators upload the inspection report, attach supporting files such as PDF documents and images, add mechanic comments, and update the inspection status of the vehicle. This ensures that inspection information presented to buyers is verified and maintained by the platform.
+User Management
+Administrators can manage system users through the admin panel. User details such as name, email, role, and joining date are displayed. This feature supports moderation and role-based access control.
+Featured Listing Promotion
+The system allows users to promote their vehicle listings through a featured listing option. Featured vehicles receive higher visibility on the platform and are highlighted on the homepage. To activate this feature, users complete an online payment through the integrated payment gateway.
+Role-Based Authentication and Access Control
+The system uses a unified authentication mechanism where access to system features is controlled based on user roles and permissions. Registered users can access standard platform features such as managing listings and interacting with vehicles, while administrators have additional privileges for managing users, listings, and inspection reports. This approach ensures secure access control while maintaining a consistent user experience.
+Responsive User Interface with Theme Support
+The system supports responsive design for desktop, tablet, and mobile devices. Users can switch between light and dark themes, improving accessibility and usability.
+Functional Description
+This section describes the system’s functional behaviour, focusing on user interactions, system responses, and inspection service flows.
+User Registration and Authentication
+Users can register and log in using an email-based authentication mechanism. During registration, users verify their email through a One-Time Password (OTP) sent to their email address. After successful authentication, the system generates a secure JSON Web Token (JWT) to maintain the user session. The system determines the user’s role (user or administrator) and grants access accordingly. A registered user can act as both a buyer and a seller within the platform.
+Browse and Search Vehicles
+The system allows users to view all available vehicle listings. Buyers can filter listings based on price range, year, fuel type, and inspection status. Search and filter functions dynamically retrieve and display relevant vehicles.
+View Vehicle Details
+Selecting a vehicle opens the vehicle detail page, displaying images, specifications, seller information, and inspection reports (if available). Inspection reports are visible only after the inspection has been completed. Buyers and sellers can view the same detail page, ensuring consistency across roles.
+Create and Manage Vehicle Listings
+Users can add new vehicle listings with required details and images. Each listing’s inspection status is tracked:
+Managed Sale Mode (“Sell It for Me”):
+The platform inspects the vehicle before listing.
+Inspection charges are paid by the seller.
+The admin uploads inspection reports (PDF, images) to the vehicle detail page.
+General Sale Mode (Free Mode):
+Seller lists the vehicle without inspection.
+If a buyer expresses interest in the vehicle, the buyer can request an inspection before purchase.
+Inspection charges are paid by the buyer.
+The admin uploads the inspection report after completion.
+Sellers can edit, delete, or update their listings and track inspection status.
+Inspection Workflow
+The inspection workflow ensures that vehicle condition information presented on the platform is verified and reliable. When an inspection is requested, the platform coordinates the inspection process through its inspection team.
+Inspection scheduling and assignment to mechanics are handled offline by the administrator. After the physical inspection is completed, the administrator uploads the inspection report to the system.
+The inspection report includes:
+A PDF inspection document
+Supporting vehicle images
+Mechanic observations or comments
+The administrator updates the inspection status of the vehicle once the report is uploaded. Inspection reports become visible to users on the vehicle detail page only after the inspection process is completed.
+This workflow ensures transparency while maintaining a controlled verification process.
+Listing Visibility Control
+Administrators can control whether a vehicle listing is visible on the public “Browse Cars” page. This feature allows moderation and prevents incomplete or inappropriate listings from being displayed.
+User Interaction Features
+Buyers and sellers can interact through:
+Contact options displayed on the vehicle detail page.
+Share and favourite features to improve engagement.
+Platform Administration
+Administrators can:
+View overall platform statistics via the dashboard (e.g., total listings, pending inspections, active users).
+Manage system users and other admins.
+Configure system settings, including general information, notification preferences, and security options.
+These functions support smooth platform operation and scalability.
+Non-Functional Description
+Performance Requirements
+System Response Time: Pages and search results should load within 3 seconds under normal traffic (up to 500 concurrent users).
+Transaction Processing: Online featured listing payments should be processed in under 5 seconds.
+Inspection Request Handling: System should reflect inspection requests in the dashboard within 2 seconds after submission.
+Reliability & Availability
+System Uptime: The platform should be available 99% of the time, excluding scheduled maintenance.
+Error Handling: System should provide meaningful error messages for failed actions (e.g., unauthorized access, invalid price, vehicle not found).
+Data Backup: Vehicle listings, user accounts, inspection reports, and payment records should be backed up daily.
+Security Requirements
+Authentication: Users must log in to access sensitive functionalities (e.g., inspection requests, managed sales, contact admin).
+Password Security: Passwords should be stored using strong hashing algorithms (e.g., bcrypt).
+Payment Security: Featured listing payments must use a secure payment gateway (PCI DSS compliant).
+Authorization: Only admins can approve/reject listings, upload/update inspection reports, and manage users.
+Data Privacy: User data, vehicle information, and inspection reports must be protected in compliance with local data privacy laws.
+Maintainability & Extensibility
+The system should be modular to allow future expansion (e.g., adding more sale types or inspection services).
+Code and database design should allow easy updates to inspection report format or listing attributes.
+Logging should be implemented to help diagnose system issues quickly.
+Usability & Accessibility
+The interface should be intuitive for buyers, sellers, and admin.
+Mobile and desktop responsiveness is required for all pages.
+User-friendly error prompts for actions like invalid price entry, unauthorized access, or vehicle not found.
+Key features like inspection request, contact seller/admin, and share vehicle must be easily accessible.
+Scalability
+System should support up to 5,000 registered users initially, with the ability to scale horizontally for growth.
+Database design should allow thousands of active listings without performance degradation.
+Portability
+The system should be web-based and compatible with modern browsers (Chrome, Firefox, Edge, Safari).
+Minimal platform-specific dependencies to allow future deployment on cloud or on-premises servers.
+Availability of Reports & Logging
+Admin should have audit logs of user actions, listing changes, inspection uploads, and managed sale updates.
+Inspection report updates should maintain version history for traceability.
+User Classes and Characteristics
+The system supports two types of users: User and Administrators.
+User
+A User can act as both a buyer and a seller within the platform. Depending on the activity:
+As a Buyer
+Buyers are users who want to purchase used vehicles. They use the system to browse vehicle listings, view inspection reports, and request inspection services for vehicles listed in general sale mode. Buyers mainly need clear information and an easy-to-use interface to make informed purchasing decisions.
+As a Seller
+Sellers are users who want to sell their vehicles on the platform. They add vehicle details, upload images, and manage their listings. Sellers can opt for a managed sale (“Sell It for Me”) where the platform arranges inspection of their vehicle before listing, with inspection charges paid by the seller. Sellers require simple tools to update and manage their vehicle information and track inspection status.
+Administrators
+Admins are trusted system operators responsible for inspections, moderation, and user management. They possess higher technical competence and authority within the system.
+Design and Implementation Constraints
+The development of the Vehicle Trading & Inspection System is subject to several design and implementation constraints. As the system is developed as a final year academic project, it is limited by available development time and resources. These limitations influence the overall system scope and feature prioritization.
+The system is implemented as a web-based application and is required to function correctly on standard, modern web browsers. Native mobile applications are outside the scope of the current implementation.
+Payment gateway integration, where applicable, may be restricted to test or sandbox environments during development due to financial and regulatory limitations. Full production-level payment handling is considered beyond the academic scope of this project.
+The system does not integrate with government identity verification services such as NADRA due to legal, privacy, and access restrictions. User identity verification is therefore limited to email and administrative moderation.
+Security considerations, including user authentication, session management, and data protection, impose additional constraints on system design and technology selection. Inspection authenticity relies on manual verification and moderation performed by authorized administrators.
+Assumptions and Dependencies
+Users have access to an internet-enabled device and modern web browser.
+Inspection data is uploaded and verified manually by administrators.
+Email services are available for notifications.
+Email services must support OTP delivery for account verification during user registration.
+Third-party services for SMS or advanced analytics may be integrated in future versions.
+The system assumes honest participation by sellers, supported by admin moderation and inspection processes.
+Technical Architecture
+The Vehicle Trading & Inspection System is a custom-built web-based system developed for this project. It is designed to support online processing where users can interact with the system in real time. The system handles transaction-based operations such as vehicle listing management, inspection report management, and featured listing payment processing.
+The application follows a client–server architecture. Users access the system through a web browser, which acts as the client. The backend server processes requests, applies business logic, and communicates with the database. All data is stored in a centralized database to ensure consistency and reliability.
+The system collects and manages data related to users, vehicles, inspection reports, media files, and service payment records. It provides a browser-based user interface that is simple and easy to use. The system is accessible over the internet and can be hosted on a local or cloud-based server environment.
+Application and Data Architecture
+The Vehicle Trading and Inspection System follows a structured client–server architectural model designed to support scalability, maintainability, and secure data processing. The architecture separates presentation, business logic, data management, and external integrations into distinct layers to ensure clear functional boundaries and controlled interaction between components.
+The system is implemented as a web-based distributed application in which users access the platform through a browser interface, while all core processing and data management operations are handled on the server side. Communication between the client and server occurs through RESTful HTTP requests and responses.
+The architecture is further designed to support hybrid payment handling (both online and physical transactions), structured inspection workflows, featured listing promotion, and cloud-based media storage for improved performance and scalability.
+Architectural Style
+The system adopts a Client–Server Architecture combined with a layered architectural approach.
+In this structure:
+The client side is responsible for rendering the user interface and capturing user input.
+The server-side processes incoming requests, applies business rules, and communicates with the database and external services.
+The database provides centralized and persistent structured data storage.
+Cloud-based media storage is used for managing large files such as images and PDF reports.
+This separation ensures that presentation logic remains independent from backend processing and data storage mechanisms. It also allows each layer to evolve or scale independently without affecting the overall system structure.
+The architecture is designed to support:
+Interactive user operations through responsive web interfaces
+Structured inspection workflows
+Hybrid payment processing (physical and online)
+Featured vehicle promotion
+Secure cloud-based media management
+Logical Layer Separation
+The application is logically divided into five primary layers:
+Presentation Layer
+The Presentation Layer represents the user interface accessible through web browsers. It is responsible for:
+Rendering vehicle listings and inspection reports
+Capturing user inputs such as registration details, listing information, inspection requests, and featured listing selection
+Displaying system responses and notifications
+Managing user sessions and role-based dashboards
+This layer does not directly access the database or media storage services. Instead, it communicates with the backend through secure API calls.
+Application (Business Logic) Layer
+The Application Layer processes client requests and implements core system logic. Its responsibilities include:
+Validating user input
+Managing authentication and role-based access control
+Handling listing creation and approval workflows
+Managing inspection request records and inspection report uploads performed by administrators.
+Managing featured vehicle promotion logic
+Coordinating service payment workflows, including online payment for featured listings and physical payment tracking for inspection and managed sale services.
+Triggering notifications
+All decision-making logic resides in this layer. It ensures that system rules are enforced consistently across all operations.
+Data Layer
+The Data Layer is responsible for persistent storage and retrieval of structured system data. A centralized database stores information related to:
+User accounts
+Vehicle listings
+Inspection records
+Payment records
+Featured listing status
+Service activity logs and payment records
+Data is accessed through controlled backend operations to ensure integrity and security. The system maintains relationships between entities to support efficient querying, reporting, and auditing.
+Media Storage Layer
+The system uses ImageKit as a cloud-based media management service for storing and delivering:
+Vehicle images uploaded by sellers
+Inspection images uploaded by administrators
+PDF inspection reports
+Instead of storing media files directly in the database or local server storage, the system stores only secure URLs referencing files hosted on ImageKit. This approach improves:
+Performance
+Scalability
+Secure content delivery
+Optimized media loading
+The backend handles file uploads and retrieves secure URLs, which are then stored in the database and rendered in the frontend.
+Integration Layer
+The Integration Layer manages communication with external services. These include:
+Digital payment gateway services used for processing online payments for featured vehicle listings
+Email services used for OTP verification during registration and for sending notifications related to inspection completion and listing updates
+Cloud media storage services
+This layer isolates third-party integrations from core business logic, ensuring that changes in external services do not significantly affect internal system functionality.
+Data Architecture Overview
+The system is designed around a set of core data entities that represent the primary components of vehicle trading and inspection operations.
+Key entities include:
+User – Stores account information, role type (buyer/seller, administrator), and authentication credentials.
+Vehicle Listing – Contains vehicle specifications, pricing details, selling mode, inspection status, and featured status.
+Inspection Record – Stores inspection summaries, media URLs, and completion status.
+Payment Record – Maintains transaction details related to inspection charges and featured listing payments.
+Transaction Record – Stores information regarding managed sales completed through physical transactions.
+Media References – Secure URLs pointing to files stored in ImageKit.
+The relationships between these entities reflect real-world workflows:
+A single user may create multiple vehicle listings.
+Each vehicle listing may have one associated inspection record.
+An inspection record may contain multiple media references.
+Payment records are linked to inspection requests or featured listing promotions.
+Managed sales are recorded as physical transactions for tracking and audit purposes.
+This structured entity design ensures traceability of operations and supports auditability for both online and offline financial activities.
+Data Flow Description
+Data within the system flows through a structured request–response cycle:
+A user performs an action through the browser interface (e.g., creating a listing, requesting inspection, or selecting featured promotion).
+The request is transmitted to the backend server via an API call.
+The server validates the request and applies relevant business rules.
+If media files are included, they are uploaded to ImageKit and secure URLs are generated.
+Structured data is stored or updated in the database.
+For online payments, the system communicates with the configured payment gateway for transaction processing.
+A response is generated and returned to the client.
+The user interface updates dynamically based on the response.
+The system supports three types of payment scenarios:
+Managed Sale Payment – Completed physically between buyer and seller, recorded in the system for tracking purposes.
+Inspection Charges – Collected physically by the inspection team during on-site inspection and recorded in the system.
+Featured Vehicle Promotion Fee – Processed online to highlight selected listings on the platform.
+This structured data flow ensures reliability, transparency, and secure processing of all platform activities.
+Component Interactions and Collaborations
+This section describes how the major system components interact and collaborate during key operational workflows. While Section 3.1 defines the structural architecture of the system, this section explains how the different layers and modules coordinate to perform functional tasks such as authentication, listing management, inspection handling, payment processing, and featured listing promotion.
+The system components collaborate through controlled API communication, role-based access control, and structured service coordination within the backend environment.
+User Authentication and Role Validation Flow
+When a user attempts to log in:
+The user submits credentials through the frontend interface.
+The request is transmitted to the backend authentication controller.
+The backend validates the credentials against stored user records in the database.
+Upon successful validation, a JSON Web Token (JWT) is generated.
+The token is returned to the client and stored securely.
+Subsequent requests include the token for verification.
+Middleware validates the token and determines the user’s role:
+Admin – Full access to dashboards, inspections, and system management.
+User – Can act as a buyer or seller, both simultaneously.
+Access to protected routes and features is granted accordingly.
+This collaboration ensures secure session handling and controlled access while allowing users to perform both buying and selling activities under a single account.
+Vehicle Listing Creation and Approval Workflow
+When a user creates a new vehicle listing:
+The user submits vehicle details and uploads media files through the frontend.
+Media files are transmitted to the backend and uploaded to ImageKit, generating secure URLs stored in the database.
+The listing is saved with a “Pending” status.
+The administrator reviews the listing via the admin dashboard:
+Approve → Listing becomes publicly visible.
+Reject → Listing remains invisible, with optional feedback to the user.
+The user can manage their listings through a personalized dashboard, which is divided into three sections:
+Active → Listings approved by the admin and visible to the public.
+Pending → Listings awaiting admin approval; not visible publicly.
+Sold → listings marked as sold (after purchase / deal completion)
+Removed → Listings deleted by the user or admin; no longer visible publicly.
+Users can view, edit, or delete their listings from any section. Updates to media are re-uploaded to ImageKit, and any modifications to pending listings require re-approval.
+This workflow ensures controlled listing visibility, clear separation of listing states, and complete user management within the dashboard.
+Inspection Workflow Collaboration
+The inspection process differs depending on the selected sale mode.
+Managed Sale Mode (“Sell It for Me”)
+The user selects managed sale mode during listing creation.
+The system records the listing as requiring inspection.
+The user completes online inspection payment.
+The backend verifies the payment through the integrated payment gateway.
+The administrator conducts the physical inspection.
+Inspection media (images and PDF report) are uploaded to ImageKit.
+Media URLs are stored in the inspection record.
+The inspection status is marked as “Completed.”
+The listing is published with verified inspection details.
+General Sale Mode (Free Mode with Buyer-Requested Inspection)
+The listing is created without inspection.
+Any interested user may request an inspection (even the listing owner acting as a buyer for another vehicle).
+The inspection payment is completed online by the requesting user.
+The backend verifies the payment.
+The administrator performs inspection.
+Inspection files are uploaded to ImageKit.
+The inspection record is updated.
+The user can view the completed inspection report.
+This collaboration ensures structured inspection verification before final purchase decisions while allowing users to play both roles.
+Featured Vehicle Promotion Workflow
+The system supports promotional visibility through featured listings.
+A user selects the “Featured Vehicle” option.
+The system calculates the promotion fee.
+The user completes the online payment.
+The backend verifies payment confirmation.
+The listing is marked as “Featured.”
+The listing appears in the featured section on the homepage.
+Payment Processing Collaboration
+The system supports three types of payment scenarios:
+Managed Sale Payment – Completed physically between users. The transaction is recorded in the system for tracking and commission documentation purposes.
+Inspection Charges – Collected physically by the inspection team during on-site inspection and recorded in the system.
+Featured Listing Promotion Fee – Processed online through the same or configurable payment gateway.
+For online transactions:
+The frontend initiates the payment request.
+The backend generates a transaction reference.
+The user is redirected to the payment gateway.
+Upon completion, the gateway sends confirmation to the backend.
+The backend verifies transaction integrity.
+The payment record is stored in the database.
+The related service (featured status) is triggered.
+This structured interaction ensures secure and traceable financial operations for all users.
+Notification and Communication Collaboration
+The system automatically generates notifications during major workflow events, including:
+Inspection completion
+Featured listing activation
+Listing approval
+Managed sale record completion
+When such events occur:
+The backend service triggers the notification module.
+Email notifications are generated using the configured email service.
+Messages are delivered to the registered user email address.
+This collaboration enhances transparency and improves user awareness of transaction status.
+Administrative Oversight and Monitoring
+Administrators interact with multiple system modules simultaneously. The admin dashboard aggregates data from:
+User management module
+Listing management module
+Inspection records
+Payment records
+Featured listings
+The backend compiles this information dynamically through secure queries to ensure real-time monitoring and system control.
+This centralized oversight ensures operational integrity, transparency, and moderation of all trading activities within the platform.
+Design Reuse and Design Patterns
+The Vehicle Trading and Inspection System follows a modular and reusable design approach to ensure maintainability, scalability, and ease of future enhancement. Commonly accepted software design principles and architectural patterns are applied throughout the system.
+Layered Architecture Pattern
+The system follows a Layered Architecture, where responsibilities are divided into multiple layers:
+Presentation Layer: Frontend developed using React.js, responsible for user interaction and UI rendering.
+Application Layer: Backend APIs implemented using Node.js and Express.js, responsible for business logic.
+Data Layer: MongoDB database used for persistent data storage.
+Integration Layer: External services such as payment gateways and email services.
+This separation ensures loose coupling between components and allows independent modification of each layer.
+Model–View–Controller (MVC) Pattern
+The backend follows the MVC pattern to structure application logic:
+Model: Represents core entities such as Users, Vehicles, Inspections, Payments, and Sales.
+Controller: Handles HTTP requests, validates input, processes business logic, and communicates with the database.
+View: The frontend acts as the view layer, consuming backend APIs and displaying responses to users.
+MVC improves code readability, simplifies debugging, and supports team-based development.
+Reusable Service Modules
+Key business functionalities are implemented as reusable service modules, including:
+Inspection Service: Handles inspection requests, report uploads, inspection status updates, and related workflows.
+Payment Service: Manages inspection fee payments and commission-based transactions using an integrated payment gateway.
+Email Notification Service: Implemented using the NodeMailer library, responsible for sending automated email notifications to buyers and sellers when inspections are completed or sales are finalized.
+Using reusable services reduces code duplication and improves maintainability.
+RESTful API Design
+The backend exposes functionality through RESTful APIs, following standard HTTP methods:
+GET for retrieving data (vehicles, inspections, users)
+POST for creating records (listings, inspections, payments)
+PUT/PATCH for updating existing data
+DELETE for removing listings or users
+This approach allows easy integration with different frontend components and supports future extensions such as mobile applications.
+Design Reuse Benefits
+The adopted design patterns provide the following benefits:
+Improved maintainability and readability
+Reduced code duplication
+Easier debugging and testing
+Support for future enhancements such as chat systems or analytics dashboards
+Technology Architecture
+This section describes the technologies, tools, and platforms used to implement the Vehicle Trading and Inspection System.
+Frontend Technologies
+React.js: Used for building a responsive, component-based user interface.
+HTML5, CSS3, JavaScript: Core web technologies for layout and styling.
+Theme Support: Light and dark mode implemented at the UI level.
+Responsive Design: Ensures usability across desktop and mobile browsers.
+Backend Technologies
+Node.js: Provides a scalable runtime environment for server-side logic.
+Express.js: Used to develop RESTful APIs for handling requests and responses.
+JWT Authentication: Ensures secure login and role-based access control for users and admins.
+Database Technology
+MongoDB: A NoSQL database used to store user profiles, vehicle listings, inspection records, payments, and sales data.
+Collections are designed to support flexible data structures and fast retrieval.
+Payment Integration
+The system supports integration with real-world digital payment gateways for handling financial transactions.
+Supported payment gateways include:
+JazzCash
+EasyPaisa
+Note:Only one payment gateway will be integrated in the initial implementation phase, based on availability and feasibility. The system architecture is designed in a way that allows additional gateways to be added in the future with minimal changes.
+Payments are processed in the following scenarios:
+Inspection Fee Payment collected physically by the inspection team on-site
+Commission Deduction in managed sale mode (Payment from buyer → collected physically → platform deducts commission → seller receives remainder)
+Notification and Communication Services
+NodeMailer is used as the email service library.
+Email notifications are automatically sent for:
+Inspection completion
+Managed sale completion
+Listing approval/rejection notifications
+Featured listing activation notifications
+Emails are triggered by backend services and delivered to registered user email addresses.
+Development and Deployment Environment
+Development Tools: Visual Studio Code, Postman, Git
+Browser Compatibility: Google Chrome, Mozilla Firefox, Microsoft Edge
+Deployment: The system is designed to be deployed on cloud-based hosting platforms.
+Use Cases
+User Authentication System
+UC-1.1.1:  User Registration
+UC-1.1.2: Login
+UC-1.1.3: Logout
+UC-1.1.4: Change Password
+UC-1.1.5: Change Email
+UC-1.1.6: Delete Account
+Seller Functionalities
+UC-2.1.1: Create Vehicle Listing
+UC-2.1.2: Edit Vehicle Listing
+UC-2.1.3:  Delete Vehicle Listing
+UC-2.1.4: Mark Listing as Sold
+UC-2.1.5: Track Listing Status
+UC-2.1.6: Select Sale Mode
+UC-2.1.7: Earnings Overview
+Buyer Functionalities
+UC-3.1.1: Browse & Search Vehicles
+UC-3.1.2: Contact Seller (General Sale)
+UC-3.1.3: Request Inspection (General Sale, Buyer-initiated)
+UC-3.1.4: Contact Platform / Managed Purchase
+UC-3.1.5: Save / Favorite Vehicles
+UC-3.1.6: Share Vehicle Listing
+UC-3.1.7: Buyer Dashboard / Manage Interests
+Admin functionalities
+User Management
+UC-4.1.1: View User
+UC-4.1.2: Block / Unblock User
+UC-4.1.3: Delete User
+Vehicle & Listing Management
+UC-4.2.1: View & Filter All Listings
+UC-4.2.2: Approve Listing
+UC-4.2.3: Reject Listing
+UC-4.2.4: Remove Active Listing
+UC-4.2.5: Mark Listing as Sold (Managed Sale)
+Inspection Management
+UC-4.3.1: Upload Inspection Report
+UC-4.3.2: Update Inspection Report
+Managed Sale Management
+UC-4.4.1: View Managed Sale Requests
+UC-4.4.2: Update Managed Sale Status
+Classes & Objects
+User Authentication Module
+Account Management (Change Password / Change Email / Delete Account)
+Seller / Vehicle Listing
+Sale Mode
+Buyer Module
+Inspection Module
+Admin Module
+Screenshots/Prototype
+Workflow
+The workflow of the Vehicle Trading & Inspection System shows how different users interact with the system step by step. The process starts when a user registers and logs into the system.
+First, sellers add vehicle listings by entering vehicle details and uploading images. After a vehicle is listed, the administrator inspects the vehicle physically. Once the inspection is completed, the administrator uploads the inspection report along with images and videos.
+Buyers then browse the available vehicle listings and view inspection reports. If a buyer wants to proceed, they can make a payment for the inspection service through the payment gateway. The system records the payment and updates the status accordingly.
+This workflow can be represented using a swim-lane diagram showing separate lanes for buyers, sellers, administrators, and the system.
+Screens
+The system includes the following main graphical user interface screens:
+• Login and Registration Screen• Home Page with Vehicle Listings• Vehicle Details Screen• Inspection Report Screen (PDF reports and Images)• Seller Dashboard for Managing Listings• Admin Panel for Inspection Upload• Payment Screen
+Screenshots of these interfaces are included to show how users interact with the system.
+Additional Information
+The prototype is designed to demonstrate the main functionality and flow of the system. The prototype focuses on usability, clear navigation, and modern interface design suitable for real-world deployment. All screens are connected to represent a realistic user journey.
+Other Design Details
+The system is designed with simplicity and ease of use in mind. Input validation is applied on forms to reduce incorrect data entry. Basic error messages are shown to guide users when something goes wrong.
+Security features such as login authentication and role-based access control are implemented to restrict unauthorized access. The system design allows future enhancements such as adding AI-based inspection or advanced search features.
+Revised Project Plan
+The project follows the plan defined in the project proposal. Major phases include requirement analysis, system design, development, testing, and documentation.
+Current progress shows that system design and core development have been completed, while testing and documentation are in progress. A Gantt chart is used to show task timelines, completed tasks, and remaining activities. The updated project plan reflects the current project status.
+References
+ Sommerville, I. Software Engineering, 10th Edition, Pearson, 2016.
+ University of Central Punjab, Final Year Project Guidelines.
+ Official documentation of web development frameworks.
+ Payment Gateway API Documentation.
+Appendix A: Glossary
+Vehicle Listing: Information related to a vehicle available for sale on the platform.Inspection Report: A document containing details about the condition of a vehicle after inspection.Administrator: Authorized user responsible for inspecting vehicles and uploading reports.Buyer: User who browses vehicles and views inspection reports.Seller: User who lists vehicles for sale.Payment Gateway: A service used to process online payments securely.Web Application: A software application that runs in a web browser.
+Appendix B: IV & V Report
+(Independent verification & validation)
+IV & V Resource
+NameSignature
+Table 1: List of non-trivial defects
+This document has been adapted from the following:
+Previous project templates at UCP
+High-level Technical Design, Centers for Medicare & Medicaid Services. (www.cms.gov)
