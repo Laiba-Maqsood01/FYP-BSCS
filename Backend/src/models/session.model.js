@@ -25,6 +25,11 @@ const sessionSchema = new mongoose.Schema({
     lastUsedAt: {
         type: Date,
         default: Date.now
+    },
+    expiresAt: {
+        type: Date,
+        required: true,
+        index: { expires: 0 }
     }
 },
     {

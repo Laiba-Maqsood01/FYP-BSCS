@@ -1,4 +1,4 @@
-import { registerSchema, loginSchema, verifyEmailSchema } from "../validations/auth.validation.js";
+import { registerSchema, loginSchema, verifyEmailSchema, forgotPasswordSchema,resetPasswordSchema, changePasswordSchema, requestEmailChangeSchema,confirmEmailChangeSchema } from "../validations/auth.validation.js";
 import { validate } from "../middlewares/validate.middleware.js";
 import { authLimiter } from "../middlewares/rateLimit.middleware.js";
 import { authMiddleware } from "../middlewares/auth.middleware.js";
@@ -40,16 +40,16 @@ authRouter.get(
     authController.refreshToken)
 
 /*
-GET /api/auth/logout 
+POST /api/auth/logout 
  */
-authRouter.get(
+authRouter.post(
     "/logout",
     authController.logout)
 
 /*
-GET /api/auth/logout-all 
+POST /api/auth/logout-all 
 */
-authRouter.get(
+authRouter.post(
     "/logout-all",
     authController.logoutAll)
 
@@ -72,42 +72,65 @@ authRouter.post(
 
 /** for it we have to give oldPassword, newPassword, and also authorization: access token
  * POST /api/auth/change-password
-  */  
- authRouter.post(
+  */
+authRouter.post(
     "/change-password",
     authMiddleware,
+    validate(changePasswordSchema),
     authController.changePassword)
+
+/*
+POST /api/auth/forgot-password
+*/
+authRouter.post(
+    "/forgot-password",
+    authLimiter,
+    validate(forgotPasswordSchema),
+    authController.forgotPassword
+);
+
+/*
+POST /api/auth/reset-password
+*/
+authRouter.post(
+    "/reset-password",
+    authLimiter,
+    validate(resetPasswordSchema),
+    authController.resetPassword
+);
 
 /**
  * DELETE /api/auth/delete-account
-  */  
- authRouter.delete(
+  */
+authRouter.delete(
     "/delete-account",
     authMiddleware,
     authController.deleteAccount)
 
 /**
  * POST /api/auth/request-email-change
-  */  
- authRouter.post(
+  */
+authRouter.post(
     "/request-email-change",
     authMiddleware,
+    validate(requestEmailChangeSchema),
     authController.requestEmailChange)
 
 /**
  * POST /api/auth/confirm-email-change
-  */  
- authRouter.post(
+  */
+authRouter.post(
     "/confirm-email-change",
     authMiddleware,
+    validate(confirmEmailChangeSchema),
     authController.confirmEmailChange)
 
- /**
- * POST /api/auth/cancel-email-change
-  */  
- authRouter.post(
+/**
+* POST /api/auth/cancel-email-change
+ */
+authRouter.post(
     "/cancel-email-change",
     authMiddleware,
-    authController.cancelEmailChange)   
+    authController.cancelEmailChange)
 
 export default authRouter
