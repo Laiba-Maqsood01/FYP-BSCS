@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { ROLES, ACCOUNT_STATUS } from "../utils/constants.js";
 
 const userSchema = new mongoose.Schema({
     username: {
@@ -16,29 +17,46 @@ const userSchema = new mongoose.Schema({
     },
     password: {
         type: String,
-        required: [true, "Password is required"]
+        required: [true, "Password is required"],
+        select: false
     },
     role: {
         type: String,
-        enum: ["admin", "user"],
-        default: "user"
+        enum: Object.values(ROLES),
+        default: ROLES.USER
     },
     verified: {
         type: Boolean,
         default: false
     },
-    accountStatus:{
+    accountStatus: {
         type: String,
-        enum:["PENDING", "ACTIVE", "SUSPENDED", "BLOCKED"],
-        default: "PENDING"
+        enum: Object.values(ACCOUNT_STATUS),
+        default: ACCOUNT_STATUS.PENDING
     },
-    pendingEmail:{
+    pendingEmail: {
         type: String,
+        default: null
+    },
+    passwordResetToken: {
+        type: String,
+        default: null
+    },
+    passwordResetExpires: {
+        type: Date,
+        default: null
+    },
+    isDeleted: {
+        type: Boolean,
+        default: false
+    },
+    deletedAt: {
+        type: Date,
         default: null
     }
 },
     {
-        timestamps: true 
+        timestamps: true
     }
 )
 

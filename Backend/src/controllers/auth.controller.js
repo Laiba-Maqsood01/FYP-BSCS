@@ -150,6 +150,33 @@ export const changePassword = asyncHandler(async (req, res) => {
     )
 })
 
+export const forgotPassword = asyncHandler(async (req, res) => {
+    const { email } = req.body;
+
+    await authService.forgotPassword(email);
+
+    res.status(200).json(
+        new ApiResponse(
+            200,
+            "If account exists, reset email sent"
+        )
+    );
+})
+
+export const resetPassword = asyncHandler(async (req, res) => {
+
+    const { token, newPassword } = req.body;
+
+    await authService.resetPassword(token, newPassword);
+
+    res.status(200).json(
+        new ApiResponse(
+            200,
+            "Password reset successful"
+        )
+    );
+})
+
 export const deleteAccount = asyncHandler(async (req, res) => {
     const userId = req.user._id;
     await authService.deleteAccount(userId)

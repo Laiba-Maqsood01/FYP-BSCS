@@ -3,12 +3,13 @@ import sessionModel from "../models/session.model.js";
 import userModel from "../models/user.model.js";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
+import { ACCOUNT_STATUS } from "../utils/constants.js";
 
 export async function authMiddleware(req, res, next) {
     try {
         const authHeader = req.headers.authorization;
 
-        if(!authHeader || !authHeader.startsWith("Bearer ")){
+        if (!authHeader || !authHeader.startsWith("Bearer ")) {
             return res.status(401).json({
                 message: "Token not found!"
             })
@@ -22,14 +23,17 @@ export async function authMiddleware(req, res, next) {
         // 2. Find user
         const user = await userModel.findById(decoded.id);
 
-        if(!user){
+        if (!user) {
             return res.status(401).json({
                 message: "User not found!"
             })
         }
 
         // 3. Check account status
-        if(user.accountStatus && user.accountStatus !== "ACTIVE"){
+        if (
+            user.accountStatus &&
+            user.accountStatus !== ACCOUNT_STATUS.ACTIVE
+        ) {
             return res.status(403).json({
                 message: `Account is ${user.accountStatus}`
             })
@@ -37,7 +41,7 @@ export async function authMiddleware(req, res, next) {
 
         // 4. session valid or not
         const session = await sessionModel.findById(decoded.sessionId)
-        if(!session || session.revoked){
+        if (!session || session.revoked) {
             return res.status(401).json({
                 message: "Session expired or revoked"
             })

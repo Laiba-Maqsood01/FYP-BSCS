@@ -9,6 +9,7 @@ import { generateOTP, getOtpHtml } from "../utils/utils.js";
 import { ApiError } from "../utils/apiError.js"
 import { sendEmail } from "../services/email.service.js";
 import { generateAccessToken, generateRefreshToken } from "../utils/token.utils.js";
+import { ACCOUNT_STATUS } from "../utils/constants.js";
 
 export async function registerUser({ username, email, password }) {
 
@@ -62,20 +63,25 @@ export async function registerUser({ username, email, password }) {
 
 export async function loginUser({ email, password, ip, userAgent }) {
 
-    const user = await userModel.findOne({ email })
+    const user = await userModel.findOne({ email }).select("+password")
     if (!user) {
         throw new ApiError(401, "Invalid credentials");
     }
 
-    if (user.accountStatus === "PENDING") {
+    // Soft delete check
+    if (user.isDeleted) {
+        throw new ApiError(403, "Account deleted");
+    }
+
+    if (user.accountStatus === ACCOUNT_STATUS.PENDING) {
         throw new ApiError(403, "Please verify your email first.");
     }
 
-    if (user.accountStatus === "SUSPENDED") {
+    if (user.accountStatus === ACCOUNT_STATUS.SUSPENDED) {
         throw new ApiError(403, "Your account is temporarily suspended. Contact support.");
     }
 
-    if (user.accountStatus === "BLOCKED") {
+    if (user.accountStatus === ACCOUNT_STATUS.BLOCKED) {
         throw new ApiError(403, "Your account has been permanently blocked.");
     }
 
@@ -95,7 +101,10 @@ export async function loginUser({ email, password, ip, userAgent }) {
         user: user._id,
         refreshTokenHash,
         ip,
-        userAgent
+        userAgent,
+        expiresAt: new Date(
+            Date.now() + 7 * 24 * 60 * 60 * 1000
+        )
     })
 
     //  Access tokens for auth 
@@ -216,7 +225,7 @@ export async function verifyUserEmail(otp, email) {
     const user = await userModel.findByIdAndUpdate(otpDoc.user,
         {
             verified: true,
-            accountStatus: "ACTIVE"
+            accountStatus: ACCOUNT_STATUS.ACTIVE
         },
         {
             new: true
@@ -272,7 +281,7 @@ export async function resendOTP(email) {
 }
 
 export async function changePassword(userId, oldPassword, newPassword) {
-    const user = await userModel.findById(userId);
+    const user = await userModel.findById(userId).select("+password");
 
     if (!user) {
         throw new ApiError(404, "User not found");
@@ -299,18 +308,114 @@ export async function changePassword(userId, oldPassword, newPassword) {
 
 }
 
+export async function forgotPassword(email) {
+    const user = await userModel.findOne({ email });
+
+    // we don't have to reveal whether user exists
+    if (!user) {
+        return true;
+    }
+
+    const resetToken = crypto.randomBytes(32).toString("hex");
+
+    const hashedToken = crypto
+        .createHash("sha256")
+        .update(resetToken)
+        .digest("hex");
+
+    user.passwordResetToken = hashedToken;
+    user.passwordResetExpires = new Date(Date.now() + 15 * 60 * 1000);
+
+    await user.save();
+
+    const resetUrl =
+        `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+
+    await sendEmail(
+        user.email,
+        "Password Reset",
+        `Reset your password using this link: ${resetUrl}`,
+        `
+        <h2>Password Reset</h2>
+        <p>Click below to reset password:</p>
+        <a href="${resetUrl}">${resetUrl}</a>
+        `
+    );
+
+    return true;
+}
+
+export async function resetPassword(token, newPassword) {
+
+    const hashedToken = crypto
+        .createHash("sha256")
+        .update(token)
+        .digest("hex");
+
+    const user = await userModel.findOne({
+        passwordResetToken: hashedToken,
+        passwordResetExpires: { $gt: new Date() }
+    }).select("+password");
+
+    if (!user) {
+        throw new ApiError(400, "Invalid or expired reset token");
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    user.password = hashedPassword;
+
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+
+    await user.save();
+
+    // revoke all sessions
+    await sessionModel.updateMany(
+        { user: user._id },
+        { revoked: true }
+    );
+
+    return true;
+}
+
+// export async function deleteAccount(userId) {
+//     await userModel.findByIdAndDelete(userId);
+
+//     // remove all sessions
+//     await sessionModel.deleteMany({ user: userId })
+
+//     // remove otp
+//     await otpModel.deleteMany({ user: userId })
+// }
+
 export async function deleteAccount(userId) {
-    await userModel.findByIdAndDelete(userId);
 
-    // remove all sessions
-    await sessionModel.deleteMany({ user: userId })
+    const user = await userModel.findById(userId);
 
-    // remove otp
-    await otpModel.deleteMany({ user: userId })
+    if (!user) {
+        throw new ApiError(404, "User not found");
+    }
+
+    user.isDeleted = true;
+    user.deletedAt = new Date();
+
+    // Optional anonymization
+    user.email = `deleted_${user._id}@deleted.com`;
+    user.username = `deleted_${user._id}`;
+
+    await user.save();
+
+    await sessionModel.updateMany(
+        { user: userId },
+        { revoked: true }
+    );
+
+    return true;
 }
 
 export async function requestEmailChange(userId, newEmail, password) {
-    const user = await userModel.findById(userId)
+    const user = await userModel.findById(userId).select("+password")
 
     if (!user) {
         throw new ApiError(404, "User not found");
