@@ -52,5 +52,34 @@ export const deleteListing = asyncHandler(async (req, res) => {
   );
 });
 
+//Listings for public
+export const getPublicListings = asyncHandler(async (req, res) => {
+
+    const result = await listingService.getPublicListings(req.query);
+
+    res.status(200).json(
+        new ApiResponse(
+            200,
+            "Listings fetched successfully",
+            result
+        )
+    );
+});
+
+// Details of single listing
+export const getListingDetails = asyncHandler(async (req, res) => {
+
+    const listing = await listingService.getListingDetails(
+        req.params.id
+    );
+
+    res.status(200).json(
+        new ApiResponse(
+            200,
+            "Listing details fetched successfully",
+            listing
+        )
+    );
+});
 
 

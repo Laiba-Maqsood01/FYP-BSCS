@@ -2,7 +2,10 @@ import authRouter from "./routes/auth.routes.js";
 import cookieParser from "cookie-parser";
 import { apiLimiter } from "./middlewares/rateLimit.middleware.js";
 import { errorHandler } from "./middlewares/error.middleware.js";
+
 import listingRouter from "./modules/listing/listing.routes.js";
+import inspectionRouter from "./modules/inspection/inspection.routes.js"
+
 import express from "express";
 import morgan from "morgan";
 import helmet from "helmet";
@@ -41,6 +44,9 @@ app.use("/api/auth", authRouter)
 
 // All routes starting with /api/listings
 app.use("/api/listings", listingRouter);
+
+// All inspection related routes starts with /api/inspection
+app.use("/api/inspection", inspectionRouter)
 
 // use global error handler
 app.use(errorHandler);
