@@ -22,6 +22,18 @@ router.get(
   controller.getMyListings
 );
 
+// GET /api/listings
+// GET /api/listings?brand=Toyota&fuelType=petrol
+// GET /api/listings?search=civic
+// GET /api/listings?sortBy=price&sortOrder=asc
+// GET /api/listings?sortBy=price&sortOrder=desc
+// GET /api/listings?page=2&limit=5
+router.get(
+  "/",
+  controller.getPublicListings
+);
+
+
 // PUT /api/listings/:id
 router.put(
   "/:id",
@@ -35,6 +47,12 @@ router.delete(
   "/:id",
   authMiddleware,
   controller.deleteListing
+);
+
+// GET /api/listings/:id (for public)
+router.get(
+  "/:id",
+  controller.getListingDetails
 );
 
 export default router;

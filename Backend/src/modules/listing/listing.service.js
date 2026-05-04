@@ -90,3 +90,140 @@ export async function deleteListing(listingId, userId) {
   return true;
 }
 
+// Listings for public
+export async function getPublicListings(query) {
+
+  const {
+    page = 1,
+    limit = 10,
+
+    brand,
+    fuelType,
+    transmission,
+    inspectionStatus,
+
+    minPrice,
+    maxPrice,
+
+    minYear,
+
+    maxMileage,
+
+    search,
+
+    sortBy = "createdAt",
+    sortOrder = "desc"
+  } = query;
+
+  const filters = {
+    status: "ACTIVE"
+  };
+
+  // exact filters
+  if (brand) filters.brand = brand;
+
+  if (fuelType) filters.fuelType = fuelType;
+
+  if (transmission) filters.transmission = transmission;
+
+  if (inspectionStatus) {
+    filters.inspectionStatus = inspectionStatus;
+  }
+
+  // price range
+  if (minPrice || maxPrice) {
+    filters.price = {};
+
+    if (minPrice) {
+      filters.price.$gte = Number(minPrice);
+    }
+
+    if (maxPrice) {
+      filters.price.$lte = Number(maxPrice);
+    }
+  }
+
+  // year
+  if (minYear) {
+    filters.year = {
+      $gte: Number(minYear)
+    };
+  }
+
+  // mileage
+  if (maxMileage) {
+    filters.mileage = {
+      $lte: Number(maxMileage)
+    };
+  }
+
+  // search
+  if (search) {
+    filters.$or = [
+      {
+        title: {
+          $regex: search,
+          $options: "i"
+        }
+      },
+      {
+        brand: {
+          $regex: search,
+          $options: "i"
+        }
+      },
+      {
+        model: {
+          $regex: search,
+          $options: "i"
+        }
+      }
+    ];
+  }
+
+  const skip = (Number(page) - 1) * Number(limit);
+
+  const sort = {
+    [sortBy]: sortOrder === "asc" ? 1 : -1
+  };
+
+  const listings = await listingModel
+    .find(filters)
+    .populate("seller", "username")
+    .sort(sort)
+    .skip(skip)
+    .limit(Number(limit));
+
+  const total = await listingModel.countDocuments(filters);
+
+  return {
+    listings,
+    pagination: {
+      total,
+      page: Number(page),
+      limit: Number(limit),
+      pages: Math.ceil(total / limit)
+    }
+  };
+}
+
+// Get details of single listing
+export async function getListingDetails(listingId) {
+
+    const listing = await listingModel
+        .findOne({
+            _id: listingId,
+            status: "ACTIVE"
+        })
+        .populate(
+            "seller",
+            "username createdAt"
+        );
+
+    if (!listing) {
+        throw new ApiError(404, "Listing not found");
+    }
+
+    return listing;
+}
+
