@@ -6,6 +6,10 @@ import { errorHandler } from "./middlewares/error.middleware.js";
 import listingRouter from "./modules/listing/listing.routes.js";
 import inspectionRouter from "./modules/inspection/inspection.routes.js"
 
+import featuredRouter from "./modules/featured/featured.routes.js";
+
+import masterRouter from "./modules/master/master.routes.js";
+
 import express from "express";
 import morgan from "morgan";
 import helmet from "helmet";
@@ -36,8 +40,11 @@ app.use(express.json());
 // morgan middleware for logging
 app.use(morgan("dev"));
 
-// use cookieParser
+// use cookieParsera
 app.use(cookieParser());
+
+// All routes starting with /api/master 
+app.use("/api/master", masterRouter);
 
 // All routes starting with /api/auth
 app.use("/api/auth", authRouter)
@@ -47,6 +54,9 @@ app.use("/api/listings", listingRouter);
 
 // All inspection related routes starts with /api/inspection
 app.use("/api/inspection", inspectionRouter)
+
+// Featured request handling, starts with /api/featured
+app.use( "/api/featured", featuredRouter); 
 
 // use global error handler
 app.use(errorHandler);

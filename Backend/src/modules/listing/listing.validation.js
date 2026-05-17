@@ -1,86 +1,139 @@
 import { z } from "zod";
 
+const objectIdSchema = z
+  .string()
+  .regex(
+    /^[0-9a-fA-F]{24}$/,
+    "Invalid ObjectId"
+  );
+
 export const createListingSchema = z.object({
-  title: z
+  saleMode: z.enum([
+    "GENERAL",
+    "MANAGED"
+  ]),
+
+  city: objectIdSchema,
+
+  registeredIn: objectIdSchema,
+
+  brand: objectIdSchema,
+
+  carModel: objectIdSchema,
+
+  bodyType: objectIdSchema,
+
+  year: z.number().min(1950),
+
+  engineType: z.enum([
+    "petrol",
+    "diesel",
+    "hybrid",
+    "electric"
+  ]),
+
+  engineCapacity: z.number().positive(),
+
+  transmission: z.enum([
+    "manual",
+    "automatic"
+  ]),
+
+  assembly: z.enum([
+    "local",
+    "imported"
+  ]),
+
+  exteriorColor: z.string(),
+
+  mileage: z.number().min(0),
+
+  price: z.number().positive(),
+
+  description: z.string().min(10),
+
+  images: z.array(
+    z.object({
+      url: z.string(),
+      fileId: z.string()
+    })
+  ).optional(),
+
+  mobileNumber: z.string(),
+
+  secondaryNumber: z.string().optional(),
+
+  whatsappAllowed: z.boolean().optional(),
+
+  inspectionAddress: z.string().optional(),
+
+  inspectionDate: z
     .string()
-    .min(3),
-
-  description: z
-    .string()
-    .min(10),
-
-  brand: z
-    .string(),
-
-  model: z
-    .string(),
-
-  year: z
-    .number(),
-
-  price: z
-    .number()
-    .positive(),
-
-  mileage: z
-    .number(),
-
-  fuelType: z
-    .enum(["petrol", "diesel", "hybrid", "electric"]),
-
-  transmission: z
-    .enum(["manual", "automatic"]),
-
-  condition: z
-    .enum(["new", "used"])
+    .datetime()
     .optional(),
 
-  saleMode: z
-    .enum(["GENERAL", "MANAGED"])
-    .optional()
+  inspectionTimeSlot: z
+    .string()
+    .optional(),
 });
 
-export const updateListingSchema = z.object({
-  title: z
-    .string()
-    .min(3)
-    .optional(),
+// export const updateListingSchema = z.object({
+//   title: z
+//     .string()
+//     .min(3)
+//     .optional(),
 
-  description: z
-    .string()
-    .min(10)
-    .optional(),
+//   description: z
+//     .string()
+//     .min(10)
+//     .optional(),
 
-  brand: z
-    .string()
-    .optional(),
+//   brand: objectIdSchema.optional(),
 
-  model: z
-    .string()
-    .optional(),
+//   model: z
+//     .string()
+//     .min(1)
+//     .optional(),
 
-  year: z
-    .number()
-    .optional(),
+//   city: objectIdSchema.optional(),
 
-  price: z
-    .number()
-    .positive()
-    .optional(),
+//   province: objectIdSchema.optional(),
 
-  mileage: z
-    .number()
-    .optional(),
+//   bodyType: objectIdSchema.optional(),
 
-  fuelType: z
-    .enum(["petrol", "diesel", "hybrid", "electric"])
-    .optional(),
+//   year: z
+//     .number()
+//     .optional(),
 
-  transmission: z
-    .enum(["manual", "automatic"])
-    .optional(),
+//   price: z
+//     .number()
+//     .positive()
+//     .optional(),
 
-  saleMode: z
-    .enum(["GENERAL", "MANAGED"])
-    .optional()
-});
+//   mileage: z
+//     .number()
+//     .optional(),
+
+//   fuelType: z.enum([
+//     "petrol",
+//     "diesel",
+//     "hybrid",
+//     "electric"
+//   ])
+//     .optional(),
+
+//   transmission: z.enum([
+//     "manual",
+//     "automatic"
+//   ])
+//     .optional(),
+
+//   saleMode: z.enum([
+//     "GENERAL",
+//     "MANAGED"
+//   ])
+//     .optional()
+// });
+
+export const updateListingSchema =
+  createListingSchema.partial();

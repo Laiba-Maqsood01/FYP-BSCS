@@ -16,10 +16,11 @@ export const register = asyncHandler(async (req, res) => {
 })
 
 export const login = asyncHandler(async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password, rememberMe } = req.body;
     const result = await authService.loginUser({
         email,
         password,
+        rememberMe,
         ip: req.ip,
         userAgent: req.headers["user-agent"]
     })
@@ -31,7 +32,9 @@ export const login = asyncHandler(async (req, res) => {
         secure: true,
         // sameSite: "strict",
         sameSite: "none",
-        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        maxAge: rememberMe
+            ? 7 * 24 * 60 * 60 * 1000 //7 days in case of rememberMe
+            : 24 * 60 * 60 * 1000 // 24hrs in case of unchecked
     })
 
     // only for localhost
