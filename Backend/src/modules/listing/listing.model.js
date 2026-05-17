@@ -2,45 +2,69 @@ import mongoose from "mongoose";
 
 const listingSchema = new mongoose.Schema(
   {
-    title: {
-      type: String,
-      required: true,
-      trim: true
+    // seller
+    seller: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "users",
+      required: true
     },
 
-    description: {
+    // listing type
+    saleMode: {
       type: String,
+      enum: ["GENERAL", "MANAGED"],
+      default: "GENERAL"
+    },
+
+    // car location
+    city: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "cities",
       required: true
+    },
+
+    // registered city/province
+    registeredIn: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "cities",
+      required: true
+    },
+
+    // car info
+    year: {
+      type: Number,
+      required: true,
+      min: 1950,
+      max: new Date().getFullYear() + 1
     },
 
     brand: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "brands",
       required: true
     },
 
-    model: {
-      type: String,
+    carModel: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "car_models",
+      required: true
+    },
+    // body types from collection
+    bodyType: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "body_types",
       required: true
     },
 
-    year: {
-      type: Number,
-      required: true
-    },
-
-    price: {
-      type: Number,
-      required: true
-    },
-
-    mileage: {
-      type: Number,
-      required: true
-    },
-
-    fuelType: {
+    // vehicle details
+    engineType: {
       type: String,
       enum: ["petrol", "diesel", "hybrid", "electric"],
+      required: true
+    },
+
+    engineCapacity: {
+      type: Number,
       required: true
     },
 
@@ -50,12 +74,38 @@ const listingSchema = new mongoose.Schema(
       required: true
     },
 
-    // condition: {
-    //   type: String,
-    //   enum: ["new", "used"],
-    //   default: "used"
-    // },
+    assembly: {
+      type: String,
+      enum: ["local", "imported"],
+      required: true
+    },
 
+    exteriorColor: {
+      type: String,
+      required: true,
+      trim: true
+    },
+
+    mileage: {
+      type: Number,
+      required: true,
+      min: 0
+    },
+
+    price: {
+      type: Number,
+      required: true,
+      min: 1000
+    },
+
+    description: {
+      type: String,
+      required: true,
+      trim: true,
+      minlength: 10
+    },
+
+    // media
     images: [
       {
         url: String,
@@ -63,37 +113,115 @@ const listingSchema = new mongoose.Schema(
       }
     ],
 
-    seller: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "users",
+    // contact info
+    mobileNumber: {
+      type: String,
       required: true
     },
 
-    status: {
+    secondaryNumber: {
       type: String,
-      enum: ["PENDING", "ACTIVE", "REJECTED", "SOLD", "REMOVED"],
-      default: "PENDING"
+      default: null
     },
 
-    saleMode: {
+    whatsappAllowed: {
+      type: Boolean,
+      default: true
+    },
+
+    // managed listing fields
+    inspectionAddress: {
       type: String,
-      enum: ["GENERAL", "MANAGED"],
-      default: "GENERAL"
+      default: null
+    },
+
+    inspectionDate: {
+      type: Date,
+      default: null
+    },
+
+    inspectionTimeSlot: {
+      type: String,
+      default: null
+    },
+
+    inspectionStatus: {
+      type: String,
+      enum: [
+        "NOT_REQUESTED",
+        "PENDING",
+        "COMPLETED"
+      ],
+      default: "NOT_REQUESTED"
+    },
+
+    // listing status
+    status: {
+      type: String,
+      enum: [
+        "PENDING",
+        "ACTIVE",
+        "REJECTED",
+        "SOLD",
+        "REMOVED"
+      ],
+      default: "PENDING"
     },
 
     isFeatured: {
       type: Boolean,
       default: false
-    },
-
-    inspectionStatus: {
-      type: String,
-      enum: ["NOT_REQUESTED", "PENDING", "COMPLETED"],
-      default: "NOT_REQUESTED"
     }
   },
-  { timestamps: true }
+  {
+    timestamps: true
+  }
 );
 
-const listingModel = mongoose.model("listings", listingSchema);
+// indexes
+// listingSchema.index({ brand: 1 });
+// listingSchema.index({ carModel: 1 });
+// listingSchema.index({ city: 1 });
+// listingSchema.index({ price: 1 });
+// listingSchema.index({ year: -1 });
+// listingSchema.index({ createdAt: -1 });
+
+listingSchema.index({ brand: 1 });
+listingSchema.index({ carModel: 1 });
+listingSchema.index({ city: 1 });
+listingSchema.index({ bodyType: 1 });
+listingSchema.index({ price: 1 });
+listingSchema.index({ year: -1 });
+listingSchema.index({ mileage: 1 });
+listingSchema.index({ engineType: 1 });
+listingSchema.index({ transmission: 1 });
+listingSchema.index({ assembly: 1 });
+listingSchema.index({ saleMode: 1 });
+listingSchema.index({ isFeatured: -1 });
+listingSchema.index({ createdAt: -1 });
+
+listingSchema.index(
+  {
+    seller: 1,
+    brand: 1,
+    carModel: 1,
+    city: 1,
+    year: 1
+  },
+  {
+    unique: true,
+    partialFilterExpression: {
+      status: {
+        $in: ["PENDING", "ACTIVE"]
+      }
+    }
+  }
+);
+
+const listingModel = mongoose.model(
+  "listings",
+  listingSchema
+);
+
 export default listingModel;
+

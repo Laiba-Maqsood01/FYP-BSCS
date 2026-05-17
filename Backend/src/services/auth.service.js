@@ -11,12 +11,12 @@ import { sendEmail } from "../services/email.service.js";
 import { generateAccessToken, generateRefreshToken } from "../utils/token.utils.js";
 import { ACCOUNT_STATUS } from "../utils/constants.js";
 
-export async function registerUser({ username, email, password }) {
-
+export async function registerUser({ username, email, mobileNumber, password }) {
     const isAlreadyExist = await userModel.findOne({
         $or: [
             { username },
-            { email }
+            { email },
+            { mobileNumber }
         ]
     })
 
@@ -33,6 +33,7 @@ export async function registerUser({ username, email, password }) {
     const user = await userModel.create({
         username,
         email,
+        mobileNumber,
         password: hashedPassword
     })
 
@@ -61,7 +62,7 @@ export async function registerUser({ username, email, password }) {
 }
 
 
-export async function loginUser({ email, password, ip, userAgent }) {
+export async function loginUser({ email, password, rememberMe, ip, userAgent }) {
 
     const user = await userModel.findOne({ email }).select("+password")
     if (!user) {
@@ -91,6 +92,10 @@ export async function loginUser({ email, password, ip, userAgent }) {
         throw new ApiError(401, "Invalid Password!");
     }
 
+    const refreshExpiry = rememberMe
+        ? 7 * 24 * 60 * 60 * 1000
+        : 24 * 60 * 60 * 1000;
+
     //   Refresh and Access tokens for auth 
     const refreshToken = generateRefreshToken(user._id)
 
@@ -103,7 +108,7 @@ export async function loginUser({ email, password, ip, userAgent }) {
         ip,
         userAgent,
         expiresAt: new Date(
-            Date.now() + 7 * 24 * 60 * 60 * 1000
+            Date.now() + refreshExpiry
         )
     })
 
