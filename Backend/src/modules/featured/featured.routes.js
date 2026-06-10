@@ -7,11 +7,19 @@ import { requestFeaturedSchema } from "./featured.validation.js";
 
 const router = Router();
 
+// POST /api/featured/request
 router.post(
   "/request",
   authMiddleware,
   validate(requestFeaturedSchema),
   controller.requestFeatured
+);
+
+// POST /api/featured/:featureId/payment
+router.post(
+  "/:featureId/payment",
+  authMiddleware,
+  controller.createFeaturedPayment
 );
 
 export default router;

@@ -8,6 +8,8 @@ import inspectionRouter from "./modules/inspection/inspection.routes.js"
 
 import featuredRouter from "./modules/featured/featured.routes.js";
 
+import paymentRouter from "./modules/payment/payment.routes.js";
+
 import masterRouter from "./modules/master/master.routes.js";
 
 import express from "express";
@@ -34,6 +36,14 @@ app.use(cors());
 //It's Standard security headers
 app.use(helmet());
 
+// for stripe webhook  /api/payment
+app.use(
+  "/api/payment",
+  express.raw({ type: "application/json" }),
+  paymentRouter
+);
+
+
 // express middleware
 app.use(express.json());
 
@@ -56,7 +66,7 @@ app.use("/api/listings", listingRouter);
 app.use("/api/inspection", inspectionRouter)
 
 // Featured request handling, starts with /api/featured
-app.use( "/api/featured", featuredRouter); 
+app.use("/api/featured", featuredRouter);
 
 // use global error handler
 app.use(errorHandler);

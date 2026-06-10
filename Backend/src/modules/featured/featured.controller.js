@@ -18,3 +18,19 @@ export const requestFeatured = asyncHandler(async (req, res) => {
         )
     );
 });
+
+export const createFeaturedPayment = asyncHandler(async (req, res) => {
+
+    const result = await featuredService.createFeaturedPayment(
+        req.params.featureId,
+        req.user._id
+    );
+
+    res.status(200).json(
+        new ApiResponse(
+            200,
+            "Featured payment session created",
+            result
+        )
+    );
+});
