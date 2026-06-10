@@ -1,20 +1,11 @@
 import listingModel from "./listing.model.js";
+import inspectionModel from "../inspection/inspection.model.js";
 import brandModel from "../master/models/brand.model.js"
 import car_Model from "../master/models/carModel.model.js"
 import { ApiError } from "../../utils/apiError.js";
 
 // For creating listing
 export async function createListing(data, userId) {
-
-  if (
-    data.saleMode === "MANAGED" &&
-    !data.inspectionAddress
-  ) {
-    throw new ApiError(
-      400,
-      "Inspection address is required"
-    );
-  }
 
   const existingListing = await listingModel.findOne({
     seller: userId,
@@ -38,26 +29,10 @@ export async function createListing(data, userId) {
 
   const listingData = {
     ...data,
-    seller: userId
+    seller: userId,
+    status: "PENDING"
   };
 
-  // managed workflow
-  if (data.saleMode === "MANAGED") {
-
-    listingData.inspectionStatus =
-      "PENDING";
-
-    listingData.status = "PENDING";
-  }
-
-  // general workflow
-  else {
-
-    listingData.inspectionStatus =
-      "NOT_REQUESTED";
-
-    listingData.status = "PENDING";
-  }
 
   const listing =
     await listingModel.create(listingData);
@@ -79,141 +54,6 @@ export async function getMyListings(userId) {
 }
 
 // update any listing
-// export async function updateListing(listingId, userId, data) {
-
-//   const listing = await listingModel.findById(listingId);
-
-//   if (!listing) {
-//     throw new ApiError(404, "Listing not found");
-//   }
-
-//   if (listing.seller.toString() !== userId.toString()) {
-//     throw new ApiError(403, "Not allowed");
-//   }
-
-//   if (["REMOVED", "SOLD"].includes(listing.status)) {
-//     throw new ApiError(
-//       400,
-//       `Cannot update a ${listing.status.toLowerCase()} listing`
-//     );
-//   }
-
-//   const allowedUpdates = [
-//     "city",
-//     "registeredIn",
-
-//     "year",
-//     "brand",
-//     "carModel",
-//     "bodyType",
-
-//     "engineType",
-//     "engineCapacity",
-
-//     "transmission",
-//     "assembly",
-
-//     "exteriorColor",
-
-//     "mileage",
-//     "price",
-
-//     "description",
-
-//     "images",
-
-//     "mobileNumber",
-//     "secondaryNumber",
-//     "whatsappAllowed",
-
-//     // managed listing fields
-//     "inspectionAddress",
-//     "inspectionDate",
-//     "inspectionTimeSlot"
-//   ];
-
-//   // we are removing unwanted fields(I mean that fields which are not allowed to update)
-//   Object.keys(data).forEach((key) => {
-//     if (!allowedUpdates.includes(key)) {
-//       delete data[key];
-//     }
-//   });
-
-//   // in case if the user is updating managed listing
-//   const inspectionFields = [
-//     "inspectionAddress",
-//     "inspectionDate",
-//     "inspectionTimeSlot"
-//   ];
-
-//   if (listing.inspectionStatus === "COMPLETED") {
-
-//     const tryingToModifyInspection = Object.keys(data).some(key =>
-//       inspectionFields.includes(key)
-//     );
-
-//     if (tryingToModifyInspection) {
-//       throw new ApiError(
-//         400,
-//         "Inspection is completed. You cannot modify inspection details. Request re-inspection instead."
-//       );
-//     }
-//   }
-
-
-//   // In case the user creates a listing then another one, updating the second one with the details of first one to duplicate first one
-//   const duplicateListing =
-//     await listingModel.findOne({
-//       // Find duplicate listings EXCEPT this current one.
-//       _id: { $ne: listingId },
-
-//       seller: userId,
-
-//       // Use new brand if provided, otherwise use old existing brand
-//       brand:
-//         data.brand || listing.brand,
-
-//       carModel:
-//         data.carModel ||
-//         listing.carModel,
-
-//       city:
-//         data.city || listing.city,
-
-//       year:
-//         data.year || listing.year,
-
-//       transmission:
-//         data.transmission ||
-//         listing.transmission,
-
-//       engineCapacity:
-//         data.engineCapacity ||
-//         listing.engineCapacity,
-
-//       status: {
-//         $in: [
-//           "PENDING",
-//           "ACTIVE"
-//         ]
-//       }
-//     });
-
-//   if (duplicateListing) {
-
-//     throw new ApiError(
-//       409,
-//       "Duplicate listing already exists"
-//     );
-//   }
-
-//   Object.assign(listing, data);
-
-//   await listing.save();
-
-//   return listing;
-// }
-
 export async function updateListing(listingId, userId, data) {
   const listing = await listingModel.findById(listingId);
 
@@ -232,25 +72,6 @@ export async function updateListing(listingId, userId, data) {
     );
   }
 
-  //INSPECTION RULE (LOCK AFTER COMPLETION)
-  const inspectionFields = [
-    "inspectionAddress",
-    "inspectionDate",
-    "inspectionTimeSlot"
-  ];
-
-  const isInspectionCompleted = listing.inspectionStatus === "COMPLETED";
-
-  const isUpdatingInspection = inspectionFields.some((field) =>
-    Object.prototype.hasOwnProperty.call(data, field)
-  );
-
-  if (isInspectionCompleted && isUpdatingInspection) {
-    throw new ApiError(
-      400,
-      "Inspection already completed. Please request re-inspection instead."
-    );
-  }
 
   //SANITIZE INPUT
   const allowedUpdates = [
@@ -451,8 +272,14 @@ export async function getPublicListings(query) {
 
   if (assembly) filters.assembly = assembly;
 
-  if (inspectionStatus) {
-    filters.inspectionStatus = inspectionStatus;
+  // INSPECTED CARS FILTER
+  if (inspectionStatus === "INSPECTED") {
+
+    const inspectedIds = await inspectionModel.distinct("listing", {
+      status: "COMPLETED"
+    });
+
+    filters._id = { $in: inspectedIds };
   }
 
   if (saleMode) {
@@ -501,29 +328,6 @@ export async function getPublicListings(query) {
   }
 
   // search
-  // if (search) {
-  //   filters.$or = [
-  //     {
-  //       title: {
-  //         $regex: search,
-  //         $options: "i"
-  //       }
-  //     },
-  //     {
-  //       brand: {
-  //         $regex: search,
-  //         $options: "i"
-  //       }
-  //     },
-  //     {
-  //       model: {
-  //         $regex: search,
-  //         $options: "i"
-  //       }
-  //     }
-  //   ];
-  // }
-
   if (search) {
     const brands = await brandModel.find({
       name: { $regex: search, $options: "i" }

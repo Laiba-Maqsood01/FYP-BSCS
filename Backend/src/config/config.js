@@ -32,6 +32,17 @@ if(!process.env.GOOGLE_USER){
     throw new Error("GOOGLE_USER is not defined in environment variables.");
 }
 
+// Stripe related variables
+if(!process.env.STRIPE_SECRET_KEY){
+    throw new Error("STRIPE_SECRET_KEY is not defined in environment variables.");
+}
+if(!process.env.STRIPE_WEBHOOK_SECRET){
+    throw new Error("STRIPE_WEBHOOK_SECRET is not defined in environment variables.");
+}
+if(!process.env.CLIENT_URL){
+    throw new Error("CLIENT_URL is not defined in environment variables.");
+}
+
 
 const config = {
     MONGO_URI: process.env.MONGO_URI,
@@ -40,8 +51,10 @@ const config = {
     // GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
     // GOOGLE_REFRESH_TOKEN: process.env.GOOGLE_REFRESH_TOKEN,
     GOOGLE_USER: process.env.GOOGLE_USER,
-    GOOGLE_APP_PASSWORD: process.env.GOOGLE_APP_PASSWORD
-
+    GOOGLE_APP_PASSWORD: process.env.GOOGLE_APP_PASSWORD,
+    STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
+    STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
+    CLIENT_URL: process.env.CLIENT_URL
 }
 
 export default config
