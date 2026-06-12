@@ -7,6 +7,13 @@ import { requestInspectionParamsSchema, inspectionRequestSchema } from "./inspec
 
 const router = Router();
 
+// GET /api/inspection/my-inspections
+router.get(
+  "/my-inspections",
+  authMiddleware,
+  controller.getMyInspections
+);
+
 //POST /api/inspection/:listingId/request
 router.post(
     "/:listingId/request",

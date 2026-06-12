@@ -88,6 +88,26 @@ const inspectionSchema = new mongoose.Schema(
       default: "PENDING"
     },
 
+    cancelReason: {
+      type: String,
+      default: null
+    },
+
+    refundRequired: {
+      type: Boolean,
+      default: false
+    },
+
+    refundStatus: {
+      type: String,
+      enum: [
+        "NOT_REQUIRED",
+        "PENDING",
+        "PROCESSED"
+      ],
+      default: "NOT_REQUIRED"
+    },
+
     // seller inspection location
     inspectionAddress: {
       type: String,
@@ -136,6 +156,10 @@ inspectionSchema.index(
     }
   }
 );
+
+inspectionSchema.index({ requestedBy: 1 });
+inspectionSchema.index({ listing: 1 });
+inspectionSchema.index({ status: 1 });
 
 const inspectionModel = mongoose.model("inspections", inspectionSchema);
 export default inspectionModel;

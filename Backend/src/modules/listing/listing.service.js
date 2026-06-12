@@ -1,5 +1,6 @@
 import listingModel from "./listing.model.js";
 import inspectionModel from "../inspection/inspection.model.js";
+import featuredModel from "../featured/featured.model.js"
 import brandModel from "../master/models/brand.model.js"
 import car_Model from "../master/models/carModel.model.js"
 import { ApiError } from "../../utils/apiError.js";
@@ -210,6 +211,74 @@ export async function deleteListing(listingId, userId) {
     throw new ApiError(400, "Sold listing cannot be removed");
   }
 
+  // BLOCK IF INSPECTION IS IN PROGRESS
+  const inProgressInspection = await inspectionModel.findOne({
+    listing: listingId,
+    status: "IN_PROGRESS"
+  });
+
+  if (inProgressInspection) {
+    throw new ApiError(
+      400,
+      "Listing cannot be removed while inspection is in progress"
+    );
+  }
+
+  // FETCH INSPECTIONS THAT MUST BE CANCELLED
+  const inspections = await inspectionModel.find({
+    listing: listingId,
+    status: {
+      $in: [
+        "PENDING",
+        "PENDING_COORDINATION",
+        "SCHEDULED"
+      ]
+    }
+  });
+
+  for (const inspection of inspections) {
+
+    let refundRequired = false;
+
+    // BUYER PAID AND WAITING COORDINATION
+    if (inspection.status === "PENDING_COORDINATION") 
+    {
+      refundRequired = true;
+    }
+
+    // SCHEDULED BUYER INSPECTION
+    if (inspection.status === "SCHEDULED" && inspection.inspectionBy === "BUYER")
+    {
+      refundRequired = true;
+    }
+
+    inspection.status = "CANCELLED";
+
+    inspection.cancelReason = "Listing removed by seller";
+
+    inspection.refundRequired = refundRequired;
+
+    inspection.refundStatus = refundRequired ? "PENDING" : "NOT_REQUIRED";
+
+    await inspection.save();
+  }
+
+  // FEATURED CLEANUP
+  await featuredModel.updateMany(
+    {
+      listing: listingId,
+      status: {
+        $in: ["PENDING", "ACTIVE"]
+      }
+    },
+    {
+      $set: {
+        status: "REMOVED"
+      }
+    }
+  );
+
+  listing.isFeatured = false;
   listing.status = "REMOVED";
   await listing.save();
 

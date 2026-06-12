@@ -12,6 +12,8 @@ import paymentRouter from "./modules/payment/payment.routes.js";
 
 import masterRouter from "./modules/master/master.routes.js";
 
+import favoriteRoutes from "./modules/favorite/favorite.routes.js";
+
 import express from "express";
 import morgan from "morgan";
 import helmet from "helmet";
@@ -67,6 +69,9 @@ app.use("/api/inspection", inspectionRouter)
 
 // Featured request handling, starts with /api/featured
 app.use("/api/featured", featuredRouter);
+
+// Favorite request handling, starts with /api/favorite
+app.use("/api/favorite", favoriteRoutes)
 
 // use global error handler
 app.use(errorHandler);
