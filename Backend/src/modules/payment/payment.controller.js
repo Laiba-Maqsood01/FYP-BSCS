@@ -42,3 +42,42 @@ export const stripeWebhook = async (req, res) => {
         res.status(400).send(`Webhook Error: ${err.message}`);
     }
 };
+
+export const getMyPayments = asyncHandler(
+  async (req, res) => {
+
+    const payments =
+      await paymentService.getMyPayments(
+        req.user._id,
+        req.query
+      );
+
+    res.status(200).json(
+      new ApiResponse(
+        200,
+        "Payment history fetched successfully",
+        payments
+      )
+    );
+  }
+);
+
+export const getPaymentById = asyncHandler(
+  async (req, res) => {
+
+    const payment =
+      await paymentService.getPaymentById(
+        req.params.paymentId,
+        req.user._id
+      );
+
+    res.status(200).json(
+      new ApiResponse(
+        200,
+        "Payment fetched successfully",
+        payment
+      )
+    );
+  }
+);
+

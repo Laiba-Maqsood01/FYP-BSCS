@@ -5,7 +5,7 @@ import { ApiResponse } from "../../utils/apiResponse.js";
 export const requestInspection = asyncHandler(async (req, res) => {
 
     const { listingId } = req.params; // already validated through zod
-    
+
     const inspection = await inspectionService.requestInspection(
         listingId,
         req.user._id
@@ -81,6 +81,22 @@ export const createInspectionPayment = asyncHandler(async (req, res) => {
             200,
             "Inspection payment session created",
             inspection
+        )
+    );
+});
+
+export const getMyInspections = asyncHandler(async (req, res) => {
+
+    const inspections = await inspectionService.getMyInspections(
+        req.user._id,
+        req.query
+    );
+
+    res.status(200).json(
+        new ApiResponse(
+            200,
+            "My inspections fetched successfully",
+            inspections
         )
     );
 });

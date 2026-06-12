@@ -75,7 +75,7 @@ const featuredSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["PENDING", "ACTIVE", "EXPIRED", "REJECTED"],
+      enum: ["PENDING", "ACTIVE", "EXPIRED", "REJECTED", "REMOVED"],
       default: "PENDING"
     },
 

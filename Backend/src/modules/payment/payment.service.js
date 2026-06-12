@@ -192,3 +192,52 @@ async function handleCheckoutSessionCompleted(session) {
   }
 }
 
+export async function getMyPayments(
+  userId,
+  filters = {}
+) {
+  const query = { user: userId };
+
+  if (filters.status) {
+    query.status = filters.status;
+  }
+
+  if (filters.purpose) {
+    query.purpose = filters.purpose;
+  }
+
+  return await paymentModel
+    .find(query)
+    .select(
+      "purpose amount currency status transactionId paymentMethod createdAt"
+    )
+    .sort({ createdAt: -1 });
+}
+
+export async function getPaymentById(
+  paymentId,
+  userId
+) {
+  const payment = await paymentModel
+    .findOne({
+      _id: paymentId,
+      user: userId
+    })
+    .populate({
+      path: "listing",
+      select:
+        "brand carModel year price status city images"
+    })
+    .populate({
+      path: "referenceId"
+    });
+
+  if (!payment) {
+    throw new ApiError(
+      404,
+      "Payment not found"
+    );
+  }
+
+  return payment;
+}

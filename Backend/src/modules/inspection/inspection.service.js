@@ -278,3 +278,157 @@ export async function createInspectionPayment(inspectionId, userId) {
     };
 }
 
+export async function getMyInspections(userId, filters = {}) {
+
+    const matchStage = {};
+
+    // optional filters
+    if (filters.status) {
+        matchStage.status = filters.status;
+    }
+
+    if (filters.type) {
+        matchStage.type = filters.type;
+    }
+
+    if (filters.inspectionBy) {
+        matchStage.inspectionBy = filters.inspectionBy;
+    }
+
+    if (filters.refundRequired !== undefined) {
+        matchStage.refundRequired =
+            filters.refundRequired === "true";
+    }
+
+    if (filters.refundStatus) {
+        matchStage.refundStatus = filters.refundStatus;
+    }
+
+    const inspections = await inspectionModel.aggregate([
+
+        // 1. apply filters on inspection fields
+        {
+            $match: matchStage
+        },
+
+        // 2. join listing collection
+        {
+            // replaces listing ID with full listing object
+            $lookup: {
+                from: "listings",
+                localField: "listing",
+                foreignField: "_id",
+                as: "listing"
+            }
+        },
+        // converts array into object, Because $lookup returns an array 
+        {
+            $unwind: "$listing"
+        },
+
+        // 3. join users (requestedBy)
+        {
+            // replaces user ID with full user object
+            $lookup: {
+                from: "users",
+                localField: "requestedBy",
+                foreignField: "_id",
+                as: "requestedBy"
+            }
+        },
+
+        {
+            $unwind: "$requestedBy"
+        },
+
+        // 4. filter by ownership (IMPORTANT PART)
+        {
+            $match: {
+                $or: [
+                    {
+                        // You are the requester
+                       requestedBy: userId
+                    },
+                    {
+                        // You own the listing
+                        "listing.seller": userId
+                    }
+                ]
+            }
+        },
+
+        // 5. populate brand + carModel
+        {
+            // replaces brand ID 
+            $lookup: {
+                from: "brands",
+                localField: "listing.brand",
+                foreignField: "_id",
+                as: "listing.brand"
+            }
+        },
+        {
+            $unwind: "$listing.brand"
+        },
+
+        {
+            // // replaces car_models ID 
+            $lookup: {
+                from: "car_models",
+                localField: "listing.carModel",
+                foreignField: "_id",
+                as: "listing.carModel"
+            }
+        },
+        {
+            $unwind: "$listing.carModel"
+        },
+
+        // 6. sort latest first
+        {
+            $sort: {
+                createdAt: -1
+            }
+        },
+
+        // 7. final shape (clean response)
+        {
+            $project: {
+                _id: 1,
+                type: 1,
+                inspectionBy: 1,
+                status: 1,
+                refundRequired: 1,
+                refundStatus: 1,
+                inspectionAddress: 1,
+                scheduledDate: 1,
+                timeSlot: 1,
+                createdAt: 1,
+
+                requestedBy: {
+                    _id: "$requestedBy._id",
+                    username: "$requestedBy.username",
+                    email: "$requestedBy.email"
+                },
+
+                listing: {
+                    _id: "$listing._id",
+                    year: "$listing.year",
+                    price: "$listing.price",
+                    status: "$listing.status",
+                    brand: {
+                        _id: "$listing.brand._id",
+                        name: "$listing.brand.name"
+                    },
+                    carModel: {
+                        _id: "$listing.carModel._id",
+                        name: "$listing.carModel.name"
+                    }
+                }
+            }
+        }
+    ]);
+
+    return inspections;
+}
+
