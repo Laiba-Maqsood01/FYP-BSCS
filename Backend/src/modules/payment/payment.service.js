@@ -57,9 +57,6 @@ export async function markSandboxSuccess(transactionId) {
     }
     await inspection.save();
 
-    // const listing = await listingModel.findById(payment.listing);
-    // listing.inspectionStatus = "PENDING";
-    // await listing.save();
   }
 
   return payment;
@@ -238,6 +235,27 @@ export async function getPaymentById(
       "Payment not found"
     );
   }
+
+  return payment;
+}
+
+export async function processStripeRefund(inspectionId) {
+  const payment = await paymentModel.findOne({
+    referenceId: inspectionId,
+    status: "SUCCESS",
+  });
+
+  if (!payment) {
+    throw new ApiError(404, "No successful payment found for this inspection");
+  }
+
+  if (!payment.stripePaymentIntentId) {
+    throw new ApiError(400, "No Stripe payment intent found — cannot process refund");
+  }
+
+  await stripe.refunds.create({
+    payment_intent: payment.stripePaymentIntentId,
+  });
 
   return payment;
 }

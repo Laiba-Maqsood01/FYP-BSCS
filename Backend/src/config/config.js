@@ -43,6 +43,15 @@ if(!process.env.CLIENT_URL){
     throw new Error("CLIENT_URL is not defined in environment variables.");
 }
 
+if(!process.env.EMAIL_ADMIN){
+    throw new Error("EMAIL_ADMIN is not defined in environment variables.");
+}
+
+if(!process.env.ADMIN_PASSWORD){
+    throw new Error("ADMIN_PASSWORD is not defined in environment variables.");
+}
+
+
 
 const config = {
     MONGO_URI: process.env.MONGO_URI,
@@ -54,7 +63,10 @@ const config = {
     GOOGLE_APP_PASSWORD: process.env.GOOGLE_APP_PASSWORD,
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
-    CLIENT_URL: process.env.CLIENT_URL
+    CLIENT_URL: process.env.CLIENT_URL,
+
+    EMAIL_ADMIN: process.env.EMAIL_ADMIN,
+    ADMIN_PASSWORD: process.env.ADMIN_PASSWORD
 }
 
 export default config

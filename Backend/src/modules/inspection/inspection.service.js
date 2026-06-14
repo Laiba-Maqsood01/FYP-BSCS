@@ -3,6 +3,8 @@ import listingModel from "../listing/listing.model.js";
 import paymentModel from "../payment/payment.model.js";
 import { ApiError } from "../../utils/apiError.js";
 
+import userModel from "../../models/user.model.js";
+
 import { calculateInspectionFee } from "./inspectionPricing.js";
 
 import { createStripeCheckoutSession } from "../payment/payment.service.js";
@@ -48,7 +50,7 @@ export async function requestInspection(listingId, userId, payload = {}) {
     const existingInspection = await inspectionModel.findOne({
         listing: listingId,
         status: {
-            $in: ["PENDING", "SCHEDULED", "IN_PROGRESS"]
+            $in: ["PENDING", "PENDING_COORDINATION", "SCHEDULED", "IN_PROGRESS"]
         }
     });
 
@@ -247,6 +249,10 @@ export async function createInspectionPayment(inspectionId, userId) {
         );
     }
 
+    // Fetch user for payerSnapshot
+    const user = await userModel.findById(userId).select("username email");
+    if (!user) throw new ApiError(404, "User not found");
+
     // 🧠 FIXED: dynamic pricing based on listing
     const amount = calculateInspectionFee(inspection.listing);
 
@@ -259,7 +265,12 @@ export async function createInspectionPayment(inspectionId, userId) {
         referenceId: inspection._id,
         amount,
         transactionId,
-        status: "PENDING"
+        status: "PENDING",
+        payerSnapshot: {           
+            userId: user._id,
+            username: user.username,
+            email: user.email
+        }
     });
 
     inspection.payment = payment._id;
@@ -347,7 +358,7 @@ export async function getMyInspections(userId, filters = {}) {
                 $or: [
                     {
                         // You are the requester
-                       requestedBy: userId
+                        requestedBy: userId
                     },
                     {
                         // You own the listing

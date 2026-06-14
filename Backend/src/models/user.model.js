@@ -63,6 +63,10 @@ const userSchema = new mongoose.Schema({
     deletedAt: {
         type: Date,
         default: null
+    },
+    blockedUntil: {
+        type: Date,
+        default: null
     }
 },
     {

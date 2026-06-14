@@ -5,6 +5,9 @@ import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { ACCOUNT_STATUS } from "../utils/constants.js";
 
+import { checkAndAutoUnblock } from "../helpers/user.helper.js";
+
+
 export async function authMiddleware(req, res, next) {
     try {
         const authHeader = req.headers.authorization;
@@ -30,13 +33,15 @@ export async function authMiddleware(req, res, next) {
         }
 
         // 3. Check account status
-        if (
-            user.accountStatus &&
-            user.accountStatus !== ACCOUNT_STATUS.ACTIVE
-        ) {
-            return res.status(403).json({
-                message: `Account is ${user.accountStatus}`
-            })
+        // User already has a valid token, block expires mid-session
+        await checkAndAutoUnblock(user);
+
+        if (user.accountStatus !== ACCOUNT_STATUS.ACTIVE) {
+            const message =
+                user.accountStatus === ACCOUNT_STATUS.BLOCKED && user.blockedUntil
+                    ? `Your account is blocked until ${user.blockedUntil.toDateString()}`
+                    : `Your account is ${user.accountStatus}`;
+            return res.status(403).json({ message });
         }
 
         // 4. session valid or not

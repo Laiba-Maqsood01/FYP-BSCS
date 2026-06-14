@@ -14,6 +14,10 @@ import masterRouter from "./modules/master/master.routes.js";
 
 import favoriteRoutes from "./modules/favorite/favorite.routes.js";
 
+import adminRouter from "./modules/admin/admin.routes.js";
+
+import { startFeaturedExpiryJob } from "./jobs/featured.expiry.job.js";
+
 import express from "express";
 import morgan from "morgan";
 import helmet from "helmet";
@@ -37,6 +41,9 @@ app.use(cors());
 // Helmet for securing extra information, like hackers can check our tool(express) then can find the vulnerability and attack our website.
 //It's Standard security headers
 app.use(helmet());
+
+// Start cron jobs to auto handle featured expiry every midnight
+startFeaturedExpiryJob();
 
 // for stripe webhook  /api/payment
 app.use(
@@ -72,6 +79,9 @@ app.use("/api/featured", featuredRouter);
 
 // Favorite request handling, starts with /api/favorite
 app.use("/api/favorite", favoriteRoutes)
+
+// Admin routes, starts with /api/admin
+app.use("/api/admin", adminRouter);
 
 // use global error handler
 app.use(errorHandler);
