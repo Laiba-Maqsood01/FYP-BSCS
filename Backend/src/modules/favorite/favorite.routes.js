@@ -6,7 +6,7 @@ import { listingIdParamsSchema} from "./favorite.validation.js";
 
 const router = Router();
 
-// Save Listing
+// Save Listing , POST  /api/favorite/:listingId
 router.post(
   "/:listingId",
   authMiddleware,
@@ -14,7 +14,7 @@ router.post(
   controller.saveListing
 );
 
-// Remove Favorite
+// Remove Favorite  DELETE /api/favorite/:listingId
 router.delete(
   "/:listingId",
   authMiddleware,
@@ -23,7 +23,7 @@ router.delete(
 );
 
 
-// My Favorites
+// My Favorites 
 router.get(
   "/",
   authMiddleware,
@@ -31,7 +31,7 @@ router.get(
 );
 
 
-// Check Status
+// Check Status  GET /api/favorite/:listingId/status
 // Has this user already saved this listing?
 router.get(
   "/:listingId/status",

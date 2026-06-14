@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import userModel from "../models/user.model.js";
 import sessionModel from "../models/session.model.js";
+import listingModel from "../modules/listing/listing.model.js";
 import config from "../config/config.js";
 import otpModel from "../models/otp.model.js";
 import { generateOTP, getOtpHtml } from "../utils/utils.js";
@@ -10,6 +11,9 @@ import { ApiError } from "../utils/apiError.js"
 import { sendEmail } from "../services/email.service.js";
 import { generateAccessToken, generateRefreshToken } from "../utils/token.utils.js";
 import { ACCOUNT_STATUS } from "../utils/constants.js";
+
+import { cleanupListingForDeletion } from "../helpers/listing.cleanup.helper.js";
+import { checkAndAutoUnblock } from "../helpers/user.helper.js";
 
 export async function registerUser({ username, email, mobileNumber, password }) {
     const isAlreadyExist = await userModel.findOne({
@@ -82,9 +86,16 @@ export async function loginUser({ email, password, rememberMe, ip, userAgent }) 
         throw new ApiError(403, "Your account is temporarily suspended. Contact support.");
     }
 
+    // User whose block expired tries to log in fresh
+    await checkAndAutoUnblock(user);
+
     if (user.accountStatus === ACCOUNT_STATUS.BLOCKED) {
-        throw new ApiError(403, "Your account has been permanently blocked.");
+        const message = user.blockedUntil
+            ? `Your account is blocked until ${user.blockedUntil.toDateString()}`
+            : `Your account has been permanently blocked. Contact support.`;
+        throw new ApiError(403, message);
     }
+
 
     const isPasswordValid = await bcrypt.compare(password, user.password)
 
@@ -385,32 +396,70 @@ export async function resetPassword(token, newPassword) {
 }
 
 // export async function deleteAccount(userId) {
-//     await userModel.findByIdAndDelete(userId);
 
-//     // remove all sessions
-//     await sessionModel.deleteMany({ user: userId })
+//     const user = await userModel.findById(userId);
 
-//     // remove otp
-//     await otpModel.deleteMany({ user: userId })
+//     if (!user) {
+//         throw new ApiError(404, "User not found");
+//     }
+
+//     user.isDeleted = true;
+//     user.deletedAt = new Date();
+
+//     // Optional anonymization
+//     user.email = `deleted_${user._id}@deleted.com`;
+//     user.username = `deleted_${user._id}`;
+
+//     await user.save();
+
+//     await sessionModel.updateMany(
+//         { user: userId },
+//         { revoked: true }
+//     );
+
+//     return true;
 // }
 
 export async function deleteAccount(userId) {
-
     const user = await userModel.findById(userId);
+    if (!user) throw new ApiError(404, "User not found");
 
-    if (!user) {
-        throw new ApiError(404, "User not found");
+    // Step 1 — get all listings owned by this user
+    const listings = await listingModel.find(
+        { seller: userId },
+        { _id: 1 } // only need IDs
+    );
+
+    // Step 2 — check if any listing is blocked by IN_PROGRESS inspection
+    for (const listing of listings) {
+        const { blocked } = await cleanupListingForDeletion(
+            listing._id,
+            false, // user cannot force cancel
+            "Listing deleted — owner deleted account"
+        );
+
+        if (blocked) {
+            throw new ApiError(
+                400,
+                "Cannot delete account. One or more listings have an inspection currently in progress. Please wait for the inspection to complete."
+            );
+        }
     }
 
+    // Step 3 — all listings are safe, mark them all as REMOVED
+    await listingModel.updateMany(
+        { seller: userId },
+        { status: "REMOVED" }
+    );
+
+    // Step 4 — anonymize and soft delete user
     user.isDeleted = true;
     user.deletedAt = new Date();
-
-    // Optional anonymization
     user.email = `deleted_${user._id}@deleted.com`;
     user.username = `deleted_${user._id}`;
-
     await user.save();
 
+    // Step 5 — revoke all sessions
     await sessionModel.updateMany(
         { user: userId },
         { revoked: true }

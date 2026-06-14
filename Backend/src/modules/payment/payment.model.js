@@ -1,52 +1,3 @@
-// import mongoose from "mongoose";
-
-// const paymentSchema = new mongoose.Schema(
-//   {
-//     user: {
-//       type: mongoose.Schema.Types.ObjectId,
-//       ref: "users",
-//       required: true
-//     },
-
-//     listing: {
-//       type: mongoose.Schema.Types.ObjectId,
-//       ref: "listings",
-//       required: true
-//     },
-
-//     featuredRequest: {
-//       type: mongoose.Schema.Types.ObjectId,
-//       ref: "featured_listings"
-//     },
-
-//     amount: {
-//       type: Number,
-//       required: true
-//     },
-
-//     paymentMethod: {
-//       type: String,
-//       default: "SANDBOX"
-//     },
-
-//     transactionId: {
-//       type: String,
-//       unique: true
-//     },
-
-//     status: {
-//       type: String,
-//       enum: ["PENDING", "SUCCESS", "FAILED"],
-//       default: "PENDING"
-//     }
-//   },
-//   { timestamps: true }
-// );
-
-// const paymentModel = mongoose.model("payments", paymentSchema);
-
-// export default paymentModel;
-
 import mongoose from "mongoose";
 
 const paymentSchema = new mongoose.Schema(
@@ -99,6 +50,16 @@ const paymentSchema = new mongoose.Schema(
       default: "SANDBOX"
     },
 
+    // because if the admin deleted listing, and the buyer requested for inspection has also deleted his account/or deleted by admin, then just for audit, for admin view that wo paid, and whome to refund should go.   
+    // it will not be used in stripe refund, because stripe already has payment details. it's just for admin visibility, without it admin have to check stripe dashbord.
+    payerSnapshot: {
+      userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User"
+      },
+      username: { type: String },
+      email: { type: String }
+    },
     stripeSessionId: String,
     stripePaymentIntentId: String,
 
@@ -130,5 +91,5 @@ paymentSchema.index({ status: 1 });
 
 // paymentSchema.index({ transactionId: 1 }, { unique: true });
 
-const paymentModel= mongoose.model("payments", paymentSchema);
+const paymentModel = mongoose.model("payments", paymentSchema);
 export default paymentModel;
