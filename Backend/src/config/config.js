@@ -2,15 +2,15 @@ import dotenv from "dotenv"
 
 dotenv.config()
 
-if(!process.env.MONGO_URI){
+if (!process.env.MONGO_URI) {
     throw new Error("MONGO_URI is not existed in environment variables.");
 }
 
-if(!process.env.JWT_SECRET){
+if (!process.env.JWT_SECRET) {
     throw new Error("JWT_SECRET is not existed in environment variables.");
 }
 
-if(!process.env.GOOGLE_APP_PASSWORD){
+if (!process.env.GOOGLE_APP_PASSWORD) {
     throw new Error("GOOGLE_APP_PASSWORD is not existed in environment variables.");
 }
 
@@ -28,38 +28,48 @@ if(!process.env.GOOGLE_APP_PASSWORD){
 
 
 
-if(!process.env.GOOGLE_USER){
+if (!process.env.GOOGLE_USER) {
     throw new Error("GOOGLE_USER is not defined in environment variables.");
 }
 
 // Stripe related variables
-if(!process.env.STRIPE_SECRET_KEY){
+if (!process.env.STRIPE_SECRET_KEY) {
     throw new Error("STRIPE_SECRET_KEY is not defined in environment variables.");
 }
-if(!process.env.STRIPE_WEBHOOK_SECRET){
+if (!process.env.STRIPE_WEBHOOK_SECRET) {
     throw new Error("STRIPE_WEBHOOK_SECRET is not defined in environment variables.");
 }
-if(!process.env.CLIENT_URL){
+if (!process.env.CLIENT_URL) {
     throw new Error("CLIENT_URL is not defined in environment variables.");
 }
 
-if(!process.env.EMAIL_ADMIN){
+if (!process.env.EMAIL_ADMIN) {
     throw new Error("EMAIL_ADMIN is not defined in environment variables.");
 }
 
-if(!process.env.ADMIN_PASSWORD){
+if (!process.env.ADMIN_PASSWORD) {
     throw new Error("ADMIN_PASSWORD is not defined in environment variables.");
 }
 
-if(!process.env.PORT){
+if (!process.env.PORT) {
     throw new Error("PORT is not defined in environment variables.");
 }
 
 
-if(!process.env.FRONTEND_URL){
+if (!process.env.FRONTEND_URL) {
     throw new Error("PORT is not defined in environment variables.");
 }
 
+// Cloudinary related variables
+if (!process.env.CLOUDINARY_CLOUD_NAME) {
+    throw new Error("CLOUDINARY_CLOUD_NAME is not defined in environment variables.");
+}
+if (!process.env.CLOUDINARY_API_KEY) {
+    throw new Error("CLOUDINARY_API_KEY is not defined in environment variables.");
+}
+if (!process.env.CLOUDINARY_API_SECRET) {
+    throw new Error("CLOUDINARY_API_SECRET is not defined in environment variables.");
+}
 
 
 const config = {
@@ -78,7 +88,13 @@ const config = {
     ADMIN_PASSWORD: process.env.ADMIN_PASSWORD,
 
     PORT: process.env.PORT,
-    FRONTEND_URL: process.env.FRONTEND_URL
+    FRONTEND_URL: process.env.FRONTEND_URL,
+
+    // Cloudinary
+    CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME,
+    CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY,
+    CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET,
+
 }
 
 export default config

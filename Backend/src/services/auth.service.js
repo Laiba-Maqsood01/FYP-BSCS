@@ -12,12 +12,12 @@ import { sendEmail } from "../services/email.service.js";
 import { generateAccessToken, generateRefreshToken } from "../utils/token.utils.js";
 import { ACCOUNT_STATUS } from "../utils/constants.js";
 
-import config from "../config/config.js"
-
 import { cleanupListingForDeletion } from "../helpers/listing.cleanup.helper.js";
 import listingDeletionRequestModel from "../modules/managed-sale/listing-deletion-request.model.js"
 
 import { checkAndAutoUnblock } from "../helpers/user.helper.js";
+import { deleteImages, deleteFiles } from "../modules/upload/upload.service.js";
+import inspectionModel from "../modules/inspection/inspection.model.js";
 
 export async function registerUser({ username, email, mobileNumber, password }) {
     const isAlreadyExist = await userModel.findOne({
@@ -404,7 +404,7 @@ export async function deleteAccount(userId) {
     if (!user) throw new ApiError(404, "User not found");
 
     const listings = await listingModel.find(
-        { seller: userId }, 
+        { seller: userId },
         { _id: 1, saleMode: 1, status: 1 }
     );
 
@@ -455,6 +455,30 @@ export async function deleteAccount(userId) {
                 "Cannot delete account. One or more listings have an inspection currently in progress. Please wait for the inspection to complete."
             );
         }
+    }
+
+    // Delete all Cloudinary assets for each listing
+    for (const listing of listings) {
+        const fullListing = await listingModel.findById(listing._id, { images: 1 });
+
+        // Delete images
+        const imageFileIds = (fullListing.images || [])
+            .map((img) => img.fileId)
+            .filter(Boolean);
+
+        await deleteImages(imageFileIds);
+
+        // Delete inspection report PDFs if any
+        const inspections = await inspectionModel.find(
+            { listing: listing._id },
+            { report: 1 }
+        );
+
+        const reportFileIds = inspections
+            .map((insp) => insp.report?.fileId)
+            .filter(Boolean);
+
+        await deleteFiles(reportFileIds, "raw");
     }
 
     // Mark all listings REMOVED

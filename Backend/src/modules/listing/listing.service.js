@@ -4,6 +4,7 @@ import featuredModel from "../featured/featured.model.js"
 import brandModel from "../master/models/brand.model.js"
 import car_Model from "../master/models/carModel.model.js"
 import { ApiError } from "../../utils/apiError.js";
+import { deleteImages, deleteFiles } from "../upload/upload.service.js";
 
 // For creating listing
 export async function createListing(data, userId) {
@@ -236,31 +237,29 @@ export async function deleteListing(listingId, userId) {
     }
   });
 
-  for (const inspection of inspections) {
+  for (const Inspection of inspections) {
 
     let refundRequired = false;
 
     // BUYER PAID AND WAITING COORDINATION
-    if (inspection.status === "PENDING_COORDINATION") 
-    {
+    if (Inspection.status === "PENDING_COORDINATION") {
       refundRequired = true;
     }
 
     // SCHEDULED BUYER INSPECTION
-    if (inspection.status === "SCHEDULED" && inspection.inspectionBy === "BUYER")
-    {
+    if (Inspection.status === "SCHEDULED" && Inspection.inspectionBy === "BUYER") {
       refundRequired = true;
     }
 
-    inspection.status = "CANCELLED";
+    Inspection.status = "CANCELLED";
 
-    inspection.cancelReason = "Listing removed by seller";
+    Inspection.cancelReason = "Listing removed by seller";
 
-    inspection.refundRequired = refundRequired;
+    Inspection.refundRequired = refundRequired;
 
-    inspection.refundStatus = refundRequired ? "PENDING" : "NOT_REQUIRED";
+    Inspection.refundStatus = refundRequired ? "PENDING" : "NOT_REQUIRED";
 
-    await inspection.save();
+    await Inspection.save();
   }
 
   // FEATURED CLEANUP
@@ -277,6 +276,22 @@ export async function deleteListing(listingId, userId) {
       }
     }
   );
+
+  // Delete listing images from Cloudinary
+  const imageFileIds = (listing.images || [])
+    .map((img) => img.fileId)
+    .filter(Boolean);
+
+  await deleteImages(imageFileIds);
+
+  // Delete inspection report PDFs from Cloudinary (if any exist for this listing)
+  const Inspections = await inspectionModel.find({ listing: listingId });
+
+  const reportFileIds = Inspections
+    .map((insp) => insp.report?.fileId)
+    .filter(Boolean);
+
+  await deleteFiles(reportFileIds, "raw");
 
   listing.isFeatured = false;
   listing.status = "REMOVED";

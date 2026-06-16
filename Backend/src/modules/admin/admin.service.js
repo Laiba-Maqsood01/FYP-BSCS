@@ -10,6 +10,7 @@ import { ACCOUNT_STATUS } from "../../utils/constants.js";
 
 import { cleanupListingForDeletion } from "../../helpers/listing.cleanup.helper.js"
 import { processStripeRefund } from "../payment/payment.service.js";
+import { deleteImages, deleteFiles } from "../upload/upload.service.js";
 
 import listingDeletionRequestModel from "../managed-sale/listing-deletion-request.model.js";
 import commissionModel from "../managed-sale/commission.model.js";
@@ -387,13 +388,37 @@ export async function deleteUser(userId) {
     );
   }
 
-  // Step 4 — mark all listings as REMOVED
+  // Step 4 — delete all Cloudinary assets for each listing
+  for (const listing of listings) {
+    const fullListing = await listingModel.findById(listing._id, { images: 1 });
+
+    // Delete images
+    const imageFileIds = (fullListing.images || [])
+      .map((img) => img.fileId)
+      .filter(Boolean);
+
+    await deleteImages(imageFileIds);
+
+    // Delete inspection report PDFs if any
+    const inspections = await inspectionModel.find(
+      { listing: listing._id },
+      { report: 1 }
+    );
+
+    const reportFileIds = inspections
+      .map((insp) => insp.report?.fileId)
+      .filter(Boolean);
+
+    await deleteFiles(reportFileIds, "raw");
+  }
+
+  // Step 5 — mark all listings as REMOVED  ← renumber this and below
   await listingModel.updateMany(
     { seller: userId },
     { status: "REMOVED" }
   );
 
-  // Step 5 — anonymize and soft delete
+  // Step 6 — anonymize and soft delete
   user.isDeleted = true;
   user.deletedAt = new Date();
   user.email = `deleted_${user._id}@deleted.com`;
@@ -402,7 +427,7 @@ export async function deleteUser(userId) {
   user.blockedUntil = null;
   await user.save();
 
-  // Step 6 — revoke all sessions
+  // Step 7 — revoke all sessions
   await sessionModel.updateMany({ user: userId }, { revoked: true });
 
   return { message: "User deleted successfully" };
@@ -540,6 +565,13 @@ export async function rejectListing(listingId, reason) {
     throw new ApiError(400, `Cannot reject a listing with status ${listing.status}`);
   }
 
+  // Delete images from Cloudinary — rejected listing won't be published
+  const imageFileIds = (listing.images || [])
+    .map((img) => img.fileId)
+    .filter(Boolean);
+
+  await deleteImages(imageFileIds);
+
   listing.status = "REJECTED";
   listing.rejectionReason = reason;
   await listing.save();
@@ -568,6 +600,22 @@ export async function removeListing(listingId) {
   if (blocked) {
     throw new ApiError(400, "Could not remove listing");
   }
+
+  // Delete images from 
+  const imageFileIds = (listing.images || [])
+    .map((img) => img.fileId)
+    .filter(Boolean);
+
+  await deleteImages(imageFileIds);
+
+  // Delete pdf inspection reports
+  const inspections = await inspectionModel.find({ listing: listingId });
+
+  const reportFileIds = inspections
+    .map((insp) => insp.report?.fileId)
+    .filter(Boolean);
+
+  await deleteFiles(reportFileIds, "raw");
 
   listing.status = "REMOVED";
   await listing.save();
