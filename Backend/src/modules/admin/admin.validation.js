@@ -38,3 +38,19 @@ export const uploadReportSchema = z.object({
     fileId: z.string()
         .min(1, "File ID is required"),
 });
+
+export const rejectDeletionRequestSchema = z.object({
+    adminNote: z.string().min(5, "Admin note must be at least 5 characters"),
+});
+
+export const markSoldSchema = z.object({
+    salePrice: z
+        .number({ invalid_type_error: "Sale price must be a number" })
+        .positive("Sale price must be greater than 0"),
+});
+
+export const cancelCommissionSchema = z.object({
+    cancelReason: z
+        .string()
+        .min(10, "Cancel reason must be at least 10 characters"),
+});

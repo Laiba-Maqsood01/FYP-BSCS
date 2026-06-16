@@ -137,7 +137,8 @@ const listingSchema = new mongoose.Schema(
         "ACTIVE",
         "REJECTED",
         "SOLD",
-        "REMOVED"
+        "REMOVED",
+        "PENDING_COMMISSION"
       ],
       default: "PENDING"
     },

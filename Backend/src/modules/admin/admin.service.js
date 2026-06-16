@@ -11,6 +11,9 @@ import { ACCOUNT_STATUS } from "../../utils/constants.js";
 import { cleanupListingForDeletion } from "../../helpers/listing.cleanup.helper.js"
 import { processStripeRefund } from "../payment/payment.service.js";
 
+import listingDeletionRequestModel from "../managed-sale/listing-deletion-request.model.js";
+import commissionModel from "../managed-sale/commission.model.js";
+
 
 
 // Dashboard
@@ -344,10 +347,38 @@ export async function deleteUser(userId) {
   // Step 1 — get all listings owned by this user
   const listings = await listingModel.find(
     { seller: userId },
-    { _id: 1 }
+    { _id: 1, status: 1, saleMode: 1 }
   );
 
-  // Step 2 — force cleanup all listings (admin can override IN_PROGRESS)
+  // Step 2 — cancel any PENDING commissions first
+  for (const listing of listings) {
+    if (listing.status === "PENDING_COMMISSION") {
+      const commission = await commissionModel.findOne({
+        listing: listing._id,
+        status: { $in: ["PENDING", "EXPIRED"] },
+      });
+
+      if (commission) {
+        commission.status = "CANCELLED";
+        commission.cancelReason = "Account deleted by admin";
+        await commission.save();
+
+        // Cancel related pending payment if exists
+        if (commission.payment) {
+          await paymentModel.findByIdAndUpdate(commission.payment, {
+            status: "FAILED",
+          });
+        }
+      }
+      //  reset listing status so cleanup helper doesn't block it
+      await listingModel.findByIdAndUpdate(listing._id, {
+        status: "ACTIVE",
+      });
+    }
+  }
+
+
+  // Step 3 — force cleanup all listings (admin can override IN_PROGRESS)
   for (const listing of listings) {
     await cleanupListingForDeletion(
       listing._id,
@@ -356,13 +387,13 @@ export async function deleteUser(userId) {
     );
   }
 
-  // Step 3 — mark all listings as REMOVED
+  // Step 4 — mark all listings as REMOVED
   await listingModel.updateMany(
     { seller: userId },
     { status: "REMOVED" }
   );
 
-  // Step 4 — anonymize and soft delete
+  // Step 5 — anonymize and soft delete
   user.isDeleted = true;
   user.deletedAt = new Date();
   user.email = `deleted_${user._id}@deleted.com`;
@@ -371,7 +402,7 @@ export async function deleteUser(userId) {
   user.blockedUntil = null;
   await user.save();
 
-  // Step 5 — revoke all sessions
+  // Step 6 — revoke all sessions
   await sessionModel.updateMany({ user: userId }, { revoked: true });
 
   return { message: "User deleted successfully" };
@@ -932,4 +963,220 @@ export async function approveRefund(inspectionId) {
   await inspection.save();
 
   return { message: "Refund processed successfully", inspection };
+}
+
+
+// DELETION REQUESTS
+export async function getDeletionRequests(query) {
+  const { page = 1, limit = 10, status } = query;
+
+  const filter = {};
+  if (status) filter.status = status;
+
+  const skip = (Number(page) - 1) * Number(limit);
+
+  const [requests, total] = await Promise.all([
+    listingDeletionRequestModel
+      .find(filter)
+      .populate("listing", "title saleMode status")
+      .populate("requestedBy", "username email")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(Number(limit)),
+    listingDeletionRequestModel.countDocuments(filter),
+  ]);
+
+  return {
+    requests,
+    pagination: {
+      total,
+      page: Number(page),
+      limit: Number(limit),
+      totalPages: Math.ceil(total / Number(limit)),
+    },
+  };
+}
+
+export async function approveDeletionRequest(requestId) {
+  const request = await listingDeletionRequestModel
+    .findById(requestId)
+    .populate("listing");
+
+  if (!request) throw new ApiError(404, "Deletion request not found");
+
+  if (request.status !== "PENDING") {
+    throw new ApiError(400, `Request is already ${request.status}`);
+  }
+
+  // Force cleanup the listing (admin override)
+  await cleanupListingForDeletion(
+    request.listing._id,
+    true, // forceCancel
+    "Listing deleted — deletion request approved by admin"
+  );
+
+  // Mark listing as REMOVED
+  await listingModel.findByIdAndUpdate(request.listing._id, {
+    status: "REMOVED",
+  });
+
+  // Approve the request
+  request.status = "APPROVED";
+  await request.save();
+
+  return { message: "Deletion request approved, listing removed", request };
+}
+
+export async function rejectDeletionRequest(requestId, adminNote) {
+  const request = await listingDeletionRequestModel.findById(requestId);
+
+  if (!request) throw new ApiError(404, "Deletion request not found");
+
+  if (request.status !== "PENDING") {
+    throw new ApiError(400, `Request is already ${request.status}`);
+  }
+
+  request.status = "REJECTED";
+  request.adminNote = adminNote;
+  await request.save();
+
+  return { message: "Deletion request rejected", request };
+}
+
+
+// COMMISSION
+export async function markListingSold(listingId, salePrice, adminId) {
+  const listing = await listingModel.findById(listingId);
+
+  if (!listing) throw new ApiError(404, "Listing not found");
+
+  if (listing.saleMode !== "MANAGED") {
+    throw new ApiError(400, "Only managed listings can be marked as sold");
+  }
+
+  if (listing.status !== "ACTIVE") {
+    throw new ApiError(
+      400,
+      `Cannot mark listing as sold. Current status: ${listing.status}`
+    );
+  }
+
+  // Calculate commission
+  const commissionRate = 0.009;
+  const commissionAmount = Math.round(salePrice * commissionRate * 100) / 100;
+
+  // Set listing to PENDING_COMMISSION
+  listing.status = "PENDING_COMMISSION";
+  await listing.save();
+
+  // Create commission record
+  const commission = await commissionModel.create({
+    listing: listingId,
+    seller: listing.seller,
+    salePrice,
+    commissionRate,
+    commissionAmount,
+    expiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 mins
+    initiatedBy: adminId,
+  });
+
+  return {
+    message: "Listing marked as sold. Commission payment required from seller.",
+    commission,
+    commissionAmount,
+    salePrice,
+  };
+}
+
+export async function getCommissions(query) {
+  const { page = 1, limit = 10, status } = query;
+
+  const filter = {};
+  if (status) filter.status = status;
+
+  const skip = (Number(page) - 1) * Number(limit);
+
+  const [commissions, total] = await Promise.all([
+    commissionModel
+      .find(filter)
+      .populate("listing", "title saleMode status")
+      .populate("seller", "username email")
+      .populate("payment", "amount status")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(Number(limit)),
+    commissionModel.countDocuments(filter),
+  ]);
+
+  return {
+    commissions,
+    pagination: {
+      total,
+      page: Number(page),
+      limit: Number(limit),
+      totalPages: Math.ceil(total / Number(limit)),
+    },
+  };
+}
+
+export async function reinitiateCommission(commissionId) {
+  const commission = await commissionModel.findById(commissionId);
+
+  if (!commission) throw new ApiError(404, "Commission not found");
+
+  if (commission.status === "PAID") {
+    throw new ApiError(400, "Commission has already been paid");
+  }
+
+  if (commission.status === "CANCELLED") {
+    throw new ApiError(400, "Cannot reinitiate a cancelled commission");
+  }
+
+  // Reset expiry to 30 mins from now
+  commission.expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  commission.status = "PENDING";
+  await commission.save();
+
+  return {
+    message: "Commission reinitiated. Seller has 30 minutes to pay.",
+    commission,
+  };
+}
+
+export async function cancelCommission(commissionId, cancelReason) {
+  const commission = await commissionModel
+    .findById(commissionId)
+    .populate("listing");
+
+  if (!commission) throw new ApiError(404, "Commission not found");
+
+  if (commission.status === "PAID") {
+    throw new ApiError(400, "Cannot cancel a paid commission");
+  }
+
+  if (commission.status === "CANCELLED") {
+    throw new ApiError(400, "Commission is already cancelled");
+  }
+
+  // Cancel commission
+  commission.status = "CANCELLED";
+  commission.cancelReason = cancelReason;
+  await commission.save();
+
+  // Cancel related pending payment if exists
+  if (commission.payment) {
+    await paymentModel.findByIdAndUpdate(commission.payment, {
+      status: "FAILED",
+    });
+  }
+
+  // Put listing back to ACTIVE — deal fell through
+  await listingModel.findByIdAndUpdate(commission.listing._id, {
+    status: "ACTIVE",
+  });
+
+  return {
+    message: "Commission cancelled. Listing restored to ACTIVE.",
+    commission,
+  };
 }

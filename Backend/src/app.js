@@ -16,7 +16,9 @@ import favoriteRoutes from "./modules/favorite/favorite.routes.js";
 
 import adminRouter from "./modules/admin/admin.routes.js";
 
-import { startFeaturedExpiryJob } from "./jobs/featured.expiry.job.js";
+import { startExpiryJobs  } from "./jobs/featured.expiry.job.js";
+
+import managedSaleRouter from "./modules/managed-sale/managed-sale.routes.js";
 
 import express from "express";
 import morgan from "morgan";
@@ -42,8 +44,8 @@ app.use(cors());
 //It's Standard security headers
 app.use(helmet());
 
-// Start cron jobs to auto handle featured expiry every midnight
-startFeaturedExpiryJob();
+// Start cron jobs to auto handle featured expiry every midnight, and commission expiry after every 5mins
+startExpiryJobs();
 
 // for stripe webhook  /api/payment
 app.use(
@@ -82,6 +84,9 @@ app.use("/api/favorite", favoriteRoutes)
 
 // Admin routes, starts with /api/admin
 app.use("/api/admin", adminRouter);
+
+// Managed Sale routes, start with /api/managed-sale
+app.use("/api/managed-sale", managedSaleRouter);
 
 // use global error handler
 app.use(errorHandler);

@@ -7,60 +7,14 @@ import listingModel from "../listing/listing.model.js";
 
 import inspectionModel from "../inspection/inspection.model.js";
 
+import commissionModel from "../managed-sale/commission.model.js";
+
 import { ApiError } from "../../utils/apiError.js"
 
 import config from "../../config/config.js"
 
 const stripe = new Stripe(config.STRIPE_SECRET_KEY);
 
-export async function markSandboxSuccess(transactionId) {
-  const payment = await paymentModel.findOne({ transactionId });
-
-  if (!payment) {
-    throw new ApiError(404, "Payment not found");
-  }
-
-  // prevents duplicate success processing
-  if (payment.status === "SUCCESS") {
-    return payment;
-  }
-
-  payment.status = "SUCCESS";
-  await payment.save();
-
-
-  // FEATURED PAYMENT
-  if (payment.purpose === "FEATURED") {
-    const feature = await featuredModel.findById(payment.referenceId);
-    if (!feature) throw new ApiError(404, "Feature not found");
-
-    feature.status = "ACTIVE";
-    feature.startDate = new Date();
-    feature.endDate = new Date(Date.now() + feature.durationDays * 24 * 60 * 60 * 1000);
-
-    await feature.save();
-
-    const listing = await listingModel.findById(payment.listing);
-    listing.isFeatured = true;
-    await listing.save();
-  }
-
-  // INSPECTION PAYMENT
-  if (payment.purpose === "INSPECTION" || payment.purpose === "RE_INSPECTION") {
-    const inspection = await inspectionModel.findById(payment.referenceId);
-    if (!inspection) throw new ApiError(404, "Inspection not found");
-
-    if (inspection.inspectionBy === "OWNER") {
-      inspection.status = "SCHEDULED";
-    } else {
-      inspection.status = "PENDING_COORDINATION";
-    }
-    await inspection.save();
-
-  }
-
-  return payment;
-}
 
 export async function createStripeCheckoutSession(payment) {
 
@@ -82,7 +36,7 @@ export async function createStripeCheckoutSession(payment) {
               name: payment.purpose
             },
 
-            unit_amount: payment.amount * 100
+           unit_amount: Math.round(payment.amount * 100)
           },
 
           quantity: 1
@@ -186,8 +140,27 @@ async function handleCheckoutSessionCompleted(session) {
         : "PENDING_COORDINATION";
 
     await inspection.save();
+  }    
+
+    // COMMISSION FLOW
+    if (payment.purpose === "COMMISSION") {
+      const commission = await commissionModel.findById(payment.referenceId);
+      if (!commission) return;
+
+      // Mark commission as paid
+      commission.status = "PAID";
+      commission.payment = payment._id;
+      await commission.save();
+
+      // Mark listing as SOLD
+      const listing = await listingModel.findById(payment.listing);
+      if (listing) {
+        listing.status = "SOLD";
+        await listing.save();
+      }
+    }
   }
-}
+
 
 export async function getMyPayments(
   userId,

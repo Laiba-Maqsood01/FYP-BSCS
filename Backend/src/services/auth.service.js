@@ -12,7 +12,11 @@ import { sendEmail } from "../services/email.service.js";
 import { generateAccessToken, generateRefreshToken } from "../utils/token.utils.js";
 import { ACCOUNT_STATUS } from "../utils/constants.js";
 
+import config from "../config/config.js"
+
 import { cleanupListingForDeletion } from "../helpers/listing.cleanup.helper.js";
+import listingDeletionRequestModel from "../modules/managed-sale/listing-deletion-request.model.js"
+
 import { checkAndAutoUnblock } from "../helpers/user.helper.js";
 
 export async function registerUser({ username, email, mobileNumber, password }) {
@@ -345,7 +349,7 @@ export async function forgotPassword(email) {
     await user.save();
 
     const resetUrl =
-        `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+        `${config.FRONTEND_URL}/reset-password?token=${resetToken}`;
 
     await sendEmail(
         user.email,
@@ -395,46 +399,53 @@ export async function resetPassword(token, newPassword) {
     return true;
 }
 
-// export async function deleteAccount(userId) {
-
-//     const user = await userModel.findById(userId);
-
-//     if (!user) {
-//         throw new ApiError(404, "User not found");
-//     }
-
-//     user.isDeleted = true;
-//     user.deletedAt = new Date();
-
-//     // Optional anonymization
-//     user.email = `deleted_${user._id}@deleted.com`;
-//     user.username = `deleted_${user._id}`;
-
-//     await user.save();
-
-//     await sessionModel.updateMany(
-//         { user: userId },
-//         { revoked: true }
-//     );
-
-//     return true;
-// }
-
 export async function deleteAccount(userId) {
     const user = await userModel.findById(userId);
     if (!user) throw new ApiError(404, "User not found");
 
-    // Step 1 — get all listings owned by this user
     const listings = await listingModel.find(
-        { seller: userId },
-        { _id: 1 } // only need IDs
+        { seller: userId }, 
+        { _id: 1, saleMode: 1, status: 1 }
     );
 
-    // Step 2 — check if any listing is blocked by IN_PROGRESS inspection
+    // --- Managed listing account deletion guards ---
+    for (const listing of listings) {
+        if (listing.saleMode === "MANAGED") {
+
+            if (listing.status === "PENDING_COMMISSION") {
+                throw new ApiError(
+                    400,
+                    "Cannot delete account. You have a pending commission payment. Please pay the commission first."
+                );
+            }
+
+            if (listing.status === "ACTIVE") {
+                throw new ApiError(
+                    400,
+                    "Cannot delete account. You have an active managed listing being handled by our team. Please contact support."
+                );
+            }
+
+            // Check for pending deletion request
+            const pendingRequest = await listingDeletionRequestModel.findOne({
+                listing: listing._id,
+                status: "PENDING",
+            });
+
+            if (pendingRequest) {
+                throw new ApiError(
+                    400,
+                    "Cannot delete account. You have a pending managed listing deletion request awaiting admin approval."
+                );
+            }
+        }
+    }
+
+    // --- Per listing cleanup ---
     for (const listing of listings) {
         const { blocked } = await cleanupListingForDeletion(
             listing._id,
-            false, // user cannot force cancel
+            false,
             "Listing deleted — owner deleted account"
         );
 
@@ -446,24 +457,18 @@ export async function deleteAccount(userId) {
         }
     }
 
-    // Step 3 — all listings are safe, mark them all as REMOVED
-    await listingModel.updateMany(
-        { seller: userId },
-        { status: "REMOVED" }
-    );
+    // Mark all listings REMOVED
+    await listingModel.updateMany({ seller: userId }, { status: "REMOVED" });
 
-    // Step 4 — anonymize and soft delete user
+    // Anonymize and soft delete
     user.isDeleted = true;
     user.deletedAt = new Date();
     user.email = `deleted_${user._id}@deleted.com`;
     user.username = `deleted_${user._id}`;
     await user.save();
 
-    // Step 5 — revoke all sessions
-    await sessionModel.updateMany(
-        { user: userId },
-        { revoked: true }
-    );
+    // Revoke all sessions
+    await sessionModel.updateMany({ user: userId }, { revoked: true });
 
     return true;
 }
