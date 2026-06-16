@@ -20,6 +20,8 @@ import { startExpiryJobs  } from "./jobs/featured.expiry.job.js";
 
 import managedSaleRouter from "./modules/managed-sale/managed-sale.routes.js";
 
+import uploadRouter from "./modules/upload/upload.routes.js";
+
 import express from "express";
 import morgan from "morgan";
 import helmet from "helmet";
@@ -87,6 +89,9 @@ app.use("/api/admin", adminRouter);
 
 // Managed Sale routes, start with /api/managed-sale
 app.use("/api/managed-sale", managedSaleRouter);
+
+// Upload (signed Cloudinary signatures), starts with /api/upload
+app.use("/api/upload", uploadRouter);
 
 // use global error handler
 app.use(errorHandler);

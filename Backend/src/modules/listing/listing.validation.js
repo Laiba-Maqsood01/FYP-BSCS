@@ -1,4 +1,5 @@
 import { z } from "zod";
+import config from "../../config/config.js";
 
 const objectIdSchema = z
   .string()
@@ -6,6 +7,33 @@ const objectIdSchema = z
     /^[0-9a-fA-F]{24}$/,
     "Invalid ObjectId"
   );
+
+// Each image must be a real Cloudinary URL from our account + a non-empty public_id
+const imageSchema = z.object({
+  url: z
+    .string()
+    .url()
+    // when integrated with frontend uncomment it
+    // .refine(
+    //   (url) =>
+    //     url.startsWith(
+    //       `https://res.cloudinary.com/${config.CLOUDINARY_CLOUD_NAME}/image/upload/`
+    //     ),
+    //   { message: "Image URL must be a valid Cloudinary URL from this account" }
+    // ),
+    .refine(
+      (url) => {
+        const normalized = url.replace(/^http:\/\//, "https://");
+        return normalized.startsWith(
+          `https://res.cloudinary.com/${config.CLOUDINARY_CLOUD_NAME}/image/upload/`
+        );
+      },
+      { message: "Image URL must be a valid Cloudinary URL from this account" }
+    ),
+  
+    fileId: z.string().min(1, "fileId (public_id) is required"),
+});
+
 
 export const createListingSchema = z.object({
   saleMode: z.enum([
@@ -52,12 +80,11 @@ export const createListingSchema = z.object({
 
   description: z.string().min(10),
 
-  images: z.array(
-    z.object({
-      url: z.string(),
-      fileId: z.string()
-    })
-  ).optional(),
+  images: z
+    .array(imageSchema)
+    .min(1, "At least one image is required")
+    .max(10, "Maximum 10 images allowed")
+    .optional(),
 
   mobileNumber: z.string(),
 
