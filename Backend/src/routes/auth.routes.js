@@ -100,9 +100,9 @@ authRouter.post(
 );
 
 /**
- * DELETE /api/auth/delete-account
+ * PATCH /api/auth/delete-account
   */
-authRouter.delete(
+authRouter.patch(
     "/delete-account",
     authMiddleware,
     authController.deleteAccount)

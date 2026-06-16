@@ -2,14 +2,18 @@ import inspectionModel from "../modules/inspection/inspection.model.js";
 import featuredModel from "../modules/featured/featured.model.js";
 import listingModel from "../modules/listing/listing.model.js";
 
+import { ApiError } from "../utils/apiError.js";
+
+import listingDeletionRequestModel from "../modules/managed-sale/listing-deletion-request.model.js";
+
+
 /**
  * Cancels the active inspection for a listing if one exists.
  * 
  *  - if true, cancels even IN_PROGRESS (admin only)
  *  - reason stored on the inspection record
  */
-export async function cancelInspectionForListing( listingId, forceCancel = false, cancelReason = "Listing deleted by owner")
-{
+export async function cancelInspectionForListing(listingId, forceCancel = false, cancelReason = "Listing deleted by owner") {
   // Find active inspection — any status except CANCELLED and COMPLETED
   const inspection = await inspectionModel.findOne({
     listing: listingId,
@@ -57,8 +61,45 @@ export async function cancelInspectionForListing( listingId, forceCancel = false
  * Cancels inspection + closes featured record.
  *  - admin override for IN_PROGRESS
  */
-export async function cleanupListingForDeletion( listingId, forceCancel = false,cancelReason = "Listing deleted by owner")
-{
+export async function cleanupListingForDeletion(listingId, forceCancel = false, cancelReason = "Listing deleted by owner") {
+
+  const listing = await listingModel.findById(listingId);
+
+  if (!listing) 
+    throw new ApiError(404, "Listing not found");
+
+  // --- Managed listing guards ---
+  if (listing.saleMode === "MANAGED") {
+
+    if (listing.status === "PENDING_COMMISSION") {
+      throw new ApiError(
+        400,
+        "This listing has a pending commission payment. Please pay the commission first or contact support."
+      );
+    }
+
+    if (listing.status === "ACTIVE" && !forceCancel) {
+      // Check if there's already a pending deletion request
+      const existingRequest = await listingDeletionRequestModel.findOne({
+        listing: listingId,
+        status: "PENDING",
+      });
+
+      if (existingRequest) {
+        throw new ApiError(
+          400,
+          "A deletion request for this listing is already pending admin approval."
+        );
+      }
+
+      throw new ApiError(
+        400,
+        "This managed listing is currently being handled by our team. Please submit a deletion request."
+      );
+    }
+  }
+
+
   // Step 1 — handle inspection
   const { blocked, refundRequired } = await cancelInspectionForListing(
     listingId,
@@ -87,3 +128,6 @@ export async function cleanupListingForDeletion( listingId, forceCancel = false,
 
   return { blocked: false, refundRequired };
 }
+
+
+

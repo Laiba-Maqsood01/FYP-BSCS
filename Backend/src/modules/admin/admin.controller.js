@@ -200,3 +200,52 @@ export const approveRefund = asyncHandler(async (req, res) => {
         )
     );
 });
+
+
+// Deletion Requests
+export const getDeletionRequests = asyncHandler(async (req, res) => {
+    const data = await adminService.getDeletionRequests(req.query);
+    res.status(200).json(new ApiResponse(200, "Deletion requests fetched", data));
+});
+
+export const approveDeletionRequest = asyncHandler(async (req, res) => {
+    const data = await adminService.approveDeletionRequest(req.params.id);
+    res.status(200).json(new ApiResponse(200, "Deletion request approved", data));
+});
+
+export const rejectDeletionRequest = asyncHandler(async (req, res) => {
+    const data = await adminService.rejectDeletionRequest(
+        req.params.id,
+        req.body.adminNote
+    );
+    res.status(200).json(new ApiResponse(200, "Deletion request rejected", data));
+});
+
+
+// Commission
+export const markListingSold = asyncHandler(async (req, res) => {
+    const data = await adminService.markListingSold(
+        req.params.id,
+        req.body.salePrice,
+        req.user._id
+    );
+    res.status(200).json(new ApiResponse(200, "Listing marked as sold, commission created", data));
+});
+
+export const getCommissions = asyncHandler(async (req, res) => {
+    const data = await adminService.getCommissions(req.query);
+    res.status(200).json(new ApiResponse(200, "Commissions fetched", data));
+});
+
+export const reinitiateCommission = asyncHandler(async (req, res) => {
+    const data = await adminService.reinitiateCommission(req.params.id);
+    res.status(200).json(new ApiResponse(200, "Commission reinitiated", data));
+});
+
+export const cancelCommission = asyncHandler(async (req, res) => {
+    const data = await adminService.cancelCommission(
+        req.params.id,
+        req.body.cancelReason
+    );
+    res.status(200).json(new ApiResponse(200, "Commission cancelled", data));
+});

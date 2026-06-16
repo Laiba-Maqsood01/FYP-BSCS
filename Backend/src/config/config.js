@@ -51,6 +51,15 @@ if(!process.env.ADMIN_PASSWORD){
     throw new Error("ADMIN_PASSWORD is not defined in environment variables.");
 }
 
+if(!process.env.PORT){
+    throw new Error("PORT is not defined in environment variables.");
+}
+
+
+if(!process.env.FRONTEND_URL){
+    throw new Error("PORT is not defined in environment variables.");
+}
+
 
 
 const config = {
@@ -66,7 +75,10 @@ const config = {
     CLIENT_URL: process.env.CLIENT_URL,
 
     EMAIL_ADMIN: process.env.EMAIL_ADMIN,
-    ADMIN_PASSWORD: process.env.ADMIN_PASSWORD
+    ADMIN_PASSWORD: process.env.ADMIN_PASSWORD,
+
+    PORT: process.env.PORT,
+    FRONTEND_URL: process.env.FRONTEND_URL
 }
 
 export default config

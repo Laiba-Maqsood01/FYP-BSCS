@@ -37,12 +37,7 @@ export async function requestInspection(listingId, userId, payload = {}) {
     }
 
     // 3. Detect ownership (CRITICAL LOGIC)
-    const isOwner =
-        listing.seller.toString() === userId.toString();
-
-    console.log("Owner or not ", isOwner)
-
-    console.log("Address date time ", inspectionAddress, scheduledDate, timeSlot)
+    const isOwner = listing.seller.toString() === userId.toString();
 
     const inspectionBy = isOwner ? "OWNER" : "BUYER";
 
@@ -266,7 +261,7 @@ export async function createInspectionPayment(inspectionId, userId) {
         amount,
         transactionId,
         status: "PENDING",
-        payerSnapshot: {           
+        payerSnapshot: {
             userId: user._id,
             username: user.username,
             email: user.email
