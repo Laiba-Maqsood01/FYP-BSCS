@@ -179,4 +179,10 @@ adminRouter.patch(
 );
 
 
+// PATCH /api/admin/inspections/:id/schedule
+adminRouter.patch(
+  "/inspections/:id/schedule",
+  adminController.scheduleInspection
+);
+
 export default adminRouter;

@@ -20,19 +20,45 @@ import { deleteImages, deleteFiles } from "../modules/upload/upload.service.js";
 import inspectionModel from "../modules/inspection/inspection.model.js";
 
 export async function registerUser({ username, email, mobileNumber, password }) {
-    const isAlreadyExist = await userModel.findOne({
-        $or: [
-            { username },
-            { email },
-            { mobileNumber }
-        ]
-    })
+    // const isAlreadyExist = await userModel.findOne({
+    //     $or: [
+    //         { username },
+    //         { email },
+    //         { mobileNumber }
+    //     ]
+    // })
 
-    if (isAlreadyExist) {
-        if (!isAlreadyExist.verified) {
+    // if (isAlreadyExist) {
+    //     if (!isAlreadyExist.verified) {
+    //         throw new ApiError(400, "User exists but not verified. Please verify your email");
+    //     }
+    //     throw new ApiError(409, "Username or email already exists");
+    // }
+
+    // Check each field individually to give a specific error message
+    
+    const existingUsername = await userModel.findOne({ username });
+    if (existingUsername) {
+        if (!existingUsername.verified) {
             throw new ApiError(400, "User exists but not verified. Please verify your email");
         }
-        throw new ApiError(409, "Username or email already exists");
+        throw new ApiError(409, "Username already exists");
+    }
+
+    const existingEmail = await userModel.findOne({ email });
+    if (existingEmail) {
+        if (!existingEmail.verified) {
+            throw new ApiError(400, "User exists but not verified. Please verify your email");
+        }
+        throw new ApiError(409, "Email already exists");
+    }
+
+    const existingMobile = await userModel.findOne({ mobileNumber });
+    if (existingMobile) {
+        if (!existingMobile.verified) {
+            throw new ApiError(400, "User exists but not verified. Please verify your email");
+        }
+        throw new ApiError(409, "Mobile number already exists");
     }
 
     const hashedPassword = await bcrypt.hash(password, 10)

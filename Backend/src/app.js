@@ -34,12 +34,12 @@ const app = express()
 app.use(apiLimiter);
 
 //for now just use 
-app.use(cors());
+// app.use(cors());
 
-// app.use(cors({
-//   origin: "http://localhost:5173", // useful when frontend is integrated
-//   credentials: true
-// }));
+app.use(cors({
+  origin: "http://localhost:5173", // useful when frontend is integrated
+  credentials: true
+}));
 
 
 // Helmet for securing extra information, like hackers can check our tool(express) then can find the vulnerability and attack our website.
