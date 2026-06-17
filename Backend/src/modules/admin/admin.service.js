@@ -779,7 +779,7 @@ export async function updateInspectionStatus(inspectionId, status) {
 }
 
 
-export async function uploadInspectionReport(inspectionId, { url, fileId }) {
+export async function uploadInspectionReport(inspectionId, { url, fileId, inspectorNotes}) {
   const inspection = await inspectionModel.findById(inspectionId).populate("listing");
 
   if (!inspection) throw new ApiError(404, "Inspection not found");
@@ -791,6 +791,13 @@ export async function uploadInspectionReport(inspectionId, { url, fileId }) {
   // Save report on inspection
   inspection.report = { url, fileId };
   await inspection.save();
+
+  if (inspectorNotes) {
+    inspection.inspectorNotes = inspectorNotes;
+  }
+
+  await inspection.save();
+
 
   // If this is a managed listing — activate it now
   const listing = inspection.listing;
@@ -1227,4 +1234,34 @@ export async function cancelCommission(commissionId, cancelReason) {
     message: "Commission cancelled. Listing restored to ACTIVE.",
     commission,
   };
+}
+
+// Admin will schedule inspection after adding address, time and date. It can be for buyer and owner both
+export async function scheduleInspection(inspectionId, { inspectionAddress, scheduledDate, timeSlot }) {
+
+  const inspection = await inspectionModel.findById(inspectionId);
+
+  if (!inspection)
+    throw new ApiError(404, "Inspection not found");
+
+  // Admin can set/update these fields in these statuses only
+  const allowedStatuses = ["PENDING_COORDINATION", "SCHEDULED"];
+  if (!allowedStatuses.includes(inspection.status))
+    throw new ApiError(400, `Cannot schedule an inspection with status ${inspection.status}. Allowed statuses: ${allowedStatuses.join(", ")}`);
+
+  if (!inspectionAddress || !scheduledDate || !timeSlot)
+    throw new ApiError(400, "inspectionAddress, scheduledDate and timeSlot are all required");
+
+  inspection.inspectionAddress = inspectionAddress;
+  inspection.scheduledDate = new Date(scheduledDate);
+  inspection.timeSlot = timeSlot;
+
+  // Only transition status if still in coordination — rescheduling keeps it SCHEDULED
+  if (inspection.status === "PENDING_COORDINATION") {
+    inspection.status = "SCHEDULED";
+  }
+
+  await inspection.save();
+
+  return { message: "Inspection scheduled successfully", inspection };
 }

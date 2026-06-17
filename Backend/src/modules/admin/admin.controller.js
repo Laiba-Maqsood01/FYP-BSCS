@@ -249,3 +249,17 @@ export const cancelCommission = asyncHandler(async (req, res) => {
     );
     res.status(200).json(new ApiResponse(200, "Commission cancelled", data));
 });
+
+
+export const scheduleInspection = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { inspectionAddress, scheduledDate, timeSlot } = req.body;
+
+    const result = await adminService.scheduleInspection(id, {
+        inspectionAddress,
+        scheduledDate,
+        timeSlot,
+    });
+
+    res.status(200).json(new ApiResponse(200, result.message, result.inspection));
+});
