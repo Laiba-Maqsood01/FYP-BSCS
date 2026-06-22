@@ -16,7 +16,56 @@ import config from "../../config/config.js"
 const stripe = new Stripe(config.STRIPE_SECRET_KEY);
 
 
-export async function createStripeCheckoutSession(payment) {
+export async function markSandboxSuccess(transactionId) {
+  const payment = await paymentModel.findOne({ transactionId });
+
+  if (!payment) {
+    throw new ApiError(404, "Payment not found");
+  }
+
+  // prevents duplicate success processing
+  if (payment.status === "SUCCESS") {
+    return payment;
+  }
+
+  payment.status = "SUCCESS";
+  await payment.save();
+
+
+  // FEATURED PAYMENT
+  if (payment.purpose === "FEATURED") {
+    const feature = await featuredModel.findById(payment.referenceId);
+    if (!feature) throw new ApiError(404, "Feature not found");
+
+    feature.status = "ACTIVE";
+    feature.startDate = new Date();
+    feature.endDate = new Date(Date.now() + feature.durationDays * 24 * 60 * 60 * 1000);
+
+    await feature.save();
+
+    const listing = await listingModel.findById(payment.listing);
+    listing.isFeatured = true;
+    await listing.save();
+  }
+
+  // INSPECTION PAYMENT
+  if (payment.purpose === "INSPECTION" || payment.purpose === "RE_INSPECTION") {
+    const inspection = await inspectionModel.findById(payment.referenceId);
+    if (!inspection) throw new ApiError(404, "Inspection not found");
+
+    if (inspection.inspectionBy === "OWNER") {
+      inspection.status = "SCHEDULED";
+    } else {
+      inspection.status = "PENDING_COORDINATION";
+    }
+    await inspection.save();
+
+  }
+
+  return payment;
+}
+
+export async function createStripeCheckoutSession(payment, options = {}) {
 
   const stripe = new Stripe(config.STRIPE_SECRET_KEY);
 
@@ -48,10 +97,10 @@ export async function createStripeCheckoutSession(payment) {
       },
 
       success_url:
-        `${config.CLIENT_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        options.successUrl || `${config.CLIENT_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
 
       cancel_url:
-        `${config.CLIENT_URL}/payment-cancel`
+        options.cancelUrl || `${config.CLIENT_URL}/payment-cancel`
     });
 
   payment.stripeSessionId = session.id;

@@ -82,4 +82,13 @@ export const getListingDetails = asyncHandler(async (req, res) => {
     );
 });
 
+// Owner fetches own listing by ID (any status — used for inspection booking)
+export const getMyListingDetail = asyncHandler(async (req, res) => {
+    const listing = await listingService.getMyListingDetail(
+        req.params.id,
+        req.user._id
+    );
+    res.status(200).json(new ApiResponse(200, "Listing fetched", listing));
+});
+
 

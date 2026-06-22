@@ -36,4 +36,5 @@ brandSchema.pre("validate", function () {
 });
 
 
-export default mongoose.model("brands", brandSchema);
+const brandModel = mongoose.model("brands", brandSchema);
+export default brandModel;

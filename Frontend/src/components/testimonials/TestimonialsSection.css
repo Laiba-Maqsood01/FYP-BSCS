@@ -1,0 +1,144 @@
+.testimonials-section {
+  background: transparent;
+}
+
+.section-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.section-subtitle {
+  color: #64748b;
+}
+
+.testimonial-wrapper {
+  display: flex;
+  gap: 2rem;
+  justify-content: center;
+  overflow: hidden;
+  max-height: 650px;
+  mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
+  flex-wrap: wrap;
+}
+
+.testimonial-column {
+  width: 100%;
+  max-width: 380px;
+  overflow: hidden;
+}
+
+.testimonial-track {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+
+.testimonial-card {
+  padding: 1.5rem;
+  border-radius: 1.2rem;
+
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+
+  /*  KEY CHANGE */
+  min-height: 220px;
+  /* increase this */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+
+  transition: all 0.25s ease;
+}
+
+.testimonial-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
+}
+
+.testimonial-text {
+  font-size: 0.95rem;
+  color: #4b5563;
+  line-height: 1.6;
+}
+
+.testimonial-user {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.testimonial-user img {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+.testimonial-user h6 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.testimonial-user span {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+/*  Rating */
+.testimonial-rating {
+  font-size: 0.85rem;
+  color: #f59e0b;
+  /* gold */
+  margin-bottom: 0.4rem;
+  letter-spacing: 1px;
+}
+
+/* user text */
+.testimonial-user span {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+@media (max-width: 400px) {
+  .testimonial-column {
+    width: 100%;
+    max-width: 320px;
+  }
+}
+
+/*  MOBILE (2 column) */
+@media (min-width: 401px) and (max-width: 576px) {
+  .testimonial-wrapper {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1rem;
+  }
+
+  .testimonial-column {
+    width: 48%;
+  }
+}
+
+/*  TABLET (2 columns) */
+@media (min-width: 577px) and (max-width: 991px) {
+  .testimonial-wrapper {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .testimonial-column {
+    width: 48%;
+  }
+}
+
+/* 💻 DESKTOP (3 columns) */
+@media (min-width: 992px) {
+  .testimonial-column {
+    width: 380px;
+  }
+}

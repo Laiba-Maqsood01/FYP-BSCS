@@ -1,121 +1,61 @@
-﻿import { useCallback, useState } from 'react';
-import { AuthContext } from './context/AuthContext.jsx';
-import BrowseCarsPage from './pages/BrowseCarsPage.jsx';
-import CarDetailsPage from './pages/CarDetailsPage.jsx';
-import GenericSaleFlowPage from './pages/GenericSaleFlowPage.jsx';
-import HomePage from './pages/HomePage.jsx';
-import DashboardPage from './pages/DashboardPage.jsx';
-import AdminLoginPage from './pages/AdminLoginPage.jsx';
-import AdminPanelPage from './pages/AdminPanelPage.jsx';
-import ManagedSaleFlowPage from './pages/ManagedSaleFlowPage.jsx';
-import PostAdPage from './pages/PostAdPage.jsx';
-import SellOptionsPage from './pages/SellOptionsPage.jsx';
+import AppNavbar from "./components/layouts/AppNavbar";
+import AppFooter from "./components/layouts/AppFooter";
+import AppRoutes from "./routes/AppRoutes";
+import { ToastContainer } from "react-toastify";
+import { useLocation } from "react-router-dom";
+import "react-toastify/dist/ReactToastify.css";
+import "./App.css"
 
 function App() {
-  const getInitialPage = () => {
-    if (typeof window === 'undefined') {
-      return 'Home';
-    }
+  const location = useLocation();
 
-    const path = window.location.pathname.toLowerCase();
-    if (path === '/admin' || path === '/admin-login') {
-      return 'Admin Login';
-    }
+  const noLayoutPaths   = ["/not-found"];
+  const noMainPaths     = ["/dashboard"];
+  const hideFooterPaths = ["/admin", "/dashboard"];
 
-    return 'Home';
-  };
+  const hideLayout  = noLayoutPaths.includes(location.pathname);
+  const skipMain    = noMainPaths.some(r => location.pathname.startsWith(r));
+  const hideFooter  = hideLayout || hideFooterPaths.some(r => location.pathname.startsWith(r));
 
-  const [currentPage, setCurrentPage] = useState(getInitialPage);
-  const [selectedCar, setSelectedCar] = useState(null);
-  const [auth, setAuth] = useState({ role: 'guest', name: '', email: '' });
-
-  const handleLogin = useCallback((role, email, password) => {
-    const credentials = {
-      user: { email: 'user@autohub.com', password: 'user123', name: 'Valued User' },
-      admin: { email: 'admin@autohub.com', password: 'admin123', name: 'Admin User' },
-    };
-
-    const expected = credentials[role];
-    if (!expected || email.toLowerCase() !== expected.email || password !== expected.password) {
-      return false;
-    }
-
-    setAuth({ role, name: expected.name, email: expected.email });
-    setCurrentPage(role === 'admin' ? 'Admin Panel' : 'Dashboard');
-    return true;
-  }, []);
-
-  const handleLogout = useCallback(() => {
-    setAuth({ role: 'guest', name: '', email: '' });
-    setCurrentPage('Home');
-  }, []);
-
-  const handleNavigate = useCallback((page, payload) => {
-    if (page === 'Car Details') {
-      setSelectedCar(payload || null);
-    }
-
-    if (page === 'Dashboard' && auth.role !== 'user') {
-      setCurrentPage('Home');
-      return;
-    }
-
-    if (page === 'Admin Panel' && auth.role !== 'admin') {
-      setCurrentPage('Home');
-      return;
-    }
-
-    setCurrentPage(page);
-  }, [auth.role]);
-
-  let page = null;
-
-  if (currentPage === 'Browse Cars') {
-    page = (
-      <BrowseCarsPage
-        currentPage={currentPage}
-        onNavigate={handleNavigate}
-        onViewDetails={(car) => handleNavigate('Car Details', car)}
-      />
-    );
-  } else if (currentPage === 'Dashboard') {
-    page = <DashboardPage currentPage={currentPage} onNavigate={handleNavigate} />;
-  } else if (currentPage === 'Admin Panel') {
-    page = <AdminPanelPage currentPage={currentPage} onNavigate={handleNavigate} />;
-  } else if (currentPage === 'Post an Ad') {
-    page = <PostAdPage currentPage={currentPage} onNavigate={handleNavigate} />;
-  } else if (currentPage === 'Admin Login') {
-    page = <AdminLoginPage currentPage={currentPage} onNavigate={handleNavigate} onLogin={handleLogin} />;
-  } else if (currentPage === 'Car Details') {
-    page = (
-      <CarDetailsPage
-        car={selectedCar}
-        currentPage={currentPage}
-        onNavigate={handleNavigate}
-      />
-    );
-  } else if (currentPage === 'Generic Sale Flow') {
-    page = <GenericSaleFlowPage currentPage={currentPage} onNavigate={handleNavigate} />;
-  } else if (currentPage === 'Managed Sale Flow') {
-    page = <ManagedSaleFlowPage currentPage={currentPage} onNavigate={handleNavigate} />;
-  } else if (currentPage === 'Generic Sale' || currentPage === 'Managed Sale') {
-    page = (
-      <SellOptionsPage
-        currentPage={currentPage}
-        initialSelection={currentPage === 'Managed Sale' ? 'managed' : 'generic'}
-        onNavigate={handleNavigate}
-      />
-    );
+  // Remove the global body padding-top that offsets the fixed navbar
+  if (hideLayout) {
+    document.body.style.paddingTop = "0";
   } else {
-    page = <HomePage currentPage={currentPage} onNavigate={handleNavigate} />;
+    document.body.style.paddingTop = "";
+  }
+
+  if (hideLayout) {
+    return (
+      <>
+        <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} closeOnClick pauseOnHover draggable theme="light" />
+        <AppRoutes />
+      </>
+    );
   }
 
   return (
-    <AuthContext.Provider value={{ auth, onLogin: handleLogin, onLogout: handleLogout }}>
-      {page}
-    </AuthContext.Provider>
+    <>
+      <AppNavbar />
+
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        closeOnClick
+        pauseOnHover
+        draggable
+        theme="light"
+      />
+
+      {skipMain ? <AppRoutes /> : (
+        <main>
+          <AppRoutes />
+        </main>
+      )}
+
+      {!hideFooter && <AppFooter />}
+    </>
   );
 }
 
 export default App;
-

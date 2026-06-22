@@ -61,6 +61,7 @@ export const login = asyncHandler(async (req, res) => {
 export const getMe = asyncHandler(async (req, res) => {
     res.status(200).json(
         new ApiResponse(200, "User Profile Fetched Successfully!", {
+            _id: req.user._id,
             username: req.user.username,
             email: req.user.email,
             role: req.user.role,

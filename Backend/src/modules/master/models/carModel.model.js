@@ -24,10 +24,10 @@ carModelSchema.index(
   { unique: true }
 );
 
-const car_Model= mongoose.model(
+const carModel= mongoose.model(
   "car_models",
   carModelSchema
 );
 
-export default car_Model;
+export default carModel;
 

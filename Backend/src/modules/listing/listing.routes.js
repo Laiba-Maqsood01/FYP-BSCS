@@ -49,6 +49,13 @@ router.delete(
   controller.deleteListing
 );
 
+// GET /api/listings/:id/my-detail (owner fetches own listing, any status)
+router.get(
+  "/:id/my-detail",
+  authMiddleware,
+  controller.getMyListingDetail
+);
+
 // GET /api/listings/:id (for public)
 router.get(
   "/:id",

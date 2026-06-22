@@ -8,6 +8,7 @@ import userModel from "../../models/user.model.js";
 import { calculateInspectionFee } from "./inspectionPricing.js";
 
 import { createStripeCheckoutSession } from "../payment/payment.service.js";
+import config from "../../config/config.js";
 
 import crypto from "crypto";
 
@@ -80,30 +81,40 @@ export async function requestInspection(listingId, userId, payload = {}) {
         );
     }
 
-    // 7. Time slot checking
-    const slotMap = {
-        "10AM-12PM": 10,
-        "12PM-2PM": 12,
-        "2PM-4PM": 14,
-        "4PM-6PM": 16,
-        "6PM-8PM": 18
-    };
+    // 7. Time slot checking (only when a slot is provided)
+    if (isOwner && timeSlot) {
+        const slotMap = {
+            "10:00 AM": 10,
+            "12:00 PM": 12,
+            "2:00 PM":  14,
+            "4:00 PM":  16,
+            "6:00 PM":  18,
+        };
 
-    const isToday =
-        selectedDate.toDateString() === new Date().toDateString();
+        const isToday =
+            selectedDate.toDateString() === new Date().toDateString();
 
-    if (isToday) {
-        const slotHour = slotMap[timeSlot];
-
-        if (slotHour <= new Date().getHours()) {
-            throw new ApiError(
-                400,
-                "Time slot has already passed"
-            );
+        if (isToday) {
+            const slotHour = slotMap[timeSlot];
+            if (slotHour !== undefined && slotHour <= new Date().getHours()) {
+                throw new ApiError(400, "Time slot has already passed");
+            }
         }
     }
 
-
+    // 8. Slot collision check (owner requests only)
+    if (isOwner && timeSlot) {
+        const slotStart = new Date(selectedDate); slotStart.setHours(0, 0, 0, 0);
+        const slotEnd   = new Date(selectedDate); slotEnd.setHours(23, 59, 59, 999);
+        const slotTaken = await inspectionModel.exists({
+            scheduledDate: { $gte: slotStart, $lte: slotEnd },
+            timeSlot,
+            status: { $in: ["PENDING", "SCHEDULED", "IN_PROGRESS"] },
+        });
+        if (slotTaken) {
+            throw new ApiError(400, "This time slot is already booked. Please choose another.");
+        }
+    }
 
     // 6. Create inspection
     const inspection = await inspectionModel.create({
@@ -159,14 +170,13 @@ export async function requestManagedInspection(listingId, userId, payload) {
         throw new ApiError(400, "Inspection already exists");
     }
 
-    // validate required fields (OWNER flow)
-    if (!inspectionAddress || !scheduledDate || !timeSlot) {
+    // validate required fields (OWNER flow) — timeSlot is optional (null = admin will coordinate)
+    if (!inspectionAddress || !scheduledDate) {
         throw new ApiError(
             400,
-            "Inspection address, date and time slot are required"
+            "Inspection address and date are required"
         );
     }
-
 
     // 6. Date validation
     const selectedDate = new Date(scheduledDate);
@@ -182,30 +192,40 @@ export async function requestManagedInspection(listingId, userId, payload) {
         );
     }
 
-    // 7. Time slot checking
-    const slotMap = {
-        "10AM-12PM": 10,
-        "12PM-2PM": 12,
-        "2PM-4PM": 14,
-        "4PM-6PM": 16,
-        "6PM-8PM": 18
-    };
+    // 7. Time slot checking (only when a slot is provided)
+    if (timeSlot) {
+        const slotMap = {
+            "10:00 AM": 10,
+            "12:00 PM": 12,
+            "2:00 PM":  14,
+            "4:00 PM":  16,
+            "6:00 PM":  18,
+        };
 
-    const isToday =
-        selectedDate.toDateString() === new Date().toDateString();
+        const isToday =
+            selectedDate.toDateString() === new Date().toDateString();
 
-    if (isToday) {
-        const slotHour = slotMap[timeSlot];
-
-        if (slotHour <= new Date().getHours()) {
-            throw new ApiError(
-                400,
-                "Time slot has already passed"
-            );
+        if (isToday) {
+            const slotHour = slotMap[timeSlot];
+            if (slotHour !== undefined && slotHour <= new Date().getHours()) {
+                throw new ApiError(400, "Time slot has already passed");
+            }
         }
     }
 
-
+    // 8. Slot collision check (only when a slot is provided)
+    if (timeSlot) {
+        const slotStart = new Date(selectedDate); slotStart.setHours(0, 0, 0, 0);
+        const slotEnd   = new Date(selectedDate); slotEnd.setHours(23, 59, 59, 999);
+        const slotTaken = await inspectionModel.exists({
+            scheduledDate: { $gte: slotStart, $lte: slotEnd },
+            timeSlot,
+            status: { $in: ["PENDING", "SCHEDULED", "IN_PROGRESS"] },
+        });
+        if (slotTaken) {
+            throw new ApiError(400, "This time slot is already booked. Please choose another.");
+        }
+    }
 
     const inspection = await inspectionModel.create({
         listing: listingId,
@@ -218,7 +238,7 @@ export async function requestManagedInspection(listingId, userId, payload) {
 
         inspectionAddress,
         scheduledDate,
-        timeSlot
+        timeSlot: timeSlot || null,
     });
 
     return inspection;
@@ -271,7 +291,11 @@ export async function createInspectionPayment(inspectionId, userId) {
     inspection.payment = payment._id;
     await inspection.save();
 
-    const session = await createStripeCheckoutSession(payment);
+    const purposeParam = inspection.type === "RE_INSPECTION" ? "RE_INSPECTION" : "INSPECTION";
+    const session = await createStripeCheckoutSession(payment, {
+        successUrl: `${config.CLIENT_URL}/payment/success?purpose=${purposeParam}&session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl:  `${config.CLIENT_URL}/payment/failed?purpose=${purposeParam}`,
+    });
 
     // return {
     //     payment,
@@ -282,6 +306,35 @@ export async function createInspectionPayment(inspectionId, userId) {
         payment,
         checkoutUrl: session.url
     };
+}
+
+export async function getListingInspectionStatus(listingId) {
+    const inspection = await inspectionModel
+        .findOne({
+            listing: listingId,
+            status: { $ne: "CANCELLED" },
+        })
+        .sort({ createdAt: -1 })
+        .select("status type inspectionBy report _id");
+
+    return inspection; // null if none
+}
+
+export async function getAvailableSlots(dateStr) {
+  const date = new Date(dateStr);
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(date);
+  end.setHours(23, 59, 59, 999);
+
+  const booked = await inspectionModel
+    .find({
+      scheduledDate: { $gte: start, $lte: end },
+      status: { $in: ["PENDING", "SCHEDULED", "IN_PROGRESS"] },
+    })
+    .distinct("timeSlot");
+
+  return booked;
 }
 
 export async function getMyInspections(userId, filters = {}) {

@@ -1,7 +1,11 @@
 import brandModel from "./models/brand.model.js";
+import { MANAGED_SALE_CITY_NAMES } from "../../config/constants.js";
 import bodyTypeModel from "./models/bodyType.model.js";
 import provinceModel from "./models/province.model.js";
 import cityModel from "./models/city.model.js";
+import carModel from "./models/carModel.model.js";
+import listingModel from "../listing/listing.model.js";
+import carYearModel from "./models/carYear.mode.js";
 
 export async function getBrands() {
   return await brandModel.find({
@@ -30,4 +34,47 @@ export async function getCities(provinceId) {
   return await cityModel
     .find(filters)
     .populate("province", "name");
+}
+
+export async function getModels(brandId) {
+  const filters = {};
+  if (brandId) filters.brand = brandId;
+
+  const models = await carModel
+    .find(filters)
+    .populate("brand", "name")
+    .lean();
+
+  return models;
+}
+
+// NEW SERVICE
+export async function getYears(modelId) {
+  return await carYearModel.find({ model: modelId });
+}
+
+export async function getManagedCities() {
+  const nameRegexes = MANAGED_SALE_CITY_NAMES.map(n => new RegExp(`^${n}$`, "i"));
+  return await cityModel
+    .find({ name: { $in: nameRegexes } })
+    .populate("province", "name");
+}
+
+export async function getCitiesWithCount() {
+  // Get all active cities
+  const cities = await cityModel.find().populate("province", "name").lean();
+
+  // Count active listings per city in one aggregation
+  const counts = await listingModel.aggregate([
+    { $match: { status: "ACTIVE" } },
+    { $group: { _id: "$city", count: { $sum: 1 } } }
+  ]);
+
+  const countMap = {};
+  counts.forEach(c => { countMap[c._id.toString()] = c.count; });
+
+  return cities.map(city => ({
+    ...city,
+    listingCount: countMap[city._id.toString()] || 0
+  }));
 }

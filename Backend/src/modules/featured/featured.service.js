@@ -6,6 +6,7 @@ import userModel from "../../models/user.model.js";
 
 
 import { createStripeCheckoutSession } from "../payment/payment.service.js";
+import config from "../../config/config.js";
 
 import crypto from "crypto";
 
@@ -105,7 +106,10 @@ export async function createFeaturedPayment(featureId, userId) {
     feature.payment = payment._id;
     await feature.save();
 
-    const session = await createStripeCheckoutSession(payment);
+    const session = await createStripeCheckoutSession(payment, {
+        successUrl: `${config.CLIENT_URL}/payment/success?purpose=FEATURED&session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl:  `${config.CLIENT_URL}/payment/failed?purpose=FEATURED`,
+    });
 
     return {
         payment,

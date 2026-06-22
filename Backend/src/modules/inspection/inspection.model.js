@@ -77,9 +77,7 @@ const inspectionSchema = new mongoose.Schema(
 
     timeSlot: {
       type: String,
-      required: function () {
-        return this.inspectionBy === "OWNER";
-      }
+      default: null,
     },
 
     report: {

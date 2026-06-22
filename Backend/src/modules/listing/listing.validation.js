@@ -43,7 +43,9 @@ export const createListingSchema = z.object({
 
   city: objectIdSchema,
 
-  registeredIn: objectIdSchema,
+  isRegistered: z.boolean().optional(),
+
+  registeredIn: objectIdSchema.optional().nullable(),
 
   brand: objectIdSchema,
 

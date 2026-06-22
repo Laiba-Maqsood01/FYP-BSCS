@@ -14,6 +14,18 @@ router.get(
   controller.getMyInspections
 );
 
+// GET /api/inspection/available-slots?date=YYYY-MM-DD
+router.get(
+  "/available-slots",
+  controller.getAvailableSlots
+);
+
+// GET /api/inspection/listing/:listingId  — latest non-cancelled inspection for a listing (public)
+router.get(
+  "/listing/:listingId",
+  controller.getListingInspectionStatus
+);
+
 //POST /api/inspection/:listingId/request
 router.post(
     "/:listingId/request",

@@ -85,6 +85,21 @@ export const createInspectionPayment = asyncHandler(async (req, res) => {
     );
 });
 
+export const getAvailableSlots = asyncHandler(async (req, res) => {
+    const { date } = req.query;
+    if (!date) {
+        return res.status(400).json({ success: false, message: "date query param required (YYYY-MM-DD)" });
+    }
+    const booked = await inspectionService.getAvailableSlots(date);
+    res.status(200).json(new ApiResponse(200, "Available slots fetched", { bookedSlots: booked }));
+});
+
+export const getListingInspectionStatus = asyncHandler(async (req, res) => {
+    const { listingId } = req.params;
+    const inspection = await inspectionService.getListingInspectionStatus(listingId);
+    res.status(200).json(new ApiResponse(200, "Listing inspection status fetched", inspection));
+});
+
 export const getMyInspections = asyncHandler(async (req, res) => {
 
     const inspections = await inspectionService.getMyInspections(
