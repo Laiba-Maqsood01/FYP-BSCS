@@ -133,4 +133,12 @@ authRouter.post(
     authMiddleware,
     authController.cancelEmailChange)
 
+/**
+ * PATCH /api/auth/avatar
+ */
+authRouter.patch(
+    "/avatar",
+    authMiddleware,
+    authController.updateAvatar)
+
 export default authRouter

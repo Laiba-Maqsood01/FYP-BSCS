@@ -4,7 +4,7 @@ import { authorizeRoles } from "../../middlewares/role.middleware.js";
 import { validate } from "../../middlewares/validate.middleware.js";
 import * as adminController from "./admin.controller.js";
 
-import { blockUserSchema, assignInspectorSchema, updateInspectionStatusSchema, uploadReportSchema, rejectListingSchema, rejectDeletionRequestSchema, markSoldSchema, cancelCommissionSchema, } from "./admin.validation.js";
+import { blockUserSchema, assignInspectorSchema, updateInspectionStatusSchema, uploadReportSchema, rejectListingSchema, rejectDeletionRequestSchema, markSoldSchema, cancelCommissionSchema, createFeaturedPlanSchema, updateFeaturedPlanSchema, addSlotSchema, updateSlotSchema, updateSiteSettingsSchema } from "./admin.validation.js";
 
 const adminRouter = express.Router();
 
@@ -105,11 +105,27 @@ adminRouter.post(
 
 // ---------- Featured Management ----------
 
-
 // GET /api/admin/featured
 adminRouter.get(
     "/featured",
     adminController.getFeatured);
+
+// GET /api/admin/featured-plans
+adminRouter.get(
+    "/featured-plans",
+    adminController.getFeaturedPlans);
+
+// POST /api/admin/featured-plans
+adminRouter.post(
+    "/featured-plans",
+    validate(createFeaturedPlanSchema),
+    adminController.createFeaturedPlan);
+
+// PATCH /api/admin/featured-plans/:id
+adminRouter.patch(
+    "/featured-plans/:id",
+    validate(updateFeaturedPlanSchema),
+    adminController.updateFeaturedPlan);
 
 
 // ---------- Refund Management ----------
@@ -184,5 +200,19 @@ adminRouter.patch(
   "/inspections/:id/schedule",
   adminController.scheduleInspection
 );
+
+// ---------- Site Settings ----------
+// GET /api/admin/settings
+adminRouter.get("/settings", adminController.getSiteSettings);
+// PATCH /api/admin/settings
+adminRouter.patch("/settings", validate(updateSiteSettingsSchema), adminController.updateSiteSettings);
+
+// ---------- Inspection Slots ----------
+// GET /api/admin/settings/slots
+adminRouter.get("/settings/slots", adminController.getInspectionSlots);
+// POST /api/admin/settings/slots
+adminRouter.post("/settings/slots", validate(addSlotSchema), adminController.addInspectionSlot);
+// PATCH /api/admin/settings/slots/:slotId
+adminRouter.patch("/settings/slots/:slotId", validate(updateSlotSchema), adminController.updateInspectionSlot);
 
 export default adminRouter;

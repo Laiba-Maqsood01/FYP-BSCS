@@ -14,9 +14,10 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     return <Navigate to="/login" replace />;
   }
 
-  //  Role check (if provided)
+  //  Role check — send each role to their own home instead of a generic /
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    return <Navigate to="/" replace />;
+    if (user.role === "admin") return <Navigate to="/admin" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   //  Allowed

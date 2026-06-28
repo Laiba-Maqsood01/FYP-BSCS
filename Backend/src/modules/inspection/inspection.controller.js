@@ -90,8 +90,8 @@ export const getAvailableSlots = asyncHandler(async (req, res) => {
     if (!date) {
         return res.status(400).json({ success: false, message: "date query param required (YYYY-MM-DD)" });
     }
-    const booked = await inspectionService.getAvailableSlots(date);
-    res.status(200).json(new ApiResponse(200, "Available slots fetched", { bookedSlots: booked }));
+    const data = await inspectionService.getAvailableSlots(date);
+    res.status(200).json(new ApiResponse(200, "Available slots fetched", data));
 });
 
 export const getListingInspectionStatus = asyncHandler(async (req, res) => {

@@ -1,3 +1,5 @@
+import { createPortal } from "react-dom";
+
 export default function ConfirmModal({
   show,
   onClose,
@@ -7,10 +9,19 @@ export default function ConfirmModal({
 }) {
   if (!show) return null;
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
-      style={{ background: "rgba(15,23,42,0.45)", backdropFilter: "blur(3px)" }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "1rem",
+        background: "rgba(15,23,42,0.45)",
+        backdropFilter: "blur(3px)",
+      }}
       onClick={onClose}
     >
       <div
@@ -34,6 +45,7 @@ export default function ConfirmModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

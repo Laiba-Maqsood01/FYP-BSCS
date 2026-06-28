@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api, { setAccessToken } from "../services/api";
 import * as authService from "../services/authService";
 
@@ -6,9 +7,9 @@ const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [accessTokenState, setAccessTokenState] = useState(null);
-
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true); 
+  const [user, setUser]       = useState(null);
+  const [loading, setLoading] = useState(true);
+  const navigate              = useNavigate();
 
   const login = async (data, navigate) => {
     try {
@@ -98,6 +99,17 @@ const logoutAll = async () => {
 
     initAuth();
   }, []);
+
+  // When the API interceptor can't refresh the token, clear state and redirect
+  useEffect(() => {
+    const handleExpired = () => {
+      setUser(null);
+      setAccessTokenState(null);
+      navigate("/login");
+    };
+    window.addEventListener("auth:session-expired", handleExpired);
+    return () => window.removeEventListener("auth:session-expired", handleExpired);
+  }, [navigate]);
 
   return (
     <AuthContext.Provider

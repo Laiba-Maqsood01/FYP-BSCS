@@ -14,8 +14,8 @@ const CONTENT = {
       "A detailed 200+ point report is generated",
       "Inspection report is attached to the listing",
     ],
-    primary: { label: "Browse Cars", path: "/browse-cars" },
-    secondary: { label: "Go to Profile", path: "/profile" },
+    primary:   { label: "Browse Cars",  path: "/browse-cars" },
+    secondary: { label: "My Inspections", path: "/dashboard/inspections" },
   },
   RE_INSPECTION: {
     title: "Re-Inspection Booked!",
@@ -29,8 +29,8 @@ const CONTENT = {
       "Inspector re-evaluates your car",
       "Updated inspection report shared with you",
     ],
-    primary: { label: "View My Listings", path: "/profile" },
-    secondary: { label: "Browse Cars", path: "/browse-cars" },
+    primary:   { label: "Browse Cars",    path: "/browse-cars" },
+    secondary: { label: "My Inspections", path: "/dashboard/inspections" },
   },
   FEATURED: {
     title: "Listing Featured!",
@@ -44,8 +44,8 @@ const CONTENT = {
       "Buyers will see a Featured badge on your ad",
       "Higher visibility means faster sale",
     ],
-    primary: { label: "View My Listings", path: "/profile" },
-    secondary: { label: "Post Another Ad", path: "/post-ad" },
+    primary:   { label: "View My Listings", path: "/dashboard/listings" },
+    secondary: { label: "My Payments",      path: "/dashboard/payments" },
   },
   COMMISSION: {
     title: "Payment Successful!",

@@ -1,10 +1,9 @@
 import { useState, useEffect } from "react";
 import { NavLink, Outlet, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import {
-  LayoutDashboard, Car, ShieldCheck, Heart, CreditCard, User,
-  PanelLeftClose, PanelLeftOpen, Menu, X,
+import { LayoutDashboard, Car, ShieldCheck, Heart, CreditCard, User, PanelLeftClose, PanelLeftOpen, Menu, X,
 } from "lucide-react";
+import UserAvatar from "../../components/common/UserAvatar";
 
 const NAV = [
   { to: "overview",    label: "Overview",     icon: LayoutDashboard },
@@ -56,7 +55,6 @@ function SideNavLink({ to, label, icon: Icon, collapsed, onClick }) {
 export default function Dashboard() {
   const { user }      = useAuth();
   const navigate      = useNavigate();
-  const avatar        = user?.username?.[0]?.toUpperCase() ?? "U";
 
   // Desktop: collapsed = icons-only sidebar
   const [collapsed,  setCollapsed]  = useState(false);
@@ -85,7 +83,7 @@ export default function Dashboard() {
           DESKTOP SIDEBAR  (lg+)
       ════════════════════════════════════════════ */}
       <aside
-        className="hidden lg:flex shrink-0 flex-col overflow-y-auto bg-white"
+        className="hidden lg:flex shrink-0 flex-col bg-white"
         style={{
           width: collapsed ? "60px" : "224px",
           borderRight: "1px solid rgba(0,0,0,0.07)",
@@ -99,12 +97,7 @@ export default function Dashboard() {
         >
           {!collapsed && (
             <div className="flex-1 min-w-0 mr-2">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm mb-1.5"
-                style={{ background: "#ea6d00" }}
-              >
-                {avatar}
-              </div>
+              <UserAvatar user={user} size={32} className="mb-1.5" />
               <p className="font-semibold text-xs text-brand-dark truncate">{user?.username ?? "User"}</p>
               <p className="text-[11px] text-brand-muted truncate">{user?.email ?? ""}</p>
             </div>
@@ -122,12 +115,7 @@ export default function Dashboard() {
         {/* When collapsed: show avatar as icon */}
         {collapsed && (
           <div className="flex justify-center py-3" style={{ borderBottom: "1px solid rgba(0,0,0,0.07)" }}>
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm"
-              style={{ background: "#ea6d00" }}
-            >
-              {avatar}
-            </div>
+            <UserAvatar user={user} size={32} />
           </div>
         )}
 
@@ -151,7 +139,7 @@ export default function Dashboard() {
 
       {/* Icon-only rail */}
       <aside
-        className="lg:hidden shrink-0 flex flex-col bg-white overflow-y-auto"
+        className="lg:hidden shrink-0 flex flex-col bg-white"
         style={{ width: "52px", borderRight: "1px solid rgba(0,0,0,0.07)" }}
       >
         {/* Hamburger to open full overlay */}
@@ -203,12 +191,7 @@ export default function Dashboard() {
               style={{ borderBottom: "1px solid rgba(0,0,0,0.07)" }}
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0"
-                  style={{ background: "#ea6d00" }}
-                >
-                  {avatar}
-                </div>
+                <UserAvatar user={user} size={32} />
                 <div className="min-w-0">
                   <p className="font-semibold text-xs text-brand-dark truncate">{user?.username ?? "User"}</p>
                   <p className="text-[11px] text-brand-muted truncate">{user?.email ?? ""}</p>

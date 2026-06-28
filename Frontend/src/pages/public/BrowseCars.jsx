@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { Search, X, MapPin, Flame, ShieldCheck, ChevronDown, SlidersHorizontal } from "lucide-react";
+import { Search, X, MapPin, Flame, ShieldCheck, ChevronDown, SlidersHorizontal, ArrowLeft, ArrowRight } from "lucide-react";
 import api from "../../services/api";
 
 // ─── badge helpers ─────────────────────────────────
@@ -33,14 +33,12 @@ const SORT_OPTIONS = [
 ];
 
 // ─── shared input style ────────────────────────────
-const inputCls =
-  "w-full bg-[#f8fafc] border border-black/10 rounded-lg text-[#1f2937] text-[0.88rem] outline-none focus:border-[#374151] focus:shadow-[0_0_0_3px_rgba(55,65,81,0.08)] transition placeholder:text-gray-400";
+const inputCls = "w-full bg-[#f8fafc] border border-black/10 rounded-lg text-[#1f2937] text-[0.88rem] outline-none focus:border-[#374151] focus:shadow-[0_0_0_3px_rgba(55,65,81,0.08)] transition placeholder:text-gray-400";
 
 // ─── Shared selection modal (City / Brand / Model) ──
 function SelectionModal({ title, searchPlaceholder, items, selected, onSelect, onClose, renderCount }) {
   const [search, setSearch] = useState("");
   const filtered = items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
-  // split: primary (first 8 or those with a count) and rest
   const top  = filtered.slice(0, 8);
   const more = filtered.slice(8);
 
@@ -111,9 +109,7 @@ function SelectionModal({ title, searchPlaceholder, items, selected, onSelect, o
               </div>
               {more.length > 0 && (
                 <>
-                  <p className="text-[0.78rem] font-bold text-brand-muted uppercase tracking-[0.06em] mt-4 mb-2">
-                    More
-                  </p>
+                  <p className="text-[0.78rem] font-bold text-brand-muted uppercase tracking-[0.06em] mt-4 mb-2">More</p>
                   <div className="grid grid-cols-2 gap-1.5">
                     {more.map(item => <Item key={item._id} item={item} />)}
                   </div>
@@ -128,14 +124,12 @@ function SelectionModal({ title, searchPlaceholder, items, selected, onSelect, o
           <button
             onClick={() => { onSelect(""); onClose(); }}
             className="border border-black/15 text-[#374151] text-[0.88rem] font-semibold px-5 py-2 rounded-lg hover:bg-gray-50 transition"
-            style={{ borderRadius: "0.5rem" }}
           >
             Clear
           </button>
           <button
             onClick={onClose}
             className="bg-brand-dark text-white text-[0.88rem] font-semibold px-6 py-2 rounded-lg hover:bg-brand-dark2 transition"
-            style={{ borderRadius: "0.5rem" }}
           >
             Done
           </button>
@@ -172,7 +166,6 @@ function RangeFilter({ label, minKey, maxKey, filters, onApply }) {
         <button
           onClick={() => onApply({ [minKey]: min || undefined, [maxKey]: max || undefined })}
           className="bg-[#1e293b] text-white text-[0.82rem] font-semibold px-3.5 py-2 rounded-lg hover:bg-brand-dark transition shrink-0"
-          style={{ borderRadius: "0.5rem" }}
         >
           Go
         </button>
@@ -184,7 +177,7 @@ function RangeFilter({ label, minKey, maxKey, filters, onApply }) {
 // ─── Listing Card ───────────────────────────────────
 function ListingCard({ listing }) {
   const navigate = useNavigate();
-  const isInspected = listing?.inspection?.status === "COMPLETED";
+  const isInspected = listing?.isInspected === true;
   const cityName = listing?.city?.name;
 
   return (
@@ -267,6 +260,152 @@ function FilterGroup({ label, children }) {
   );
 }
 
+// ─── SidebarContent (shared between desktop sidebar & mobile drawer) ──
+function SidebarContent({
+  total, filters, setFilter,
+  searchInput, setSearchInput,
+  topCities, cityObj,
+  inlineBrandOptions, models,
+  inlineModelOptions, modelObj,
+  provinces,
+  onOpenCityModal, onOpenBrandModal, onOpenModelModal,
+}) {
+  return (
+    <>
+      <div className="text-[1.35rem] font-extrabold text-brand-dark mb-6">
+        <span>{total}</span> Results
+      </div>
+
+      {/* Keyword */}
+      <FilterGroup label="SEARCH BY KEYWORD">
+        <div className="relative">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <input
+            className={inputCls + " pl-8 py-2.5"}
+            placeholder="Search cars..."
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
+          />
+        </div>
+      </FilterGroup>
+
+      {/* City */}
+      <FilterGroup label="CITY">
+        <RadioList
+          name="city"
+          value={filters.city}
+          onChange={v => setFilter({ city: v })}
+          options={[
+            { label: "All Cities", value: "" },
+            ...topCities.map(c => ({ label: c.name, value: c._id })),
+            ...(filters.city && !topCities.find(c => c._id === filters.city) && cityObj
+              ? [{ label: cityObj.name, value: filters.city }]
+              : []),
+          ]}
+        />
+        <button
+          onClick={onOpenCityModal}
+          className="text-[0.85rem] text-blue-500 hover:underline mt-1.5 block"
+        >
+          more choices...
+        </button>
+      </FilterGroup>
+
+      {/* Make */}
+      <FilterGroup label="MAKE">
+        <RadioList
+          name="brand"
+          value={filters.brand}
+          onChange={v => setFilter({ brand: v, carModel: "" })}
+          options={inlineBrandOptions}
+        />
+        <button
+          onClick={onOpenBrandModal}
+          className="text-[0.85rem] text-blue-500 hover:underline mt-1.5 block"
+        >
+          more choices...
+        </button>
+      </FilterGroup>
+
+      {/* Model */}
+      {filters.brand && models.length > 0 && (
+        <FilterGroup label="MODEL">
+          <RadioList
+            name="carModel"
+            value={filters.carModel}
+            onChange={v => setFilter({ carModel: v })}
+            options={inlineModelOptions}
+          />
+          {models.length > 4 && (
+            <button
+              onClick={onOpenModelModal}
+              className="text-[0.85rem] text-blue-500 hover:underline mt-1.5 block"
+            >
+              more choices...
+            </button>
+          )}
+        </FilterGroup>
+      )}
+
+      {/* Registered In */}
+      <FilterGroup label="REGISTERED IN">
+        <RadioList
+          name="registeredIn"
+          value={filters.registeredIn}
+          onChange={v => setFilter({ registeredIn: v })}
+          options={[
+            { label: "All Provinces", value: "" },
+            ...provinces.map(p => ({ label: p.name, value: p._id })),
+          ]}
+        />
+      </FilterGroup>
+
+      {/* Engine Type */}
+      <FilterGroup label="ENGINE TYPE">
+        <RadioList
+          name="engineType"
+          value={filters.engineType}
+          onChange={v => setFilter({ engineType: v })}
+          options={["", "petrol", "diesel", "hybrid", "electric"].map(v => ({
+            label: v === "" ? "All" : v.charAt(0).toUpperCase() + v.slice(1),
+            value: v,
+          }))}
+        />
+      </FilterGroup>
+
+      {/* Transmission */}
+      <FilterGroup label="TRANSMISSION">
+        <RadioList
+          name="transmission"
+          value={filters.transmission}
+          onChange={v => setFilter({ transmission: v })}
+          options={["", "manual", "automatic"].map(v => ({
+            label: v === "" ? "All" : v.charAt(0).toUpperCase() + v.slice(1),
+            value: v,
+          }))}
+        />
+      </FilterGroup>
+
+      {/* Assembly */}
+      <FilterGroup label="ASSEMBLY">
+        <RadioList
+          name="assembly"
+          value={filters.assembly}
+          onChange={v => setFilter({ assembly: v })}
+          options={["", "local", "imported"].map(v => ({
+            label: v === "" ? "All" : v.charAt(0).toUpperCase() + v.slice(1),
+            value: v,
+          }))}
+        />
+      </FilterGroup>
+
+      <RangeFilter label="PRICE RANGE"  minKey="minPrice"   maxKey="maxPrice"   filters={filters} onApply={setFilter} />
+      <RangeFilter label="YEAR"         minKey="minYear"    maxKey="maxYear"    filters={filters} onApply={setFilter} />
+      <RangeFilter label="MILEAGE (KM)" minKey="minMileage" maxKey="maxMileage" filters={filters} onApply={setFilter} />
+    </>
+  );
+}
+
 // ─── Main Page ──────────────────────────────────────
 export default function BrowseCars() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -280,13 +419,14 @@ export default function BrowseCars() {
   const [provinces, setProvinces] = useState([]);
   const [cities, setCities]       = useState([]);
 
-  const [showCityModal,  setShowCityModal]  = useState(false);
-  const [showBrandModal, setShowBrandModal] = useState(false);
-  const [showModelModal, setShowModelModal] = useState(false);
-  const [showSortDropdown, setShowSortDropdown] = useState(false);
+  const [showCityModal,       setShowCityModal]       = useState(false);
+  const [showBrandModal,      setShowBrandModal]      = useState(false);
+  const [showModelModal,      setShowModelModal]      = useState(false);
+  const [showSortDropdown,    setShowSortDropdown]    = useState(false);
+  const [showFilterDrawer,    setShowFilterDrawer]    = useState(false);
+
   const sortRef = useRef();
 
-  // Must be declared before any useEffect that references filters or setFilter
   const getFilters = () => ({
     search:       searchParams.get("search")       || "",
     city:         searchParams.get("city")         || "",
@@ -318,19 +458,12 @@ export default function BrowseCars() {
     setSearchParams(params);
   };
 
-  // Local state for sidebar keyword input — debounced 400 ms before hitting the URL
   const [searchInput, setSearchInput] = useState(searchParams.get("search") || "");
 
-  // Sync local input if URL param changes externally (e.g. HeroSection navigation or Clear All)
-  useEffect(() => {
-    setSearchInput(filters.search);
-  }, [filters.search]);
+  useEffect(() => { setSearchInput(filters.search); }, [filters.search]);
 
-  // Push debounced value into URL (triggers the listings fetch effect)
   useEffect(() => {
-    const t = setTimeout(() => {
-      setFilter({ search: searchInput });
-    }, 400);
+    const t = setTimeout(() => { setFilter({ search: searchInput }); }, 400);
     return () => clearTimeout(t);
   }, [searchInput]);
 
@@ -384,6 +517,7 @@ export default function BrowseCars() {
     load();
   }, [searchParams.toString()]);
 
+  // Close sort dropdown on outside click
   useEffect(() => {
     const handler = (e) => {
       if (sortRef.current && !sortRef.current.contains(e.target)) setShowSortDropdown(false);
@@ -392,11 +526,17 @@ export default function BrowseCars() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // Lock body scroll when filter drawer is open
+  useEffect(() => {
+    document.body.style.overflow = showFilterDrawer ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [showFilterDrawer]);
+
   const activeSortLabel = SORT_OPTIONS.find(
     o => o.sortBy === filters.sortBy && o.sortOrder === filters.sortOrder
   )?.label || "Newest First";
 
-  // ── Lookup objects for chip labels ──
+  // ── Lookup objects ──
   const cityObj  = cities.find(c => c._id === filters.city);
   const brandObj = brands.find(b => b._id === filters.brand);
   const modelObj = models.find(m => m._id === filters.carModel);
@@ -411,21 +551,23 @@ export default function BrowseCars() {
   if (filters.minPrice || filters.maxPrice)
     appliedFilters.push({ key: "price",    label: `Price: ${filters.minPrice || "0"} – ${filters.maxPrice || "∞"}` });
   if (filters.minYear || filters.maxYear)
-    appliedFilters.push({ key: "year",     label: `Year: ${filters.minYear || "—"} – ${filters.maxYear || "—"}` });
+    appliedFilters.push({ key: "year",     label: `Year: ${filters.minYear || "—"} - ${filters.maxYear || "—"}` });
   if (filters.minMileage || filters.maxMileage)
-    appliedFilters.push({ key: "mileage",  label: `Mileage: ${filters.minMileage || "0"} – ${filters.maxMileage || "∞"}` });
+    appliedFilters.push({ key: "mileage",  label: `Mileage: ${filters.minMileage || "0"} - ${filters.maxMileage || "∞"}` });
   if (modelObj) appliedFilters.push({ key: "carModel",      label: modelObj.name });
   if (provObj)  appliedFilters.push({ key: "registeredIn",  label: `Reg: ${provObj.name}` });
   if (filters.engineType)   appliedFilters.push({ key: "engineType",   label: filters.engineType });
   if (filters.transmission) appliedFilters.push({ key: "transmission", label: filters.transmission });
   if (filters.assembly)     appliedFilters.push({ key: "assembly",     label: filters.assembly });
 
+  // count non-search filters for the badge (search is visible in the keyword box)
+  const activeFilterCount = appliedFilters.filter(f => f.key !== "search").length;
+
   const removeFilter = (key) => {
     const clears = {
       price:   { minPrice: "",    maxPrice: ""   },
       year:    { minYear: "",     maxYear: ""    },
       mileage: { minMileage: "",  maxMileage: "" },
-      // clearing brand also clears model
       brand:   { brand: "", carModel: "" },
     };
     setFilter(clears[key] || { [key]: "" });
@@ -440,7 +582,6 @@ export default function BrowseCars() {
     .sort((a, b) => b.listingCount - a.listingCount)
     .slice(0, 4);
 
-  // Top 5 brands inline; if selected brand not in top-5 append it so radio shows checked
   const top5Brands = brands.slice(0, 5);
   const brandNotInTop5 = filters.brand && !top5Brands.find(b => b._id === filters.brand);
   const inlineBrandOptions = [
@@ -449,7 +590,6 @@ export default function BrowseCars() {
     ...(brandNotInTop5 && brandObj ? [{ label: brandObj.name, value: filters.brand }] : []),
   ];
 
-  // Top 4 models inline; same selection-preservation logic
   const top4Models = models.slice(0, 4);
   const modelNotInTop4 = filters.carModel && !top4Models.find(m => m._id === filters.carModel);
   const inlineModelOptions = [
@@ -465,27 +605,55 @@ export default function BrowseCars() {
     boxShadow:     "0 8px 24px rgba(15,23,42,0.05)",
   };
 
+  // shared sidebar props
+  const sidebarProps = {
+    total, filters, setFilter,
+    searchInput, setSearchInput,
+    topCities, cityObj,
+    inlineBrandOptions, models,
+    inlineModelOptions, modelObj,
+    provinces,
+    onOpenCityModal:  () => setShowCityModal(true),
+    onOpenBrandModal: () => setShowBrandModal(true),
+    onOpenModelModal: () => setShowModelModal(true),
+  };
+
   return (
     <div className="py-8 pb-16 min-h-[80vh]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {/* Page header */}
-        <div className="flex items-start justify-between gap-4 mb-8 flex-wrap">
-          <div>
-            <h1
-              className="font-extrabold text-brand-dark tracking-tight m-0 mb-1"
-              style={{ fontSize: "clamp(1.7rem, 2.5vw, 2.4rem)", letterSpacing: "-0.02em" }}
-            >
-              Browse Used Cars
-            </h1>
-            <p className="text-brand-muted text-[0.95rem]">Find verified used cars across Pakistan</p>
-          </div>
+        <div className="mb-6">
+          <h1
+            className="font-extrabold text-brand-dark tracking-tight m-0 mb-1"
+            style={{ fontSize: "clamp(1.7rem, 2.5vw, 2.4rem)", letterSpacing: "-0.02em" }}
+          >
+            Browse Used Cars
+          </h1>
+          <p className="text-brand-muted text-[0.95rem]">Find verified used cars across Pakistan</p>
         </div>
 
-        {/* Controls row — relative + z-[10] so sort dropdown floats above backdrop-filter stacking contexts */}
-        <div className="relative z-10 flex items-center justify-between gap-4 mb-5 flex-wrap">
-          {/* Type pills */}
-          <div className="flex flex-wrap gap-2">
+        {/* ══ CONTROLS ROW ══ */}
+        <div className="relative z-10 flex items-center justify-between gap-3 mb-5 flex-wrap">
+
+          {/* Left: Filters button (mobile/tablet only) + type pills */}
+          <div className="flex flex-wrap items-center gap-2">
+
+            {/* Filters button — hidden on desktop where sidebar is visible */}
+            <button
+              onClick={() => setShowFilterDrawer(true)}
+              className="lg:hidden flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[0.88rem] font-semibold border-[1.5px] border-black/15 bg-transparent text-[#374151] hover:bg-black/5 hover:border-black/30 transition cursor-pointer"
+            >
+              <SlidersHorizontal size={14} />
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="bg-brand-orange text-white text-[0.7rem] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+
+            {/* Type pills */}
             {TYPE_FILTERS.map(t => (
               <button
                 key={t.value}
@@ -495,17 +663,16 @@ export default function BrowseCars() {
                     ? "bg-brand-orange border-brand-orange text-white"
                     : "bg-transparent border-black/15 text-[#374151] hover:bg-black/5 hover:border-black/30"
                 }`}
-                style={{ borderRadius: "9999px" }}
               >
                 {t.label}
               </button>
             ))}
           </div>
 
-          {/* Sort dropdown */}
+          {/* Right: Sort dropdown */}
           <div
             ref={sortRef}
-            className="relative flex items-center gap-2 px-3 py-2 rounded-xl border border-black/10"
+            className="relative flex items-center gap-2 px-3 py-2 rounded-xl border border-black/10 shrink-0"
             style={{ background: "rgba(255,255,255,0.7)", backdropFilter: "blur(8px)" }}
           >
             <span className="text-[0.82rem] font-semibold text-brand-muted whitespace-nowrap">Sort:</span>
@@ -516,7 +683,7 @@ export default function BrowseCars() {
               {activeSortLabel} <ChevronDown size={15} />
             </button>
             {showSortDropdown && (
-              <div className="absolute top-[calc(100%+6px)] right-0 bg-white border border-black/10 rounded-xl shadow-[0_10px_30px_rgba(15,23,42,0.1)] overflow-hidden min-w-50 z-500">
+              <div className="absolute top-[calc(100%+6px)] left-0 bg-white border border-black/10 rounded-xl shadow-[0_10px_30px_rgba(15,23,42,0.1)] overflow-hidden min-w-50 z-500">
                 {SORT_OPTIONS.map(opt => (
                   <button
                     key={opt.label}
@@ -538,142 +705,12 @@ export default function BrowseCars() {
         {/* Body: sidebar + main */}
         <div className="flex gap-6 items-start">
 
-          {/* ══ SIDEBAR ══ */}
+          {/* ══ DESKTOP SIDEBAR ══ */}
           <aside
             className="hidden lg:block w-72 shrink-0 rounded-2xl p-6 sticky top-21.25"
             style={sidebarStyle}
           >
-            <div className="text-[1.35rem] font-extrabold text-brand-dark mb-6">
-              <span>{total}</span> Results
-            </div>
-
-            {/* Keyword */}
-            <FilterGroup label="SEARCH BY KEYWORD">
-              <div className="relative">
-                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                <input
-                  className={inputCls + " pl-8 py-2.5"}
-                  placeholder="Search cars..."
-                  value={searchInput}
-                  onChange={e => setSearchInput(e.target.value)}
-                />
-              </div>
-            </FilterGroup>
-
-            {/* City */}
-            <FilterGroup label="CITY">
-              <RadioList
-                name="city"
-                value={filters.city}
-                onChange={v => setFilter({ city: v })}
-                options={[
-                  { label: "All Cities", value: "" },
-                  ...topCities.map(c => ({ label: c.name, value: c._id })),
-                  // keep selected city visible even if not in top-4
-                  ...(filters.city && !topCities.find(c => c._id === filters.city) && cityObj
-                    ? [{ label: cityObj.name, value: filters.city }]
-                    : []),
-                ]}
-              />
-              <button
-                onClick={() => setShowCityModal(true)}
-                className="text-[0.85rem] text-blue-500 hover:underline mt-1.5 block"
-              >
-                more choices...
-              </button>
-            </FilterGroup>
-
-            {/* Make */}
-            <FilterGroup label="MAKE">
-              <RadioList
-                name="brand"
-                value={filters.brand}
-                onChange={v => setFilter({ brand: v, carModel: "" })}
-                options={inlineBrandOptions}
-              />
-              <button
-                onClick={() => setShowBrandModal(true)}
-                className="text-[0.85rem] text-blue-500 hover:underline mt-1.5 block"
-              >
-                more choices...
-              </button>
-            </FilterGroup>
-
-            {/* Model — only when a brand is selected and models loaded */}
-            {filters.brand && models.length > 0 && (
-              <FilterGroup label="MODEL">
-                <RadioList
-                  name="carModel"
-                  value={filters.carModel}
-                  onChange={v => setFilter({ carModel: v })}
-                  options={inlineModelOptions}
-                />
-                {models.length > 4 && (
-                  <button
-                    onClick={() => setShowModelModal(true)}
-                    className="text-[0.85rem] text-blue-500 hover:underline mt-1.5 block"
-                  >
-                    more choices...
-                  </button>
-                )}
-              </FilterGroup>
-            )}
-
-            {/* Registered In */}
-            <FilterGroup label="REGISTERED IN">
-              <RadioList
-                name="registeredIn"
-                value={filters.registeredIn}
-                onChange={v => setFilter({ registeredIn: v })}
-                options={[
-                  { label: "All Provinces", value: "" },
-                  ...provinces.map(p => ({ label: p.name, value: p._id })),
-                ]}
-              />
-            </FilterGroup>
-
-            {/* Engine Type */}
-            <FilterGroup label="ENGINE TYPE">
-              <RadioList
-                name="engineType"
-                value={filters.engineType}
-                onChange={v => setFilter({ engineType: v })}
-                options={["", "petrol", "diesel", "hybrid", "electric"].map(v => ({
-                  label: v === "" ? "All" : v.charAt(0).toUpperCase() + v.slice(1),
-                  value: v,
-                }))}
-              />
-            </FilterGroup>
-
-            {/* Transmission */}
-            <FilterGroup label="TRANSMISSION">
-              <RadioList
-                name="transmission"
-                value={filters.transmission}
-                onChange={v => setFilter({ transmission: v })}
-                options={["", "manual", "automatic"].map(v => ({
-                  label: v === "" ? "All" : v.charAt(0).toUpperCase() + v.slice(1),
-                  value: v,
-                }))}
-              />
-            </FilterGroup>
-
-            {/* Assembly */}
-            <FilterGroup label="ASSEMBLY">
-              <RadioList
-                name="assembly"
-                value={filters.assembly}
-                onChange={v => setFilter({ assembly: v })}
-                options={["", "local", "imported"].map(v => ({
-                  label: v === "" ? "All" : v.charAt(0).toUpperCase() + v.slice(1),
-                  value: v,
-                }))}
-              />
-            </FilterGroup>
-
-            <RangeFilter label="PRICE RANGE" minKey="minPrice" maxKey="maxPrice" filters={filters} onApply={setFilter} />
-            <RangeFilter label="YEAR"         minKey="minYear"  maxKey="maxYear"  filters={filters} onApply={setFilter} />
-            <RangeFilter label="MILEAGE (KM)" minKey="minMileage" maxKey="maxMileage" filters={filters} onApply={setFilter} />
+            <SidebarContent {...sidebarProps} />
           </aside>
 
           {/* ══ MAIN ══ */}
@@ -703,10 +740,7 @@ export default function BrowseCars() {
                       </button>
                     </span>
                   ))}
-                  <button
-                    onClick={clearAll}
-                    className="text-[0.82rem] font-semibold text-blue-500 hover:underline"
-                  >
+                  <button onClick={clearAll} className="text-[0.82rem] font-semibold text-blue-500 hover:underline">
                     Clear All
                   </button>
                 </div>
@@ -715,8 +749,23 @@ export default function BrowseCars() {
 
             {/* Listings */}
             {loading ? (
-              <div className="flex justify-center py-20">
-                <div className="w-8 h-8 border-2 border-brand-dark/20 border-t-brand-dark rounded-full animate-spin" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 animate-pulse">
+                {[...Array(9)].map((_, i) => (
+                  <div key={i} className="bg-white border border-black/8 rounded-2xl overflow-hidden">
+                    <div className="h-45 bg-gray-200" />
+                    <div className="p-4">
+                      <div className="h-4 w-3/4 bg-gray-200 rounded mb-2" />
+                      <div className="h-3 w-full bg-gray-100 rounded mb-1.5" />
+                      <div className="h-3 w-2/3 bg-gray-100 rounded mb-3" />
+                      <div className="flex gap-2 mb-3">
+                        <div className="h-3 w-12 bg-gray-100 rounded" />
+                        <div className="h-3 w-16 bg-gray-100 rounded" />
+                        <div className="h-3 w-20 bg-gray-100 rounded" />
+                      </div>
+                      <div className="h-5 w-32 bg-gray-200 rounded" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : listings.length === 0 ? (
               <div className="text-center py-16 text-brand-muted">
@@ -724,7 +773,6 @@ export default function BrowseCars() {
                 <button
                   onClick={clearAll}
                   className="border border-black/15 text-brand-dark text-sm font-semibold px-4 py-2 rounded-lg hover:bg-gray-50 transition"
-                  style={{ borderRadius: "0.5rem" }}
                 >
                   Clear Filters
                 </button>
@@ -737,14 +785,14 @@ export default function BrowseCars() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-4 mt-8">
+              <div className="flex items-center justify-center gap-4 mt-8 flex-wrap">
                 <button
                   disabled={filters.page <= 1}
                   onClick={() => setSearchParams(p => { const n = new URLSearchParams(p); n.set("page", filters.page - 1); return n; })}
                   className="bg-white/70 border border-black/10 rounded-lg px-4 py-2 text-[0.88rem] font-semibold text-brand-dark hover:bg-[#f1f5f9] transition disabled:opacity-40 disabled:cursor-not-allowed"
-                  style={{ borderRadius: "0.5rem" }}
                 >
-                  ← Prev
+                  {/* ← Prev */}
+                  <ArrowLeft/> Prev
                 </button>
 
                 {Array.from({ length: totalPages }, (_, i) => i + 1)
@@ -766,7 +814,6 @@ export default function BrowseCars() {
                             ? "bg-brand-dark text-white border-brand-dark border"
                             : "bg-white/70 border border-black/10 text-[#374151] hover:bg-[#f1f5f9]"
                         }`}
-                        style={{ borderRadius: "0.5rem" }}
                       >
                         {n}
                       </button>
@@ -778,9 +825,9 @@ export default function BrowseCars() {
                   disabled={filters.page >= totalPages}
                   onClick={() => setSearchParams(p => { const n = new URLSearchParams(p); n.set("page", filters.page + 1); return n; })}
                   className="bg-white/70 border border-black/10 rounded-lg px-4 py-2 text-[0.88rem] font-semibold text-brand-dark hover:bg-[#f1f5f9] transition disabled:opacity-40 disabled:cursor-not-allowed"
-                  style={{ borderRadius: "0.5rem" }}
                 >
-                  Next →
+                  {/* Next → */}
+                  Next <ArrowRight/>
                 </button>
               </div>
             )}
@@ -789,7 +836,58 @@ export default function BrowseCars() {
         </div>
       </div>
 
-      {/* ── Modals ── */}
+      {/* ══ MOBILE FILTER DRAWER ══ */}
+      {showFilterDrawer && (
+        <div className="lg:hidden fixed inset-0 z-200 flex">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-[rgba(15,23,42,0.45)]"
+            style={{ backdropFilter: "blur(2px)" }}
+            onClick={() => setShowFilterDrawer(false)}
+          />
+
+          {/* Panel */}
+          <div className="relative w-80 max-w-[90vw] h-full bg-white flex flex-col shadow-[4px_0_32px_rgba(15,23,42,0.15)] overflow-hidden">
+            {/* Drawer header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-black/8 shrink-0">
+              <span className="font-bold text-brand-dark text-[1rem]">Filters</span>
+              <div className="flex items-center gap-3">
+                {appliedFilters.length > 0 && (
+                  <button
+                    onClick={() => { clearAll(); setShowFilterDrawer(false); }}
+                    className="text-[0.82rem] font-semibold text-blue-500 hover:underline"
+                  >
+                    Clear all
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowFilterDrawer(false)}
+                  className="text-brand-muted hover:text-brand-dark p-1"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Scrollable filter content */}
+            <div className="overflow-y-auto flex-1 px-5 py-5">
+              <SidebarContent {...sidebarProps} />
+            </div>
+
+            {/* Done button */}
+            <div className="shrink-0 px-5 py-4 border-t border-black/8">
+              <button
+                onClick={() => setShowFilterDrawer(false)}
+                className="w-full bg-brand-dark text-white font-semibold py-3 rounded-xl hover:bg-brand-dark2 transition text-[0.95rem]"
+              >
+                Show {total} Results
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Selection Modals ── */}
       {showCityModal && (
         <SelectionModal
           title="Select City"
@@ -801,7 +899,6 @@ export default function BrowseCars() {
           renderCount
         />
       )}
-
       {showBrandModal && (
         <SelectionModal
           title="Select Make"
@@ -812,7 +909,6 @@ export default function BrowseCars() {
           onClose={() => setShowBrandModal(false)}
         />
       )}
-
       {showModelModal && (
         <SelectionModal
           title="Select Model"

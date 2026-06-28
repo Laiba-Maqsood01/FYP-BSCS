@@ -15,7 +15,7 @@ function ListingBadges({ listing }) {
   const isInspected = listing?.inspection?.status === "COMPLETED";
   const cityName = listing?.city?.name || null;
   return (
-    <div className="absolute inset-[0.65rem] z-[2] pointer-events-none flex flex-wrap content-start gap-[0.35rem]">
+    <div className="absolute inset-[0.65rem] z-2 pointer-events-none flex flex-wrap content-start gap-[0.35rem]">
       <span className={Badges.featured}><Flame size={11} /> Featured</span>
       {isInspected && <span className={Badges.inspected}><ShieldCheck size={11} /> Inspected</span>}
       {cityName && <span className={Badges.city}><MapPin size={11} /> {cityName}</span>}
@@ -71,7 +71,7 @@ export default function FeatureSection({
             >
               {title}
             </h2>
-            <p className="text-brand-muted max-w-[42rem]">{description}</p>
+            <p className="text-brand-muted max-w-2xl">{description}</p>
           </div>
           <Link
             to="/browse-cars?featured=true"
@@ -85,16 +85,16 @@ export default function FeatureSection({
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {slides.map((listing) => (
             <article key={listing._id} className="h-full">
-              <div className="h-full rounded-2xl overflow-hidden border border-black/[0.08] bg-white shadow-[0_12px_28px_rgba(15,23,42,0.06)]">
+              <div className="h-full rounded-2xl overflow-hidden border border-black/8 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.06)]">
 
                 {/* Image */}
-                <div className="relative h-[220px]">
+                <div className="relative h-55">
                   <img
                     src={listing.images?.[0]?.url || "https://via.placeholder.com/400x250?text=No+Image"}
                     alt={`${listing.brand?.name} ${listing.carModel?.name}`}
                     className="w-full h-full object-cover"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[rgba(3,7,18,0.38)] to-transparent" />
+                  <div className="absolute inset-0 bg-linear-to-t from-[rgba(3,7,18,0.38)] to-transparent" />
                   <ListingBadges listing={listing} />
                 </div>
 
@@ -103,7 +103,7 @@ export default function FeatureSection({
                   <h3 className="text-[1.08rem] font-[650] text-brand-dark mb-2 tracking-tight">
                     {listing.year} {listing.brand?.name} {listing.carModel?.name}
                   </h3>
-                  <p className="text-[0.9rem] leading-snug text-brand-muted mb-3 min-h-[2.75rem]">
+                  <p className="text-[0.9rem] leading-snug text-brand-muted mb-3 min-h-11">
                     {listing.description?.slice(0, 80)}{listing.description?.length > 80 ? "…" : ""}
                   </p>
                   <div className="flex flex-wrap gap-x-2 gap-y-1 text-[0.78rem] text-[#475569] mb-3">

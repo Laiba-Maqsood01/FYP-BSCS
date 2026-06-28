@@ -92,3 +92,9 @@ export const getMyListingDetail = asyncHandler(async (req, res) => {
 });
 
 
+
+// User marks their own general listing as SOLD
+export const markListingSoldByUser = asyncHandler(async (req, res) => {
+    const listing = await listingService.markListingSoldByUser(req.params.id, req.user._id);
+    res.status(200).json(new ApiResponse(200, "Listing marked as sold", listing));
+});

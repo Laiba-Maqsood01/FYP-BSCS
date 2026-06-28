@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { LayoutDashboard, LogOut, Power } from "lucide-react";
 import ConfirmModal from "./ConfirmModal";
+import UserAvatar from "./UserAvatar";
 
 export default function ProfileDropdown({ user, onLogout, onLogoutAll }) {
   const [showLogoutAllModal, setShowLogoutAllModal] = useState(false);
@@ -27,15 +28,15 @@ export default function ProfileDropdown({ user, onLogout, onLogoutAll }) {
       {/* Avatar */}
       <button
         onClick={() => setOpen(!open)}
-        className="w-[42px] h-[42px] rounded-full bg-brand-btn text-white font-semibold flex items-center justify-center cursor-pointer select-none hover:bg-brand-dark2 transition"
-        style={{ borderRadius: "50%" }}
+        className="cursor-pointer select-none hover:opacity-85 transition"
+        style={{ borderRadius: "50%", lineHeight: 0 }}
       >
-        {user?.username?.charAt(0).toUpperCase() || "U"}
+        <UserAvatar user={user} size={42} />
       </button>
 
       {/* Dropdown panel */}
       <div
-        className="absolute right-0 top-[55px] w-[280px] bg-white rounded-2xl shadow-2xl p-3 border border-black/[0.06]"
+        className="absolute right-0 top-13.75 w-70 bg-white rounded-2xl shadow-2xl p-3 border border-black/6"
         style={{
           transform: open ? "scale(1)" : "scale(0.95)",
           opacity: open ? 1 : 0,
@@ -45,10 +46,13 @@ export default function ProfileDropdown({ user, onLogout, onLogoutAll }) {
         }}
       >
         {/* User info */}
-        <div className="px-3 py-2">
-          <div className="font-semibold text-brand-dark">{user?.username}</div>
-          <div className="text-xs text-gray-500 mt-0.5">{user?.email}</div>
-          <div className="text-xs text-gray-400 mt-1">{user?.role?.toUpperCase()}</div>
+        <div className="px-3 py-2 flex items-center gap-3">
+          <UserAvatar user={user} size={38} />
+          <div className="min-w-0">
+            <div className="font-semibold text-brand-dark truncate">{user?.username}</div>
+            <div className="text-xs text-gray-500 mt-0.5 truncate">{user?.email}</div>
+            <div className="text-xs text-gray-400 mt-0.5">{user?.role?.toUpperCase()}</div>
+          </div>
         </div>
 
         <hr className="my-2 border-gray-100" />

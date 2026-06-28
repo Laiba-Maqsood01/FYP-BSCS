@@ -29,8 +29,14 @@ export const getListingDetail = (listingId) =>
 export const getMyListings = () =>
   api.get("/listings/my-listings").then(r => r.data.data);
 
+export const getMyListingDetail = (id) =>
+  api.get(`/listings/${id}/my-detail`).then(r => r.data.data);
+
 export const updateListing = (id, data) =>
   api.put(`/listings/${id}`, data).then(r => r.data.data);
 
 export const deleteListing = (id) =>
   api.delete(`/listings/${id}`).then(r => r.data);
+
+export const markMyListingSold = (id) =>
+  api.patch(`/listings/${id}/mark-sold`).then(r => r.data.data);

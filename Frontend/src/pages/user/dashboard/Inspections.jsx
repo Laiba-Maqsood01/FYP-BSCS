@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, memo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
 import { getMyInspections } from "../../../services/inspectionService";
 import { ExternalLink } from "lucide-react";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatDate(d) {
   if (!d) return "—";
@@ -10,26 +12,47 @@ function formatDate(d) {
 }
 
 const STATUS_BADGE = {
-  PENDING_COORDINATION: { bg: "#fef9c3", text: "#b45309",  label: "Pending" },
-  SCHEDULED:            { bg: "#dbeafe", text: "#1d4ed8",  label: "Scheduled" },
-  IN_PROGRESS:          { bg: "#fff7ed", text: "#c2410c",  label: "In Progress" },
-  COMPLETED:            { bg: "#dcfce7", text: "#16a34a",  label: "Completed" },
-  CANCELLED:            { bg: "#f1f5f9", text: "#64748b",  label: "Cancelled" },
+  PENDING_COORDINATION: { bg: "#fef9c3", text: "#b45309", label: "Pending" },
+  SCHEDULED:            { bg: "#dbeafe", text: "#1d4ed8", label: "Scheduled" },
+  IN_PROGRESS:          { bg: "#fff7ed", text: "#c2410c", label: "In Progress" },
+  COMPLETED:            { bg: "#dcfce7", text: "#16a34a", label: "Completed" },
+  CANCELLED:            { bg: "#f1f5f9", text: "#64748b", label: "Cancelled" },
 };
 
-function InspectionCard({ insp }) {
+// ── RefundBadge ───────────────────────────────────────────────────────────────
+
+function RefundBadge({ refundRequired, refundStatus }) {
+  if (!refundRequired) return null;
+  return refundStatus === "PROCESSED" ? (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold"
+      style={{ background: "#dcfce7", color: "#16a34a" }}>
+      ✓ Refund processed
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold"
+      style={{ background: "#fef9c3", color: "#b45309" }}>
+      Refund pending
+    </span>
+  );
+}
+
+// ── InspectionCard — memo so tab switch only re-renders newly visible cards ───
+
+const InspectionCard = memo(function InspectionCard({ insp }) {
   const navigate = useNavigate();
-  const car = `${insp.listing?.year ?? ""} ${insp.listing?.brand?.name ?? ""} ${insp.listing?.carModel?.name ?? ""}`.trim();
+  const car   = `${insp.listing?.year ?? ""} ${insp.listing?.brand?.name ?? ""} ${insp.listing?.carModel?.name ?? ""}`.trim();
   const badge = STATUS_BADGE[insp.status] ?? { bg: "#f1f5f9", text: "#64748b", label: insp.status };
-  const image = insp.listing?.images?.[0];
+  const image = insp.listing?.images?.[0]?.url;
+  const isManaged   = insp.listing?.saleMode === "MANAGED";
+  const isCompleted = insp.status === "COMPLETED";
+  const canView     = !isManaged || isCompleted;
 
   return (
     <div className="bg-white rounded-xl overflow-hidden flex sm:flex-row flex-col" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
       <div className="w-full sm:w-28 h-24 sm:h-auto bg-gray-100 shrink-0">
         {image
           ? <img src={image} alt={car} className="w-full h-full object-cover" />
-          : <div className="w-full h-full flex items-center justify-center text-xs text-brand-muted">No image</div>
-        }
+          : <div className="w-full h-full flex items-center justify-center text-xs text-brand-muted">No image</div>}
       </div>
       <div className="flex-1 px-4 py-3">
         <div className="flex items-start justify-between gap-2 flex-wrap">
@@ -45,17 +68,48 @@ function InspectionCard({ insp }) {
             {badge.label}
           </span>
         </div>
-        <div className="flex gap-2 mt-3 flex-wrap">
-          <button onClick={() => navigate(`/browse-cars/${insp.listing?._id}`)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-brand-muted hover:bg-gray-50 transition"
-            style={{ border: "1px solid rgba(0,0,0,0.1)" }}>
-            <ExternalLink size={12} /> View Listing
-          </button>
+
+        {insp.refundRequired && (
+          <div className="mt-2">
+            <RefundBadge refundRequired={insp.refundRequired} refundStatus={insp.refundStatus} />
+          </div>
+        )}
+
+        {canView && (
+          <div className="flex gap-2 mt-3 flex-wrap">
+            <button
+              onClick={() => navigate(`/browse-cars/${insp.listing?._id}`)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-brand-muted hover:bg-gray-50 transition cursor-pointer"
+              style={{ border: "1px solid rgba(0,0,0,0.1)" }}>
+              <ExternalLink size={12} /> View Listing
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
+// ── Skeleton ──────────────────────────────────────────────────────────────────
+
+function InspectionSkeleton() {
+  return (
+    <div className="bg-white rounded-xl overflow-hidden flex flex-col sm:flex-row animate-pulse" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
+      <div className="w-full sm:w-28 h-24 bg-gray-200 shrink-0" />
+      <div className="flex-1 px-4 py-3 flex flex-col gap-2">
+        <div className="h-4 w-48 bg-gray-200 rounded" />
+        <div className="h-3 w-36 bg-gray-100 rounded" />
+        <div className="h-3 w-24 bg-gray-100 rounded" />
+        <div className="flex gap-2 mt-1">
+          <div className="h-6 w-20 bg-gray-100 rounded-full" />
+          <div className="h-6 w-16 bg-gray-100 rounded-full" />
         </div>
       </div>
     </div>
   );
 }
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function Inspections() {
   const { user } = useAuth();
@@ -70,8 +124,18 @@ export default function Inspections() {
       .finally(() => setLoading(false));
   }, []);
 
-  const requestedByMe = all.filter(i => i.requestedBy?._id === user?._id || i.requestedBy === user?._id);
-  const forMyListings = all.filter(i => i.listing?.seller?._id === user?._id || i.listing?.seller === user?._id);
+  const myId = user?._id;
+
+  const requestedByMe = all.filter(i => {
+    const reqId = i.requestedBy?._id ?? i.requestedBy;
+    return reqId?.toString() === myId?.toString();
+  });
+
+  const forMyListings = all.filter(i => {
+    const sellerId = i.listing?.seller?.toString?.() ?? i.listing?.seller;
+    const reqId    = i.requestedBy?._id?.toString?.() ?? i.requestedBy?.toString?.();
+    return sellerId?.toString() === myId?.toString() && reqId !== myId?.toString();
+  });
 
   const displayed = tab === "requested" ? requestedByMe : forMyListings;
 
@@ -81,11 +145,11 @@ export default function Inspections() {
 
       <div className="flex gap-1.5 mb-5">
         {[
-          { key: "requested", label: "Requested by me",  count: requestedByMe.length  },
-          { key: "seller",    label: "For my listings",  count: forMyListings.length  },
+          { key: "requested", label: "Requested by me", count: requestedByMe.length },
+          { key: "seller",    label: "For my listings", count: forMyListings.length },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold transition"
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer"
             style={tab === t.key
               ? { background: "#ea6d00", color: "#fff" }
               : { background: "#f8f9fa", color: "#64748b" }}>
@@ -95,7 +159,9 @@ export default function Inspections() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-16"><div className="w-7 h-7 border-2 border-brand-dark/20 border-t-brand-dark rounded-full animate-spin" /></div>
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => <InspectionSkeleton key={i} />)}
+        </div>
       ) : displayed.length === 0 ? (
         <div className="text-center py-16">
           <p className="text-brand-muted text-sm">

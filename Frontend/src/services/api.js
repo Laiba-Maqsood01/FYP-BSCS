@@ -53,7 +53,9 @@ api.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
         return api(originalRequest);
       } catch (err) {
-        console.error("Refresh token failed");
+        // Refresh failed — clear token and signal the app to log out
+        setAccessToken(null);
+        window.dispatchEvent(new CustomEvent("auth:session-expired"));
         return Promise.reject(err);
       }
     }

@@ -5,3 +5,4 @@ export const getModels    = (brandId)  => api.get(`/master/models?brand=${brandI
 export const getCities    = ()         => api.get("/master/cities").then(r => r.data.data);
 export const getBodyTypes = ()         => api.get("/master/body-types").then(r => r.data.data);
 export const getManagedCities = ()     => api.get("/master/managed-cities").then(r => r.data.data);
+export const getProvinces = ()     => api.get("/master/provinces").then(r => r.data.data);

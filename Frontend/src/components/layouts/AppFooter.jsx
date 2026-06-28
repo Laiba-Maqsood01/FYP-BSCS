@@ -21,7 +21,7 @@ const SOCIAL_LINKS = [
 const footerLink = "no-underline transition-colors duration-[0.18s]";
 
 export default function AppFooter({
-  brand = { title: "GearTrade.app", short: "GT", href: "/" },
+  brand = { title: "GearTrade", short: "GT", href: "/" },
 }) {
   const [email, setEmail] = useState("");
 

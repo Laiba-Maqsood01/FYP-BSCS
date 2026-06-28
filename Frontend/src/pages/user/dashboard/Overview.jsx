@@ -1,16 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip,
-  PieChart, Pie, Cell,
-} from "recharts";
-import { Car, ShieldCheck, Heart, CreditCard } from "lucide-react";
+import { Car, ShieldCheck, Heart, CreditCard, Plus, List, LayoutDashboard } from "lucide-react";
 import { getMyListings } from "../../../services/listingService";
 import { getMyInspections } from "../../../services/inspectionService";
 import { getMyFavorites } from "../../../services/favoriteService";
 import { getMyPayments } from "../../../services/paymentService";
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
+import { useAuth } from "../../../context/AuthContext";
 
 function formatPKR(n) {
   if (!n) return "PKR 0";
@@ -23,23 +18,6 @@ function formatDate(d) {
   return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function StatCard({ label, value, sub, icon: Icon, color }) {
-  return (
-    <div className="bg-white rounded-xl p-5" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
-      <div className="flex items-start justify-between mb-3">
-        <p className="text-xs font-medium text-brand-muted uppercase tracking-wide">{label}</p>
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: color + "15" }}>
-          <Icon size={15} style={{ color }} />
-        </div>
-      </div>
-      <p className="text-2xl font-bold text-brand-dark">{value}</p>
-      {sub && <p className="text-xs text-brand-muted mt-1">{sub}</p>}
-    </div>
-  );
-}
-
 const STATUS_COLORS = {
   ACTIVE:             "#16a34a",
   PENDING:            "#d97706",
@@ -50,77 +28,121 @@ const STATUS_COLORS = {
 };
 
 const PURPOSE_COLORS = {
-  INSPECTION:     "#ea6d00",
-  RE_INSPECTION:  "#f59e0b",
-  FEATURED:       "#3b82f6",
-  COMMISSION:     "#8b5cf6",
+  INSPECTION:    "#ea6d00",
+  RE_INSPECTION: "#f59e0b",
+  FEATURED:      "#3b82f6",
+  COMMISSION:    "#8b5cf6",
 };
 
-const INSP_STATUS_COLORS = {
-  PENDING_COORDINATION: "#d97706",
-  SCHEDULED:            "#3b82f6",
-  IN_PROGRESS:          "#ea6d00",
-  COMPLETED:            "#16a34a",
-  CANCELLED:            "#6b7280",
-};
-
-const CustomBarTooltip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
+function StatCard({ label, value, sub, icon: Icon, color }) {
   return (
-    <div className="bg-white rounded-lg px-3 py-2 shadow-lg text-xs" style={{ border: "1px solid rgba(0,0,0,0.1)" }}>
-      <p className="font-semibold text-brand-dark mb-0.5">{label}</p>
-      <p className="text-brand-muted">{payload[0].value} listing{payload[0].value !== 1 ? "s" : ""}</p>
+    <div className="bg-white rounded-xl p-5 relative overflow-hidden" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
+      <div className="absolute top-0 left-0 w-1 h-full rounded-l-xl" style={{ background: color }} />
+      <div className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: color + "18" }}>
+        <Icon size={15} style={{ color }} />
+      </div>
+      <p className="text-[11px] font-semibold text-brand-muted uppercase tracking-wider mb-3 pl-1">{label}</p>
+      <p className="text-2xl font-bold text-brand-dark pl-1">{value}</p>
+      {sub && <p className="text-xs text-brand-muted mt-1 pl-1">{sub}</p>}
     </div>
   );
-};
+}
 
-const CustomPieTooltip = ({ active, payload }) => {
-  if (!active || !payload?.length) return null;
+function HorizontalBar({ label, value, max, color }) {
+  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
   return (
-    <div className="bg-white rounded-lg px-3 py-2 shadow-lg text-xs" style={{ border: "1px solid rgba(0,0,0,0.1)" }}>
-      <p className="font-semibold text-brand-dark mb-0.5">{payload[0].name}</p>
-      <p className="text-brand-muted">{formatPKR(payload[0].value)}</p>
+    <div className="flex items-center gap-3">
+      <p className="text-xs text-brand-muted w-20 shrink-0">{label}</p>
+      <div className="flex-1 h-2 rounded-full" style={{ background: "rgba(0,0,0,0.06)" }}>
+        <div className="h-2 rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
+      </div>
+      <p className="text-xs font-semibold text-brand-dark w-4 text-right shrink-0">{value}</p>
     </div>
   );
-};
+}
 
-// ── Activity helpers ──────────────────────────────────────────────────────────
+function DonutChart({ data }) {
+  const total = data.reduce((s, d) => s + d.value, 0);
+  if (total === 0) return (
+    <p className="text-sm text-brand-muted text-center py-4">No payments yet</p>
+  );
+
+  const r = 36;
+  const cx = 50;
+  const cy = 50;
+  const circumference = 2 * Math.PI * r;
+  let offset = -circumference * 0.25;
+
+  return (
+    <div className="flex items-center gap-5">
+      <svg width="100" height="100" viewBox="0 0 100 100" style={{ flexShrink: 0 }}>
+        {data.map((d, i) => {
+          const pct = d.value / total;
+          const dash = pct * circumference;
+          const gap  = circumference - dash;
+          const el = (
+            <circle
+              key={i}
+              cx={cx} cy={cy} r={r}
+              fill="none"
+              stroke={PURPOSE_COLORS[d.name] ?? "#94a3b8"}
+              strokeWidth="14"
+              strokeDasharray={`${dash - 2} ${gap + 2}`}
+              strokeDashoffset={-offset}
+              style={{ transition: "stroke-dasharray 0.4s" }}
+            />
+          );
+          offset += dash;
+          return el;
+        })}
+        <text x="50" y="46" textAnchor="middle" fontSize="10" fontWeight="600" fill="#0f172a">PKR</text>
+        <text x="50" y="60" textAnchor="middle" fontSize="9" fill="#64748b">
+          {total >= 100000 ? `${(total / 100000).toFixed(1)}L` : total.toLocaleString()}
+        </text>
+      </svg>
+      <div className="flex flex-col gap-2 flex-1 min-w-0">
+        {data.map((d, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: PURPOSE_COLORS[d.name] ?? "#94a3b8" }} />
+            <span className="text-xs text-brand-muted capitalize flex-1 truncate">{d.name.replace(/_/g, " ").toLowerCase()}</span>
+            <span className="text-xs font-semibold text-brand-dark shrink-0">{formatPKR(d.value)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function buildActivity(listings, inspections) {
   const events = [];
-
   inspections.slice(0, 5).forEach(i => {
     const car = `${i.listing?.year ?? ""} ${i.listing?.brand?.name ?? ""} ${i.listing?.carModel?.name ?? ""}`.trim();
-    const labels = {
-      COMPLETED:            { text: `Inspection completed for ${car}`,   dot: "#16a34a" },
-      SCHEDULED:            { text: `Inspection scheduled for ${car}`,   dot: "#3b82f6" },
-      IN_PROGRESS:          { text: `Inspection in progress for ${car}`, dot: "#ea6d00" },
-      PENDING_COORDINATION: { text: `Inspection requested for ${car}`,   dot: "#d97706" },
+    const map = {
+      COMPLETED:            { text: `Inspection completed for ${car || "your listing"}`,   dot: "#16a34a" },
+      SCHEDULED:            { text: `Inspection scheduled for ${car || "your listing"}`,   dot: "#3b82f6" },
+      IN_PROGRESS:          { text: `Inspection in progress for ${car || "your listing"}`, dot: "#ea6d00" },
+      PENDING_COORDINATION: { text: `Inspection requested for ${car || "your listing"}`,   dot: "#d97706" },
     };
-    const ev = labels[i.status];
-    if (ev) events.push({ text: ev.text, dot: ev.dot, date: i.createdAt });
+    const ev = map[i.status];
+    if (ev) events.push({ ...ev, date: i.createdAt });
   });
-
-  listings.slice(0, 4).forEach(l => {
+  listings.slice(0, 5).forEach(l => {
     const car = `${l.year ?? ""} ${l.brand?.name ?? ""} ${l.carModel?.name ?? ""}`.trim();
-    const labels = {
+    const map = {
       ACTIVE:   { text: `Listing approved — ${car} is now active`, dot: "#16a34a" },
       PENDING:  { text: `Listing submitted — ${car} is under review`, dot: "#d97706" },
       REJECTED: { text: `Listing rejected — ${car}`, dot: "#dc2626" },
     };
-    const ev = labels[l.status];
-    if (ev) events.push({ text: ev.text, dot: ev.dot, date: l.createdAt });
+    const ev = map[l.status];
+    if (ev) events.push({ ...ev, date: l.createdAt });
   });
-
-  return events
-    .sort((a, b) => new Date(b.date) - new Date(a.date))
-    .slice(0, 6);
+  return events.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 6);
 }
-
-// ── Main ─────────────────────────────────────────────────────────────────────
 
 export default function Overview() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+
   const [listings,    setListings]    = useState([]);
   const [inspections, setInspections] = useState([]);
   const [favorites,   setFavorites]   = useState([]);
@@ -142,17 +164,19 @@ export default function Overview() {
   }, []);
 
   const activeListings = listings.filter(l => l.status === "ACTIVE").length;
-  const totalSpent     = payments.reduce((s, p) => s + (p.amount ?? 0), 0);
+  const successPayments = payments.filter(p => p.status === "SUCCESS");
+  const totalSpent = successPayments.reduce((s, p) => s + (p.amount ?? 0), 0);
 
-  // Bar chart — listing status breakdown
-  const statusOrder = ["ACTIVE", "PENDING", "REJECTED", "REMOVED", "SOLD", "PENDING_COMMISSION"];
-  const barData = statusOrder
-    .map(s => ({ name: s.charAt(0) + s.slice(1).toLowerCase().replace("_", " "), value: listings.filter(l => l.status === s).length, color: STATUS_COLORS[s] }))
-    .filter(d => d.value > 0);
+  const statusOrder = ["ACTIVE", "PENDING", "SOLD", "REJECTED", "REMOVED", "PENDING_COMMISSION"];
+  const barData = statusOrder.map(s => ({
+    label: s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, " "),
+    value: listings.filter(l => l.status === s).length,
+    color: STATUS_COLORS[s],
+  })).filter(d => d.value > 0);
+  const barMax = Math.max(...barData.map(d => d.value), 1);
 
-  // Pie chart — payment breakdown by purpose
   const purposeMap = {};
-  payments.forEach(p => {
+  successPayments.forEach(p => {
     const key = p.purpose ?? "OTHER";
     purposeMap[key] = (purposeMap[key] ?? 0) + (p.amount ?? 0);
   });
@@ -162,74 +186,131 @@ export default function Overview() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="w-7 h-7 border-2 border-brand-dark/20 border-t-brand-dark rounded-full animate-spin" />
+      <div className="p-6 max-w-5xl animate-pulse">
+        {/* Header */}
+        <div className="mb-6">
+          <div className="h-6 w-32 bg-gray-200 rounded mb-2" />
+          <div className="h-4 w-72 bg-gray-100 rounded" />
+        </div>
+
+        {/* Quick actions */}
+        <div className="flex gap-2.5 flex-wrap mb-6">
+          {[80, 120, 120].map((w, i) => (
+            <div key={i} className="h-9 rounded-lg bg-gray-200" style={{ width: w }} />
+          ))}
+        </div>
+
+        {/* Stat cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="bg-white rounded-xl p-4" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="h-3 w-20 bg-gray-100 rounded" />
+                <div className="w-8 h-8 rounded-lg bg-gray-200" />
+              </div>
+              <div className="h-7 w-16 bg-gray-200 rounded mb-1" />
+              <div className="h-3 w-24 bg-gray-100 rounded" />
+            </div>
+          ))}
+        </div>
+
+        {/* Charts row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+          {[...Array(2)].map((_, i) => (
+            <div key={i} className="bg-white rounded-xl p-5" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
+              <div className="h-4 w-36 bg-gray-200 rounded mb-4" />
+              <div className="flex flex-col gap-3">
+                {[...Array(4)].map((_, j) => (
+                  <div key={j} className="flex items-center gap-3">
+                    <div className="h-3 w-16 bg-gray-100 rounded shrink-0" />
+                    <div className="flex-1 h-4 bg-gray-100 rounded-full" style={{ maxWidth: `${40 + j * 15}%` }} />
+                    <div className="h-3 w-6 bg-gray-100 rounded" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Recent activity */}
+        <div className="bg-white rounded-xl p-5" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
+          <div className="h-4 w-32 bg-gray-200 rounded mb-4" />
+          <div className="flex flex-col">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="flex items-center gap-3 py-3" style={{ borderBottom: i < 4 ? "1px solid rgba(0,0,0,0.05)" : "none" }}>
+                <div className="w-2 h-2 rounded-full bg-gray-200 shrink-0" />
+                <div className="flex-1 h-3 bg-gray-100 rounded" style={{ maxWidth: `${55 + (i % 3) * 15}%` }} />
+                <div className="h-3 w-16 bg-gray-100 rounded shrink-0" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="p-6 max-w-5xl">
-      <h1 className="text-xl font-bold text-brand-dark mb-6">Overview</h1>
+
+      {/* Header */}
+      <div className="mb-6">
+        <h1 className="text-xl font-bold text-brand-dark">Overview</h1>
+        <p className="text-sm text-brand-muted mt-0.5">
+          Welcome back{user?.username ? `, ${user.username}` : ""} — here's what's happening with your account
+        </p>
+      </div>
+
+      {/* Quick actions */}
+      <div className="flex gap-2.5 flex-wrap mb-6">
+        <button
+          onClick={() => navigate("/post-ad")}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white hover:opacity-90 transition"
+          style={{ background: "#ea6d00" }}>
+          <Plus size={14} /> Post new ad
+        </button>
+        <button
+          onClick={() => navigate("/dashboard/listings")}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-brand-dark hover:bg-gray-50 transition"
+          style={{ border: "1px solid rgba(0,0,0,0.1)" }}>
+          <List size={14} /> Manage listings
+        </button>
+        <button
+          onClick={() => navigate("/dashboard/inspections")}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-brand-dark hover:bg-gray-50 transition"
+          style={{ border: "1px solid rgba(0,0,0,0.1)" }}>
+          <ShieldCheck size={14} /> My inspections
+        </button>
+      </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Total Listings" value={listings.length} sub={`${activeListings} active`}        icon={Car}        color="#ea6d00" />
-        <StatCard label="Inspections"    value={inspections.length} sub={`${inspections.filter(i => i.status === "COMPLETED").length} completed`} icon={ShieldCheck} color="#3b82f6" />
-        <StatCard label="Favorites"      value={favorites.length}  sub="saved cars"                      icon={Heart}      color="#ec4899" />
-        <StatCard label="Total Spent"    value={formatPKR(totalSpent)} sub={`${payments.length} transactions`} icon={CreditCard} color="#8b5cf6" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        <StatCard label="Listings"    value={listings.length}       sub={`${activeListings} active`}                                                           icon={Car}        color="#ea6d00" />
+        <StatCard label="Inspections" value={inspections.length}    sub={`${inspections.filter(i => i.status === "COMPLETED").length} completed`}               icon={ShieldCheck} color="#3b82f6" />
+        <StatCard label="Favorites"   value={favorites.length}      sub="saved cars"                                                                           icon={Heart}      color="#ec4899" />
+        <StatCard label="Total spent" value={formatPKR(totalSpent)} sub={`${successPayments.length} transaction${successPayments.length !== 1 ? "s" : ""}`}    icon={CreditCard} color="#8b5cf6" />
       </div>
 
       {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
 
-        {/* Bar chart */}
+        {/* Horizontal bar chart */}
         <div className="bg-white rounded-xl p-5" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
           <p className="text-sm font-semibold text-brand-dark mb-4">Listings by status</p>
           {barData.length === 0 ? (
-            <div className="flex items-center justify-center h-32 text-sm text-brand-muted">No listings yet</div>
+            <p className="text-sm text-brand-muted text-center py-6">No listings yet</p>
           ) : (
-            <ResponsiveContainer width="100%" height={160}>
-              <BarChart data={barData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} allowDecimals={false} />
-                <Tooltip content={<CustomBarTooltip />} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
-                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                  {barData.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <div className="flex flex-col gap-3">
+              {barData.map((d, i) => (
+                <HorizontalBar key={i} label={d.label} value={d.value} max={barMax} color={d.color} />
+              ))}
+            </div>
           )}
         </div>
 
-        {/* Pie chart */}
+        {/* Donut chart */}
         <div className="bg-white rounded-xl p-5" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
           <p className="text-sm font-semibold text-brand-dark mb-4">Payment breakdown</p>
-          {pieData.length === 0 ? (
-            <div className="flex items-center justify-center h-32 text-sm text-brand-muted">No payments yet</div>
-          ) : (
-            <div className="flex items-center gap-5">
-              <PieChart width={130} height={130}>
-                <Pie data={pieData} cx={60} cy={60} innerRadius={35} outerRadius={60} dataKey="value" paddingAngle={2}>
-                  {pieData.map((entry, i) => (
-                    <Cell key={i} fill={PURPOSE_COLORS[entry.name] ?? "#94a3b8"} />
-                  ))}
-                </Pie>
-                <Tooltip content={<CustomPieTooltip />} />
-              </PieChart>
-              <div className="flex flex-col gap-2">
-                {pieData.map((entry, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs text-brand-muted">
-                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: PURPOSE_COLORS[entry.name] ?? "#94a3b8" }} />
-                    <span className="capitalize">{entry.name.replace("_", " ").toLowerCase()}</span>
-                    <span className="font-medium text-brand-dark ml-1">{formatPKR(entry.value)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <DonutChart data={pieData} />
         </div>
       </div>
 
@@ -239,37 +320,19 @@ export default function Overview() {
         {activity.length === 0 ? (
           <p className="text-sm text-brand-muted text-center py-6">No activity yet. Start by posting a listing.</p>
         ) : (
-          <div className="space-y-0">
+          <div>
             {activity.map((ev, i) => (
-              <div key={i} className="flex items-start gap-3 py-3" style={{ borderBottom: i < activity.length - 1 ? "1px solid rgba(0,0,0,0.05)" : "none" }}>
+              <div key={i} className="flex items-start gap-3 py-3"
+                style={{ borderBottom: i < activity.length - 1 ? "1px solid rgba(0,0,0,0.05)" : "none" }}>
                 <span className="w-2 h-2 rounded-full shrink-0 mt-1.5" style={{ background: ev.dot }} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-brand-dark2">{ev.text}</p>
-                </div>
+                <p className="text-sm text-brand-dark2 flex-1">{ev.text}</p>
                 <span className="text-xs text-brand-muted shrink-0">{formatDate(ev.date)}</span>
               </div>
             ))}
           </div>
         )}
-
-        {/* Quick actions */}
-        <div className="flex gap-3 mt-5 pt-4" style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>
-          <button
-            onClick={() => navigate("/post-ad")}
-            className="px-4 py-2 text-sm font-semibold text-white rounded-lg hover:opacity-90 transition"
-            style={{ background: "#ea6d00", borderRadius: "0.5rem" }}
-          >
-            Post New Ad
-          </button>
-          <button
-            onClick={() => navigate("/dashboard/listings")}
-            className="px-4 py-2 text-sm font-semibold text-brand-dark2 bg-white rounded-lg hover:bg-gray-50 transition"
-            style={{ border: "1px solid rgba(0,0,0,0.1)", borderRadius: "0.5rem" }}
-          >
-            Manage Listings
-          </button>
-        </div>
       </div>
+
     </div>
   );
 }

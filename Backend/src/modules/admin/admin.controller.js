@@ -139,7 +139,7 @@ export const assignInspector = asyncHandler(async (req, res) => {
 });
 
 export const updateInspectionStatus = asyncHandler(async (req, res) => {
-    const data = await adminService.updateInspectionStatus(req.params.id, req.body.status);
+    const data = await adminService.updateInspectionStatus(req.params.id, req.body.status, req.body.cancelReason);
 
     res.status(200).json(
         new ApiResponse(
@@ -262,4 +262,46 @@ export const scheduleInspection = asyncHandler(async (req, res) => {
     });
 
     res.status(200).json(new ApiResponse(200, result.message, result.inspection));
+});
+export const getFeaturedPlans = asyncHandler(async (req, res) => {
+    const plans = await adminService.getFeaturedPlans();
+    res.status(200).json(new ApiResponse(200, "Featured plans fetched", plans));
+});
+
+export const createFeaturedPlan = asyncHandler(async (req, res) => {
+    const { name, label, amount, durationDays } = req.body;
+    const plan = await adminService.createFeaturedPlan({ name, label, amount, durationDays });
+    res.status(201).json(new ApiResponse(201, "Featured plan created", plan));
+});
+
+export const updateFeaturedPlan = asyncHandler(async (req, res) => {
+    const plan = await adminService.updateFeaturedPlan(req.params.id, req.body);
+    res.status(200).json(new ApiResponse(200, "Featured plan updated", plan));
+});
+
+// Site Settings
+export const getSiteSettings = asyncHandler(async (req, res) => {
+    const settings = await adminService.getSiteSettings();
+    res.status(200).json(new ApiResponse(200, "Settings fetched", settings));
+});
+
+export const updateSiteSettings = asyncHandler(async (req, res) => {
+    const settings = await adminService.updateSiteSettings(req.body);
+    res.status(200).json(new ApiResponse(200, "Settings updated", settings));
+});
+
+// Inspection Slots
+export const getInspectionSlots = asyncHandler(async (req, res) => {
+    const slots = await adminService.getInspectionSlots();
+    res.status(200).json(new ApiResponse(200, "Slots fetched", slots));
+});
+
+export const addInspectionSlot = asyncHandler(async (req, res) => {
+    const slots = await adminService.addInspectionSlot(req.body);
+    res.status(201).json(new ApiResponse(201, "Slot added", slots));
+});
+
+export const updateInspectionSlot = asyncHandler(async (req, res) => {
+    const slots = await adminService.updateInspectionSlot(req.params.slotId, req.body);
+    res.status(200).json(new ApiResponse(200, "Slot updated", slots));
 });

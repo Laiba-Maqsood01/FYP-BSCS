@@ -54,7 +54,7 @@ export default function AppNavbar({
     <Link to={brand.url} className="inline-flex items-center gap-2 no-underline">
       {/* 2rem × 2rem dark-gradient square logo — matches .app-navbar-logo */}
       <span
-        className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs font-bold text-white flex-shrink-0"
+        className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs font-bold text-white shrink-0"
         style={{ background: "linear-gradient(135deg, #1f2937, #0f172a)" }}
       >
         {brand.short}
@@ -88,7 +88,7 @@ export default function AppNavbar({
               <Link
                 key={item.title}
                 to={item.url}
-                className="no-underline px-4 py-2 hover:text-[#111827] transition-colors"
+                className="no-underline px-4 py-2 hover:text-brand-btn transition-colors"
                 style={{ fontWeight: 500, color: "#334155", fontSize: "1rem" }}
               >
                 {item.title}
@@ -178,14 +178,14 @@ export default function AppNavbar({
                   <Link
                     to={auth.login.url}
                     onClick={() => setMobileOpen(false)}
-                    className="block text-center py-[0.375rem] px-3 text-base font-normal rounded-[0.375rem] border border-[#212529] text-[#212529] bg-transparent hover:bg-[#212529] hover:text-white transition-colors no-underline"
+                    className="block text-center py-1.5 px-3 text-base font-normal rounded-md border border-[#212529] text-[#212529] bg-transparent hover:bg-[#212529] hover:text-white transition-colors no-underline"
                   >
                     {auth.login.text}
                   </Link>
                   <Link
                     to={auth.signup.url}
                     onClick={() => setMobileOpen(false)}
-                    className="block text-center py-[0.375rem] px-3 text-base font-normal rounded-[0.375rem] bg-[#212529] border border-[#212529] text-white hover:bg-[#1c1f23] transition-colors no-underline"
+                    className="block text-center py-1.5 px-3 text-base font-normal rounded-md bg-[#212529] border border-[#212529] text-white hover:bg-[#1c1f23] transition-colors no-underline"
                   >
                     {auth.signup.text}
                   </Link>

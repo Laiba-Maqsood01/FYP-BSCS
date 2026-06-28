@@ -53,14 +53,14 @@ export default function InspectionSuccess() {
             className="w-full py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
             style={{ background: "#111827", borderRadius: "0.5rem" }}
           >
-            Browse More Cars
+            Browse Cars
           </button>
           <button
-            onClick={() => navigate("/profile")}
+            onClick={() => navigate("/dashboard/inspections")}
             className="w-full py-2.5 text-sm font-semibold text-brand-dark2 border border-black/10 bg-white hover:bg-gray-50 transition"
             style={{ borderRadius: "0.5rem" }}
           >
-            View My Profile
+            My Inspections
           </button>
         </div>
       </div>

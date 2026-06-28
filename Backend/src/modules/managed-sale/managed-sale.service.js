@@ -4,6 +4,7 @@ import listingModel from "../listing/listing.model.js";
 import paymentModel from "../payment/payment.model.js";
 import { ApiError } from "../../utils/apiError.js";
 import { createStripeCheckoutSession } from "../payment/payment.service.js";
+import config from "../../config/config.js";
 import crypto from "crypto";
 
 // DELETION REQUESTS
@@ -150,7 +151,10 @@ export async function initiateCommissionPayment(commissionId, userId) {
     commission.payment = payment._id;
     await commission.save();
 
-    const session = await createStripeCheckoutSession(payment);
+    const successUrl = `${config.CLIENT_URL}/payment/success?purpose=COMMISSION&session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl  = `${config.CLIENT_URL}/payment/failed?purpose=COMMISSION`;
+
+    const session = await createStripeCheckoutSession(payment, { successUrl, cancelUrl });
 
     return {
         commission,

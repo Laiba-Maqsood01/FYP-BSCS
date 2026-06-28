@@ -15,6 +15,9 @@ import masterRouter from "./modules/master/master.routes.js";
 import favoriteRoutes from "./modules/favorite/favorite.routes.js";
 
 import adminRouter from "./modules/admin/admin.routes.js";
+import { getSettings } from "./models/siteSettings.model.js";
+import { asyncHandler } from "./utils/asyncHandler.js";
+import { ApiResponse } from "./utils/apiResponse.js";
 
 import { startExpiryJobs  } from "./jobs/featured.expiry.job.js";
 
@@ -92,6 +95,12 @@ app.use("/api/managed-sale", managedSaleRouter);
 
 // Upload (signed Cloudinary signatures), starts with /api/upload
 app.use("/api/upload", uploadRouter);
+
+// Public settings endpoint (company phone for managed listings)
+app.get("/api/settings", asyncHandler(async (_req, res) => {
+  const settings = await getSettings();
+  res.status(200).json(new ApiResponse(200, "Settings", { companyPhone: settings.companyPhone }));
+}));
 
 // use global error handler
 app.use(errorHandler);

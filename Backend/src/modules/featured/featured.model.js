@@ -16,7 +16,6 @@ const featuredSchema = new mongoose.Schema(
 
     plan: {
       type: String,
-      enum: ["BASIC", "PREMIUM", "TOP"],
       required: true
     },
 

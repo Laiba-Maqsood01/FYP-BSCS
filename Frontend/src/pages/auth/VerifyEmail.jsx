@@ -95,7 +95,7 @@ export default function VerifyEmail() {
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-8">
-      <div className="w-full max-w-[420px] bg-white rounded-2xl shadow-xl p-8 text-center">
+      <div className="w-full max-w-105 bg-white rounded-2xl shadow-xl p-8 text-center">
         <h4 className="font-bold text-xl text-brand-dark mb-2">Verify Your Email</h4>
         <p className="text-brand-muted text-sm mb-1">
           OTP sent to <span className="font-semibold text-brand-dark2">{email}</span>

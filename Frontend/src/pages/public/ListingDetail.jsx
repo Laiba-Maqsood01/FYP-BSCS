@@ -1,14 +1,12 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import {
-  Heart, Share2, ChevronLeft, ChevronRight, Phone,
-  ShieldCheck, Download, Clock, CheckCircle2, MapPin,
-  Calendar, Gauge, Flame, Settings2, AlertCircle, Check,
+import { Heart, Share2, ChevronLeft, ChevronRight, Phone, ShieldCheck, Download, Clock, CheckCircle2, MapPin, Calendar, Gauge, Flame, Settings2, AlertCircle, Check,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { getListingDetail } from "../../services/listingService";
 import { getListingInspectionStatus } from "../../services/inspectionService";
 import { checkFavoriteStatus, addFavorite, removeFavorite } from "../../services/favoriteService";
+import api from "../../services/api";
 import { toast } from "react-toastify";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -188,7 +186,7 @@ function StatsRow({ year, mileage, engineType, transmission }) {
 
 // ─── InspectionSection ────────────────────────────────────────────────────────
 
-function InspectionSection({ listingId, inspection, isAuthenticated, isOwner, navigate, onDownload }) {
+function InspectionSection({ listingId, inspection, isAuthenticated, isOwner, navigate, onDownload, isManaged }) {
   const handleRequest = () => {
     if (!isAuthenticated) { navigate("/login"); return; }
     const mode = isOwner ? "seller" : "buyer";
@@ -221,6 +219,7 @@ function InspectionSection({ listingId, inspection, isAuthenticated, isOwner, na
   };
 
   if (isCompleted) {
+    const hasReport = !!inspection?.report?.url;
     return (
       <div className="rounded-xl p-5 mt-5" style={{ background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
         <div className="flex items-center gap-3 mb-4">
@@ -229,17 +228,40 @@ function InspectionSection({ listingId, inspection, isAuthenticated, isOwner, na
           </div>
           <div>
             <p className="font-semibold text-sm text-green-800">This Car Has Been Inspected</p>
-            <p className="text-xs text-green-700 mt-0.5">Our certified inspector has evaluated this car and generated a full report.</p>
+            <p className="text-xs text-green-700 mt-0.5">
+              {hasReport
+                ? "Our certified inspector has evaluated this car and generated a full report."
+                : "Inspection completed. The report is being prepared and will be available shortly."}
+            </p>
           </div>
         </div>
-        <button
-          onClick={onDownload}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white rounded-lg transition hover:opacity-90"
-          style={{ background: "#16a34a", borderRadius: "0.5rem" }}
-        >
-          <Download size={15} />
-          Download Inspection Report
-        </button>
+
+        {hasReport && (
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={onDownload}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white rounded-lg transition hover:opacity-90"
+              style={{ background: "#16a34a", borderRadius: "0.5rem" }}
+            >
+              <Download size={15} />
+              Download Report
+            </button>
+            <button
+              onClick={handleRequest}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition hover:opacity-90"
+              style={{ background: "#fff", border: "1px solid #bbf7d0", color: "#16a34a", borderRadius: "0.5rem" }}
+            >
+              <ShieldCheck size={15} />
+              {!isAuthenticated ? "Login to Re-inspect" : "Request Re-inspection"}
+            </button>
+          </div>
+        )}
+
+        {hasReport && (
+          <p className="text-[11px] text-green-700 mt-3 opacity-70">
+            Re-inspection creates a fresh evaluation — useful if the car has been modified or repaired since the last report.
+          </p>
+        )}
       </div>
     );
   }
@@ -267,6 +289,23 @@ function InspectionSection({ listingId, inspection, isAuthenticated, isOwner, na
         >
           Inspection Underway
         </button>
+      </div>
+    );
+  }
+
+  // Managed listing with pending inspection — no CTA, inspection is handled by admin
+  if (isManaged) {
+    return (
+      <div className="rounded-xl p-5 mt-5" style={{ background: "#eff6ff", border: "1px solid #bfdbfe" }}>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "#1d4ed820" }}>
+            <ShieldCheck size={20} style={{ color: "#1d4ed8" }} />
+          </div>
+          <div>
+            <p className="font-semibold text-sm" style={{ color: "#1d4ed8" }}>Managed Sale — Inspection Included</p>
+            <p className="text-xs text-brand-muted mt-0.5">This listing is managed by GearTrade. An inspection report will be available once the car is verified.</p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -304,7 +343,7 @@ function InspectionSection({ listingId, inspection, isAuthenticated, isOwner, na
         {!isAuthenticated
           ? "Login to Request Inspection"
           : isOwner
-            ? "Schedule Re-Inspection"
+            ? "Schedule Inspection"
             : "Request Inspection"}
       </button>
     </div>
@@ -400,6 +439,7 @@ export default function ListingDetail() {
   const [phoneRevealed, setPhoneRevealed] = useState(false);
   const [favLoading,    setFavLoading]    = useState(false);
   const [copied,        setCopied]        = useState(false);
+  const [companyPhone,  setCompanyPhone]  = useState(null);
 
   useEffect(() => {
     setLoading(true);
@@ -409,13 +449,15 @@ export default function ListingDetail() {
       getListingDetail(id),
       getListingInspectionStatus(id).catch(() => null),
       isAuthenticated ? checkFavoriteStatus(id).catch(() => null) : Promise.resolve(null),
+      api.get("/settings").then(r => r.data.data).catch(() => null),
     ];
 
     Promise.all(promises)
-      .then(([l, insp, fav]) => {
+      .then(([l, insp, fav, settings]) => {
         setListing(l);
         setInspection(insp);
-        if (fav !== null) setIsFavorited(fav?.isFavorited ?? false);
+        if (fav !== null) setIsFavorited(fav?.isFavorite ?? false);
+        if (settings?.companyPhone) setCompanyPhone(settings.companyPhone);
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
@@ -424,6 +466,8 @@ export default function ListingDetail() {
   const sellerId = listing?.seller?._id ?? listing?.seller;
   const isOwner  = !!(user && sellerId && sellerId.toString() === user._id?.toString());
   const isInspected = inspection?.status === "COMPLETED";
+  const isManaged = listing?.saleMode === "MANAGED";
+  const displayPhone = isManaged ? (companyPhone ?? "—") : listing?.mobileNumber;
 
   const handleFavoriteToggle = async () => {
     if (!isAuthenticated) { navigate("/login"); return; }
@@ -470,8 +514,90 @@ export default function ListingDetail() {
   // ── Loading ──
   if (loading) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <p className="text-sm text-brand-muted">Loading listing…</p>
+      <div className="max-w-6xl mx-auto px-4 py-8 animate-pulse">
+        {/* Title area */}
+        <div className="h-7 w-72 bg-gray-200 rounded mb-2" />
+        <div className="h-4 w-48 bg-gray-100 rounded mb-6" />
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* Left column */}
+          <div className="lg:col-span-7">
+            {/* Main image */}
+            <div className="w-full rounded-xl bg-gray-200" style={{ aspectRatio: "16/9" }} />
+            {/* Thumbnails */}
+            <div className="flex gap-2 mt-2">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="w-16 h-12 rounded-lg bg-gray-200 shrink-0" />
+              ))}
+            </div>
+            {/* Stats row */}
+            <div className="grid grid-cols-4 rounded-xl overflow-hidden mt-5" style={{ border: "1px solid rgba(0,0,0,0.1)" }}>
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="flex flex-col items-center py-4 gap-2"
+                  style={{ borderRight: i < 3 ? "1px solid rgba(0,0,0,0.08)" : "none" }}>
+                  <div className="w-6 h-6 rounded bg-gray-200" />
+                  <div className="h-3.5 w-14 bg-gray-200 rounded" />
+                  <div className="h-3 w-10 bg-gray-100 rounded" />
+                </div>
+              ))}
+            </div>
+            {/* Inspection block */}
+            <div className="rounded-xl p-5 mt-5 bg-gray-100" style={{ minHeight: 96 }} />
+            {/* Car details */}
+            <div className="mt-5 rounded-xl overflow-hidden" style={{ border: "1px solid rgba(0,0,0,0.08)" }}>
+              <div className="px-5 py-3 bg-gray-50">
+                <div className="h-4 w-24 bg-gray-200 rounded" />
+              </div>
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="grid grid-cols-2 px-5 py-3" style={{ borderTop: i > 0 ? "1px solid rgba(0,0,0,0.05)" : "none" }}>
+                  <div className="h-3 w-24 bg-gray-100 rounded" />
+                  <div className="h-3 w-20 bg-gray-200 rounded ml-auto" />
+                </div>
+              ))}
+            </div>
+            {/* Description */}
+            <div className="mt-5 rounded-xl p-5" style={{ border: "1px solid rgba(0,0,0,0.08)" }}>
+              <div className="h-4 w-28 bg-gray-200 rounded mb-3" />
+              <div className="space-y-2">
+                <div className="h-3 bg-gray-100 rounded w-full" />
+                <div className="h-3 bg-gray-100 rounded w-5/6" />
+                <div className="h-3 bg-gray-100 rounded w-4/6" />
+              </div>
+            </div>
+          </div>
+
+          {/* Right column */}
+          <div className="lg:col-span-5">
+            <div className="sticky top-24 space-y-4">
+              {/* Price + phone card */}
+              <div className="bg-white rounded-2xl shadow-xl p-6">
+                <div className="h-8 w-40 bg-gray-200 rounded mb-5" />
+                <div className="h-12 bg-gray-200 rounded-xl mb-3" />
+                <div className="h-12 bg-gray-100 rounded-xl" />
+              </div>
+              {/* Seller card */}
+              <div className="bg-white rounded-2xl shadow-xl p-6">
+                <div className="h-4 w-28 bg-gray-200 rounded mb-4" />
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-gray-200 shrink-0" />
+                  <div>
+                    <div className="h-4 w-28 bg-gray-200 rounded mb-1.5" />
+                    <div className="h-3 w-36 bg-gray-100 rounded" />
+                  </div>
+                </div>
+              </div>
+              {/* Safety tips card */}
+              <div className="bg-white rounded-2xl p-6" style={{ border: "1px solid rgba(0,0,0,0.08)" }}>
+                <div className="h-4 w-36 bg-gray-200 rounded mb-3" />
+                <div className="space-y-2">
+                  {[...Array(4)].map((_, i) => (
+                    <div key={i} className="h-3 bg-gray-100 rounded" style={{ width: `${75 + i * 5}%` }} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -541,6 +667,7 @@ export default function ListingDetail() {
             isOwner={isOwner}
             navigate={navigate}
             onDownload={handleDownloadReport}
+            isManaged={listing.saleMode === "MANAGED"}
           />
 
           <CarDetails listing={listing} />
@@ -558,26 +685,62 @@ export default function ListingDetail() {
                 {formatPrice(listing.price)}
               </p>
 
-              {phoneRevealed ? (
-                <div
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-white font-semibold text-sm mb-3"
-                  style={{ background: "#16a34a", borderRadius: "0.75rem" }}
-                >
-                  <Phone size={16} />
-                  {listing.mobileNumber}
-                </div>
+              {isManaged ? (
+                phoneRevealed ? (
+                  <div className="mb-3 rounded-xl overflow-hidden" style={{ border: "1px solid #fed7aa" }}>
+                    <div className="px-4 py-2.5 flex items-center gap-2" style={{ background: "#fff7ed" }}>
+                      <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: "#ea6d00" }}>GearTrade</span>
+                      <span className="text-[10px] text-brand-muted">Official Contact</span>
+                    </div>
+                    <div className="px-4 py-3 flex items-center gap-3 bg-white">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: "#fff7ed" }}>
+                        <Phone size={14} style={{ color: "#ea6d00" }} />
+                      </div>
+                      <div>
+                        <p className="text-base font-bold text-brand-dark tracking-wide">{displayPhone}</p>
+                        <p className="text-[11px] text-brand-muted mt-0.5">Call or SMS to enquire about this car</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mb-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full text-white" style={{ background: "#ea6d00" }}>
+                        Managed by GearTrade
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setPhoneRevealed(true)}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-white font-semibold text-sm transition hover:opacity-90"
+                      style={{ background: "#ea6d00", borderRadius: "0.75rem" }}
+                    >
+                      <Phone size={16} />
+                      Show GearTrade Number
+                    </button>
+                  </div>
+                )
               ) : (
-                <button
-                  onClick={() => setPhoneRevealed(true)}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-white font-semibold text-sm mb-3 transition hover:opacity-90"
-                  style={{ background: "#16a34a", borderRadius: "0.75rem" }}
-                >
-                  <Phone size={16} />
-                  Show Phone Number
-                </button>
+                phoneRevealed ? (
+                  <div
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-white font-semibold text-sm mb-3"
+                    style={{ background: "#16a34a", borderRadius: "0.75rem" }}
+                  >
+                    <Phone size={16} />
+                    {displayPhone}
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setPhoneRevealed(true)}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-white font-semibold text-sm mb-3 transition hover:opacity-90"
+                    style={{ background: "#16a34a", borderRadius: "0.75rem" }}
+                  >
+                    <Phone size={16} />
+                    Show Phone Number
+                  </button>
+                )
               )}
 
-              {listing.whatsappAllowed && listing.mobileNumber && (
+              {!isManaged && listing.whatsappAllowed && listing.mobileNumber && (
                 <a
                   href={`https://wa.me/92${listing.mobileNumber.replace(/^0/, "")}`}
                   target="_blank"
@@ -593,26 +756,44 @@ export default function ListingDetail() {
               )}
             </div>
 
-            {/* Seller card */}
-            <div className="bg-white rounded-2xl shadow-xl p-6">
-              <h3 className="text-sm font-bold text-brand-dark mb-4">Seller Details</h3>
-              <div className="flex items-center gap-3">
-                <div
-                  className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg shrink-0"
-                  style={{ background: "#ea6d00" }}
-                >
-                  {(listing.seller?.username?.[0] ?? "?").toUpperCase()}
-                </div>
-                <div>
-                  <p className="font-semibold text-brand-dark text-sm">
-                    {listing.seller?.username || "Seller"}
-                  </p>
-                  <p className="text-xs text-brand-muted mt-0.5">
-                    Member since {formatDate(listing.seller?.createdAt)}
-                  </p>
+            {/* Seller / GearTrade card */}
+            {isManaged ? (
+              <div className="bg-white rounded-2xl shadow-xl p-6">
+                <h3 className="text-sm font-bold text-brand-dark mb-4">Managed By</h3>
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0"
+                    style={{ background: "#ea6d00" }}
+                  >
+                    GT
+                  </div>
+                  <div>
+                    <p className="font-semibold text-brand-dark text-sm">GearTrade</p>
+                    <p className="text-xs text-brand-muted mt-0.5">End-to-end managed sale</p>
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="bg-white rounded-2xl shadow-xl p-6">
+                <h3 className="text-sm font-bold text-brand-dark mb-4">Seller Details</h3>
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg shrink-0"
+                    style={{ background: "#ea6d00" }}
+                  >
+                    {(listing.seller?.username?.[0] ?? "?").toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-brand-dark text-sm">
+                      {listing.seller?.username || "Seller"}
+                    </p>
+                    <p className="text-xs text-brand-muted mt-0.5">
+                      Member since {formatDate(listing.seller?.createdAt)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <SafetyTips />
 

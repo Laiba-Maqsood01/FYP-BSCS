@@ -64,10 +64,13 @@ export const getMe = asyncHandler(async (req, res) => {
             _id: req.user._id,
             username: req.user.username,
             email: req.user.email,
+            mobileNumber: req.user.mobileNumber,
             role: req.user.role,
             verified: req.user.verified,
             accountStatus: req.user.accountStatus,
             pendingEmail: req.user.pendingEmail,
+            avatar: req.user.avatar ?? null,
+            createdAt: req.user.createdAt,
         })
     )
 })
@@ -227,3 +230,15 @@ export const cancelEmailChange = asyncHandler(async (req, res) => {
         new ApiResponse(200, "Email change request cancelled")
     )
 })
+export const updateAvatar = asyncHandler(async (req, res) => {
+    const { avatarUrl } = req.body;
+    if (!avatarUrl || typeof avatarUrl !== "string") {
+        throw new ApiError(400, "avatarUrl is required");
+    }
+    const user = await (await import("../models/user.model.js")).default.findByIdAndUpdate(
+        req.user._id,
+        { avatar: avatarUrl },
+        { new: true }
+    );
+    res.status(200).json(new ApiResponse(200, "Avatar updated", { avatar: user.avatar }));
+});

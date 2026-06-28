@@ -10,7 +10,7 @@ function App() {
   const location = useLocation();
 
   const noLayoutPaths   = ["/not-found"];
-  const noMainPaths     = ["/dashboard"];
+  const noMainPaths     = ["/dashboard", "/admin"];
   const hideFooterPaths = ["/admin", "/dashboard"];
 
   const hideLayout  = noLayoutPaths.includes(location.pathname);

@@ -31,6 +31,13 @@ export async function markSandboxSuccess(transactionId) {
   payment.status = "SUCCESS";
   await payment.save();
 
+  // Void any other PENDING payments for the same reference (stale retry attempts)
+  if (payment.referenceId) {
+    await paymentModel.updateMany(
+      { referenceId: payment.referenceId, status: "PENDING", _id: { $ne: payment._id } },
+      { $set: { status: "FAILED" } }
+    );
+  }
 
   // FEATURED PAYMENT
   if (payment.purpose === "FEATURED") {
@@ -59,7 +66,6 @@ export async function markSandboxSuccess(transactionId) {
       inspection.status = "PENDING_COORDINATION";
     }
     await inspection.save();
-
   }
 
   return payment;
@@ -69,39 +75,44 @@ export async function createStripeCheckoutSession(payment, options = {}) {
 
   const stripe = new Stripe(config.STRIPE_SECRET_KEY);
 
-  const session =
-    await stripe.checkout.sessions.create({
+  const sessionParams = {
+    payment_method_types: ["card"],
 
-      payment_method_types: ["card"],
+    mode: "payment",
 
-      mode: "payment",
+    line_items: [
+      {
+        price_data: {
+          currency: "pkr",
 
-      line_items: [
-        {
-          price_data: {
-            currency: "pkr",
-
-            product_data: {
-              name: payment.purpose
-            },
-
-           unit_amount: Math.round(payment.amount * 100)
+          product_data: {
+            name: payment.purpose
           },
 
-          quantity: 1
-        }
-      ],
+          unit_amount: Math.round(payment.amount * 100)
+        },
 
-      metadata: {
-        paymentId: payment._id.toString()
-      },
+        quantity: 1
+      }
+    ],
 
-      success_url:
-        options.successUrl || `${config.CLIENT_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+    metadata: {
+      paymentId: payment._id.toString()
+    },
 
-      cancel_url:
-        options.cancelUrl || `${config.CLIENT_URL}/payment-cancel`
-    });
+    success_url:
+      options.successUrl || `${config.CLIENT_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+
+    cancel_url:
+      options.cancelUrl || `${config.CLIENT_URL}/payment-cancel`
+  };
+
+  // Pass customer email so Stripe sends payment receipt + refund notification emails automatically
+  if (payment.payerSnapshot?.email) {
+    sessionParams.customer_email = payment.payerSnapshot.email;
+  }
+
+  const session = await stripe.checkout.sessions.create(sessionParams);
 
   payment.stripeSessionId = session.id;
   payment.paymentMethod = "STRIPE";
@@ -154,6 +165,14 @@ async function handleCheckoutSessionCompleted(session) {
   payment.stripePaymentIntentId = session.payment_intent;
 
   await payment.save();
+
+  // Void any other PENDING payments for the same reference (stale retry attempts)
+  if (payment.referenceId) {
+    await paymentModel.updateMany(
+      { referenceId: payment.referenceId, status: "PENDING", _id: { $ne: payment._id } },
+      { $set: { status: "FAILED" } }
+    );
+  }
 
   // FEATURED FLOW
   if (payment.purpose === "FEATURED") {
@@ -228,8 +247,16 @@ export async function getMyPayments(
   return await paymentModel
     .find(query)
     .select(
-      "purpose amount currency status transactionId paymentMethod createdAt"
+      "purpose amount currency status transactionId paymentMethod createdAt referenceId listing"
     )
+    .populate({
+      path: "listing",
+      select: "year images",
+      populate: [
+        { path: "brand",    select: "name" },
+        { path: "carModel", select: "name" },
+      ],
+    })
     .sort({ createdAt: -1 });
 }
 

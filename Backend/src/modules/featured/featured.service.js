@@ -1,4 +1,5 @@
 import featuredModel from "./featured.model.js";
+import featuredPlanModel from "./featured-plan.model.js";
 import listingModel from "../listing/listing.model.js";
 import paymentModel from "../payment/payment.model.js";
 
@@ -29,34 +30,52 @@ export async function requestFeaturedListing({
         throw new ApiError(400, "Only active listings can be featured");
     }
 
-    // const existingFeature = await featuredModel.findOne({
-    //     listing: listingId,
-    //     status: { $in: ["PENDING", "ACTIVE"] }
-    // });
+    const planDoc = await featuredPlanModel.findOne({ name: plan, isActive: true });
+    if (!planDoc) throw new ApiError(400, "Invalid or unavailable featured plan");
 
-    const existingFeature = await featuredModel.findOne({
+    const { amount, durationDays } = planDoc;
+
+    // Block if listing is already actively featured
+    const activeFeature = await featuredModel.findOne({
         listing: listingId,
         status: "ACTIVE",
         endDate: { $gt: new Date() }
     });
 
-    if (existingFeature) {
-        throw new ApiError(400, "Listing already has feature request");
+    if (activeFeature) {
+        throw new ApiError(400, "This listing is already featured.");
     }
 
-    const pricing = {
-        BASIC: 500,
-        PREMIUM: 1000,
-        TOP: 2000
-    };
+    // Reuse an existing PENDING featured doc (user abandoned a previous payment attempt).
+    // If the user picked a different plan this time, update the doc and any pending payment.
+    const pendingFeature = await featuredModel.findOne({
+        listing: listingId,
+        status: "PENDING"
+    });
 
-    const amount = pricing[plan];
+    if (pendingFeature) {
+        if (pendingFeature.plan !== plan) {
+            pendingFeature.plan         = plan;
+            pendingFeature.amount       = amount;
+            pendingFeature.durationDays = durationDays;
+            await pendingFeature.save();
 
+            // Keep the existing pending payment amount in sync so the Stripe session is correct
+            await paymentModel.updateOne(
+                { referenceId: pendingFeature._id, status: "PENDING" },
+                { $set: { amount } }
+            );
+        }
+        return pendingFeature;
+    }
+
+    // No pending doc — create a fresh one
     const feature = await featuredModel.create({
         listing: listingId,
         seller: sellerId,
         plan,
         amount,
+        durationDays,
         status: "PENDING"
     });
 
@@ -68,21 +87,26 @@ export async function createFeaturedPayment(featureId, userId) {
 
     if (!feature) throw new ApiError(404, "Feature not found");
 
-    // check existing payment check
-    const existingPayment =
-        await paymentModel.findOne({
-            referenceId: featureId,
-            status: "PENDING"
-        });
+    const successUrl = `${config.CLIENT_URL}/payment/success?purpose=FEATURED&session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl  = `${config.CLIENT_URL}/payment/failed?purpose=FEATURED`;
 
-    if (existingPayment) {
-        throw new ApiError(
-            400,
-            "Payment already exists for this featured request"
-        );
+    // If the feature is already active, this listing is already paid — block retry
+    if (feature.status === "ACTIVE") {
+        throw new ApiError(400, "This listing is already featured.");
     }
 
-    // Fetch user for payerSnapshot
+    // If a pending payment already exists, reuse it — just create a new Stripe session
+    const existingPayment = await paymentModel.findOne({
+        referenceId: featureId,
+        status: "PENDING"
+    });
+
+    if (existingPayment) {
+        const session = await createStripeCheckoutSession(existingPayment, { successUrl, cancelUrl });
+        return { payment: existingPayment, checkoutUrl: session.url };
+    }
+
+    // First-time payment — create the document
     const user = await userModel.findById(userId).select("username email");
     if (!user) throw new ApiError(404, "User not found");
 
@@ -106,13 +130,22 @@ export async function createFeaturedPayment(featureId, userId) {
     feature.payment = payment._id;
     await feature.save();
 
-    const session = await createStripeCheckoutSession(payment, {
-        successUrl: `${config.CLIENT_URL}/payment/success?purpose=FEATURED&session_id={CHECKOUT_SESSION_ID}`,
-        cancelUrl:  `${config.CLIENT_URL}/payment/failed?purpose=FEATURED`,
-    });
+    const session = await createStripeCheckoutSession(payment, { successUrl, cancelUrl });
 
     return {
         payment,
         checkoutUrl: session.url
     };
+}
+export async function getFeaturedByListing(listingId, sellerId) {
+    const feature = await featuredModel
+        .findOne({ listing: listingId, seller: sellerId })
+        .populate("payment", "amount status createdAt");
+
+    if (!feature) {
+        const { ApiError } = await import("../../utils/apiError.js");
+        throw new ApiError(404, "No featured record found for this listing");
+    }
+
+    return feature;
 }

@@ -9,13 +9,6 @@ import { showError } from "../../utils/toast";
 
 const MANAGED_CITY_NAMES = ["Rahim Yar Khan", "Khanpur", "Liaqat Pur", "Sadiqabad"];
 
-const TIME_SLOTS = [
-  { value: "10:00 AM", label: "10:00 AM" },
-  { value: "12:00 PM", label: "12:00 PM" },
-  { value: "2:00 PM",  label: "2:00 PM"  },
-  { value: "4:00 PM",  label: "4:00 PM"  },
-  { value: "6:00 PM",  label: "6:00 PM"  },
-];
 
 // Build 7 date options: tomorrow → +7 days
 function buildDateOptions() {
@@ -27,7 +20,8 @@ function buildDateOptions() {
     const label = i === 1
       ? `Tomorrow - ${d.toLocaleDateString("en-PK", { day: "numeric", month: "long" })}`
       : d.toLocaleDateString("en-PK", { weekday: "long", day: "numeric", month: "long" });
-    options.push({ date: d, label, iso: d.toISOString().split("T")[0] });
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    options.push({ date: d, label, iso });
   }
   return options;
 }
@@ -35,8 +29,7 @@ const DATE_OPTIONS = buildDateOptions();
 
 // ── Shared Styles ─────────────────────────────────────────────────────────────
 
-const inputCls =
-  "w-full bg-brand-surface border border-black/10 rounded-lg px-3 py-2.5 text-brand-dark2 text-sm outline-none focus:border-[#374151] focus:ring-2 focus:ring-[#37415114] transition placeholder:text-gray-400";
+const inputCls =  "w-full bg-brand-surface border border-black/10 rounded-lg px-3 py-2.5 text-brand-dark2 text-sm outline-none focus:border-[#374151] focus:ring-2 focus:ring-[#37415114] transition placeholder:text-gray-400";
 
 const selectCls =
   "w-full bg-brand-surface border border-black/10 rounded-lg px-3 py-2.5 text-brand-dark2 text-sm outline-none focus:border-[#374151] focus:ring-2 focus:ring-[#37415114] transition appearance-none cursor-pointer";
@@ -67,7 +60,7 @@ function CustomSelect({ value, onChange, options, placeholder }) {
         <ChevronDown size={15} className="text-gray-400 shrink-0" />
       </button>
       {open && (
-        <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white border border-black/10 rounded-xl shadow-[0_10px_30px_rgba(15,23,42,0.1)] overflow-y-auto max-h-56 z-[500]">
+        <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white border border-black/10 rounded-xl shadow-[0_10px_30px_rgba(15,23,42,0.1)] overflow-y-auto max-h-56 z-500">
           {options.map(opt => (
             <button
               key={opt.value}
@@ -76,7 +69,7 @@ function CustomSelect({ value, onChange, options, placeholder }) {
               className={`block w-full text-left px-4 py-2.5 text-[0.88rem] cursor-pointer transition ${
                 value === opt.value
                   ? "bg-[#f1f5f9] font-semibold text-brand-dark"
-                  : "text-[#374151] hover:bg-[#f8fafc]"
+                  : "text-[#374151] hover:bg-brand-surface"
               }`}
             >
               {opt.label}
@@ -106,7 +99,8 @@ const Field = ({ label, required, children, error, hint }) => (
 function SlotPickerModal({ onConfirm, onCancel, initial }) {
   const [selectedDate, setSelectedDate] = useState(initial?.date || null);
   const [selectedSlot, setSelectedSlot] = useState(initial?.slot || null);
-  const [bookedSlots, setBookedSlots]   = useState([]);
+  const [slots,        setSlots]        = useState([]);
+  const [bookedSlots,  setBookedSlots]  = useState([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [cantFind, setCantFind]         = useState(false);
 
@@ -115,8 +109,8 @@ function SlotPickerModal({ onConfirm, onCancel, initial }) {
     setLoadingSlots(true);
     setSelectedSlot(null);
     inspectionService.getAvailableSlots(selectedDate.iso)
-      .then(setBookedSlots)
-      .catch(() => setBookedSlots([]))
+      .then(data => { setSlots(data.slots ?? []); setBookedSlots(data.bookedSlots ?? []); })
+      .catch(() => { setSlots([]); setBookedSlots([]); })
       .finally(() => setLoadingSlots(false));
   }, [selectedDate?.iso]);
 
@@ -190,30 +184,37 @@ function SlotPickerModal({ onConfirm, onCancel, initial }) {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-2 gap-3 mb-5">
-                  {TIME_SLOTS.map(slot => {
-                    const booked = bookedSlots.includes(slot.value);
-                    const active = selectedSlot === slot.value;
-                    return (
-                      <button
-                        key={slot.value}
-                        disabled={booked || cantFind}
-                        onClick={() => setSelectedSlot(slot.value)}
-                        className="px-3 py-2.5 rounded-lg border text-sm font-medium text-center transition"
-                        style={{
-                          borderColor: active ? "#ea6d00" : booked ? "rgba(0,0,0,0.06)" : "rgba(0,0,0,0.12)",
-                          background: active ? "#FFF7ED" : booked ? "#f8fafc" : "#fff",
-                          color: active ? "#ea6d00" : booked ? "#cbd5e1" : "#334155",
-                          cursor: booked || cantFind ? "not-allowed" : "pointer",
-                          textDecoration: booked ? "line-through" : undefined,
-                          borderRadius: "0.5rem",
-                        }}
-                      >
-                        {slot.label}
-                      </button>
-                    );
-                  })}
-                </div>
+                {slots.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <Clock size={32} className="text-gray-200 mb-2" />
+                    <p className="text-sm text-brand-muted">No slots available on this day</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3 mb-5">
+                    {slots.map(slot => {
+                      const booked = bookedSlots.includes(slot.label);
+                      const active = selectedSlot === slot.label;
+                      return (
+                        <button
+                          key={slot._id}
+                          disabled={booked || cantFind}
+                          onClick={() => setSelectedSlot(slot.label)}
+                          className="px-3 py-2.5 rounded-lg border text-sm font-medium text-center transition"
+                          style={{
+                            borderColor: active ? "#ea6d00" : booked ? "rgba(0,0,0,0.06)" : "rgba(0,0,0,0.12)",
+                            background: active ? "#FFF7ED" : booked ? "#f8fafc" : "#fff",
+                            color: active ? "#ea6d00" : booked ? "#cbd5e1" : "#334155",
+                            cursor: booked || cantFind ? "not-allowed" : "pointer",
+                            textDecoration: booked ? "line-through" : undefined,
+                            borderRadius: "0.5rem",
+                          }}
+                        >
+                          {slot.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
 
                 <label className="flex items-center gap-2.5 cursor-pointer select-none">
                   <input

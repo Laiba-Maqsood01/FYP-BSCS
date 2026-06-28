@@ -45,7 +45,7 @@ function StatCard({ icon, value, label, suffix }) {
       transition={{ duration: 0.5 }}
     >
       <div
-        className="w-[50px] h-[50px] mx-auto flex items-center justify-center rounded-full mb-4 text-brand-dark transition-all duration-300"
+        className="w-12.5 h-12.5 mx-auto flex items-center justify-center rounded-full mb-4 text-brand-dark transition-all duration-300"
         style={{
           background: "rgba(255,255,255,0.6)",
           backdropFilter: "blur(10px)",
@@ -83,7 +83,7 @@ export default function StatsCTASection() {
           >
             Ready to Buy or Sell?
           </h2>
-          <p className="text-brand-muted max-w-[40rem] mx-auto mb-6">
+          <p className="text-brand-muted max-w-160 mx-auto mb-6">
             Join thousands of Pakistanis who trust our platform for safe, transparent and
             hassle-free car deals.
           </p>

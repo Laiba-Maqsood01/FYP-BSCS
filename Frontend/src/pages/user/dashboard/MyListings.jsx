@@ -1,9 +1,12 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useCallback, memo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, X, Edit2, Trash2, Star, AlertCircle, Check, ExternalLink } from "lucide-react";
-import { getMyListings, updateListing, deleteListing } from "../../../services/listingService";
+import { Edit2, Trash2, Star, Check, ExternalLink, Info, ShieldCheck, Clock, Calendar, CheckCircle2, Download, FileText,
+} from "lucide-react";
+import { getMyListings, updateListing, deleteListing, markMyListingSold } from "../../../services/listingService";
 import { getDeletionRequests, submitDeletionRequest, getCommissionDetails, initiateCommissionPayment } from "../../../services/managedSaleService";
-import { requestFeatured, createFeaturedPayment } from "../../../services/featuredService";
+import { requestFeatured, createFeaturedPayment, getFeaturedByListing, getActiveFeaturedPlans } from "../../../services/featuredService";
+import { getListingInspectionStatus } from "../../../services/inspectionService";
+import Modal from "../../../components/ui/Modal";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -17,6 +20,10 @@ function formatDate(d) {
   return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+function carLabel(l) {
+  return `${l?.year ?? ""} ${l?.brand?.name ?? ""} ${l?.carModel?.name ?? ""}`.trim() || "Unnamed listing";
+}
+
 const STATUS_BADGE = {
   ACTIVE:             { bg: "#dcfce7", text: "#16a34a" },
   PENDING:            { bg: "#fef9c3", text: "#b45309" },
@@ -28,35 +35,13 @@ const STATUS_BADGE = {
 
 const TABS = ["All", "Active", "Pending", "Rejected", "Sold", "Managed"];
 
-const PLANS = [
-  { key: "BASIC",   label: "Basic",   price: "PKR 500",  desc: "7-day boost, standard visibility" },
-  { key: "PREMIUM", label: "Premium", price: "PKR 1,000", desc: "15-day boost, priority placement" },
-  { key: "TOP",     label: "Top",     price: "PKR 2,000", desc: "30-day boost, top of search results" },
-];
-
-// ── Modal wrappers ────────────────────────────────────────────────────────────
-
-function Modal({ onClose, children, title }) {
-  return (
-    <div className="fixed inset-0 z-9000 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }}>
-      <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
-        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid rgba(0,0,0,0.07)" }}>
-          <p className="font-semibold text-brand-dark">{title}</p>
-          <button onClick={onClose} className="text-brand-muted hover:text-brand-dark transition"><X size={18} /></button>
-        </div>
-        <div className="px-5 py-4">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-// ── Edit Modal ────────────────────────────────────────────────────────────────
+// ── Edit modal ────────────────────────────────────────────────────────────────
 
 function EditModal({ listing, onClose, onSaved }) {
   const [form, setForm] = useState({
-    price:        listing.price ?? "",
-    mileage:      listing.mileage ?? "",
-    description:  listing.description ?? "",
+    price:        listing.price        ?? "",
+    mileage:      listing.mileage      ?? "",
+    description:  listing.description  ?? "",
     mobileNumber: listing.mobileNumber ?? "",
   });
   const [saving, setSaving] = useState(false);
@@ -66,44 +51,40 @@ function EditModal({ listing, onClose, onSaved }) {
     setSaving(true); setError("");
     try {
       await updateListing(listing._id, form);
-      onSaved();
+      onSaved(listing._id, form);
     } catch (e) {
       setError(e?.response?.data?.message ?? "Failed to save.");
     } finally { setSaving(false); }
   }
 
+  const field = (label, name, type = "text", extra = {}) => (
+    <div>
+      <label className="text-xs font-medium text-brand-muted block mb-1">{label}</label>
+      <input type={type} value={form[name]} {...extra}
+        onChange={e => setForm(f => ({ ...f, [name]: e.target.value }))}
+        className="w-full rounded-lg px-3 py-2 text-sm text-brand-dark outline-none"
+        style={{ border: "1px solid rgba(0,0,0,0.12)" }} />
+    </div>
+  );
+
   return (
     <Modal title="Edit Listing" onClose={onClose}>
       <div className="space-y-3">
-        <div>
-          <label className="text-xs font-medium text-brand-muted block mb-1">Price (PKR)</label>
-          <input type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
-            className="w-full rounded-lg px-3 py-2 text-sm text-brand-dark outline-none"
-            style={{ border: "1px solid rgba(0,0,0,0.12)" }} />
-        </div>
-        <div>
-          <label className="text-xs font-medium text-brand-muted block mb-1">Mileage (km)</label>
-          <input type="number" value={form.mileage} onChange={e => setForm(f => ({ ...f, mileage: e.target.value }))}
-            className="w-full rounded-lg px-3 py-2 text-sm text-brand-dark outline-none"
-            style={{ border: "1px solid rgba(0,0,0,0.12)" }} />
-        </div>
-        <div>
-          <label className="text-xs font-medium text-brand-muted block mb-1">Mobile Number</label>
-          <input type="text" value={form.mobileNumber} onChange={e => setForm(f => ({ ...f, mobileNumber: e.target.value }))}
-            className="w-full rounded-lg px-3 py-2 text-sm text-brand-dark outline-none"
-            style={{ border: "1px solid rgba(0,0,0,0.12)" }} />
-        </div>
+        {field("Price (PKR)",    "price",        "number")}
+        {field("Mileage (km)",   "mileage",      "number")}
+        {field("Mobile Number",  "mobileNumber")}
         <div>
           <label className="text-xs font-medium text-brand-muted block mb-1">Description</label>
-          <textarea rows={3} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+          <textarea rows={3} value={form.description}
+            onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
             className="w-full rounded-lg px-3 py-2 text-sm text-brand-dark outline-none resize-none"
             style={{ border: "1px solid rgba(0,0,0,0.12)" }} />
         </div>
         {error && <p className="text-xs text-red-600">{error}</p>}
         <div className="flex gap-2 pt-1">
-          <button onClick={onClose} className="flex-1 py-2 rounded-lg text-sm font-semibold text-brand-muted bg-gray-50 hover:bg-gray-100 transition">Cancel</button>
+          <button onClick={onClose} className="flex-1 py-2 rounded-lg text-sm font-semibold text-brand-muted bg-gray-50 hover:bg-gray-100 transition cursor-pointer">Cancel</button>
           <button onClick={save} disabled={saving}
-            className="flex-1 py-2 rounded-lg text-sm font-semibold text-white transition hover:opacity-90"
+            className="flex-1 py-2 rounded-lg text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50 cursor-pointer"
             style={{ background: "#ea6d00" }}>
             {saving ? "Saving…" : "Save Changes"}
           </button>
@@ -113,7 +94,7 @@ function EditModal({ listing, onClose, onSaved }) {
   );
 }
 
-// ── Delete Modal ──────────────────────────────────────────────────────────────
+// ── Delete modal ──────────────────────────────────────────────────────────────
 
 function DeleteModal({ listing, onClose, onDeleted }) {
   const [busy,  setBusy]  = useState(false);
@@ -123,23 +104,22 @@ function DeleteModal({ listing, onClose, onDeleted }) {
     setBusy(true); setError("");
     try {
       await deleteListing(listing._id);
-      onDeleted();
+      onDeleted(listing._id);
     } catch (e) {
       setError(e?.response?.data?.message ?? "Failed to delete.");
       setBusy(false);
     }
   }
 
-  const car = `${listing.year ?? ""} ${listing.brand?.name ?? ""} ${listing.carModel?.name ?? ""}`.trim();
   return (
     <Modal title="Delete Listing" onClose={onClose}>
-      <p className="text-sm text-brand-dark2 mb-1">Are you sure you want to delete <strong>{car}</strong>?</p>
+      <p className="text-sm text-brand-dark mb-1">Are you sure you want to delete <strong>{carLabel(listing)}</strong>?</p>
       <p className="text-xs text-brand-muted mb-4">This action cannot be undone.</p>
       {error && <p className="text-xs text-red-600 mb-3">{error}</p>}
       <div className="flex gap-2">
-        <button onClick={onClose} className="flex-1 py-2 rounded-lg text-sm font-semibold text-brand-muted bg-gray-50 hover:bg-gray-100 transition">Cancel</button>
+        <button onClick={onClose} className="flex-1 py-2 rounded-lg text-sm font-semibold text-brand-muted bg-gray-50 hover:bg-gray-100 transition cursor-pointer">Cancel</button>
         <button onClick={confirm} disabled={busy}
-          className="flex-1 py-2 rounded-lg text-sm font-semibold text-white transition hover:opacity-90"
+          className="flex-1 py-2 rounded-lg text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50 cursor-pointer"
           style={{ background: "#dc2626" }}>
           {busy ? "Deleting…" : "Yes, Delete"}
         </button>
@@ -148,50 +128,190 @@ function DeleteModal({ listing, onClose, onDeleted }) {
   );
 }
 
-// ── Featured Modal ────────────────────────────────────────────────────────────
+// ── Mark as Sold modal ────────────────────────────────────────────────────────
+
+function MarkSoldModal({ listing, onClose, onDone }) {
+  const [busy,  setBusy]  = useState(false);
+  const [error, setError] = useState("");
+
+  async function confirm() {
+    setBusy(true); setError("");
+    try {
+      await markMyListingSold(listing._id);
+      onDone(listing._id);
+    } catch (e) {
+      setError(e?.response?.data?.message ?? "Failed to mark as sold.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal title="Mark as Sold" onClose={onClose}>
+      <p className="text-sm text-brand-muted mb-4">
+        Are you sure you want to mark <strong>{carLabel(listing)}</strong> as sold? This cannot be undone.
+      </p>
+      {error && <p className="text-xs text-red-600 mb-3">{error}</p>}
+      <div className="flex gap-2">
+        <button onClick={onClose} className="flex-1 py-2 rounded-lg text-sm font-semibold text-brand-muted bg-gray-50 hover:bg-gray-100 transition cursor-pointer">Cancel</button>
+        <button onClick={confirm} disabled={busy}
+          className="flex-1 py-2 rounded-lg text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50 cursor-pointer"
+          style={{ background: "#1d4ed8" }}>
+          {busy ? "Updating…" : "Yes, Mark as Sold"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Featured plan picker modal ────────────────────────────────────────────────
 
 function FeaturedModal({ listing, onClose }) {
-  const [selected, setSelected] = useState("PREMIUM");
-  const [step,     setStep]     = useState("select"); // select | confirm | done | error
+  const [plans,    setPlans]    = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [loading,  setLoading]  = useState(true);
   const [busy,     setBusy]     = useState(false);
   const [err,      setErr]      = useState("");
 
+  useEffect(() => {
+    getActiveFeaturedPlans()
+      .then(data => { setPlans(data); if (data.length > 0) setSelected(data[0].name); })
+      .catch(() => setErr("Failed to load plans."))
+      .finally(() => setLoading(false));
+  }, []);
+
   async function pay() {
+    if (!selected) return;
     setBusy(true); setErr("");
     try {
       const feature = await requestFeatured(listing._id, selected);
       const { url } = await createFeaturedPayment(feature._id);
+      if (!url) throw new Error("No payment URL returned.");
       window.location.href = url;
     } catch (e) {
-      setErr(e?.response?.data?.message ?? "Could not start payment.");
-      setStep("error");
-    } finally { setBusy(false); }
+      setErr(e?.response?.data?.message ?? e?.message ?? "Could not start payment.");
+      setBusy(false);
+    }
   }
 
   return (
     <Modal title="Feature this Listing" onClose={onClose}>
       <div className="space-y-3">
-        {PLANS.map(p => (
-          <label key={p.key} className={`flex items-start gap-3 p-3 rounded-xl cursor-pointer transition ${selected === p.key ? "ring-2" : "hover:bg-gray-50"}`}
-            style={selected === p.key ? { ring: "none", border: "2px solid #ea6d00", background: "#fff7ed" } : { border: "1px solid rgba(0,0,0,0.08)" }}>
-            <input type="radio" className="mt-0.5 accent-brand-orange" checked={selected === p.key} onChange={() => setSelected(p.key)} />
+        {loading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map(i => <div key={i} className="h-16 rounded-xl animate-pulse bg-gray-100" />)}
+          </div>
+        ) : plans.length === 0 ? (
+          <p className="text-sm text-brand-muted text-center py-4">No featured plans available right now.</p>
+        ) : plans.map(p => (
+          <label key={p.name}
+            className="flex items-start gap-3 p-3 rounded-xl cursor-pointer transition"
+            style={selected === p.name
+              ? { border: "2px solid #ea6d00", background: "#fff7ed" }
+              : { border: "1px solid rgba(0,0,0,0.08)" }}>
+            <input type="radio" className="mt-0.5 accent-brand-orange"
+              checked={selected === p.name} onChange={() => setSelected(p.name)} />
             <div className="flex-1">
-              <p className="text-sm font-semibold text-brand-dark">{p.label} <span className="text-brand-orange">{p.price}</span></p>
-              <p className="text-xs text-brand-muted mt-0.5">{p.desc}</p>
+              <p className="text-sm font-semibold text-brand-dark">
+                {p.label || p.name}{" "}
+                <span className="text-brand-orange">PKR {p.amount.toLocaleString()}</span>
+              </p>
+              <p className="text-xs text-brand-muted mt-0.5">{p.durationDays}-day boost</p>
             </div>
-            {selected === p.key && <Check size={15} style={{ color: "#ea6d00" }} className="mt-0.5 shrink-0" />}
+            {selected === p.name && <Check size={15} style={{ color: "#ea6d00" }} className="mt-0.5 shrink-0" />}
           </label>
         ))}
         {err && <p className="text-xs text-red-600">{err}</p>}
         <div className="flex gap-2 pt-1">
-          <button onClick={onClose} className="flex-1 py-2 rounded-lg text-sm font-semibold text-brand-muted bg-gray-50 hover:bg-gray-100 transition">Cancel</button>
-          <button onClick={pay} disabled={busy}
-            className="flex-1 py-2 rounded-lg text-sm font-semibold text-white transition hover:opacity-90"
+          <button onClick={onClose} className="flex-1 py-2 rounded-lg text-sm font-semibold text-brand-muted bg-gray-50 hover:bg-gray-100 transition cursor-pointer">Cancel</button>
+          <button onClick={pay} disabled={busy || loading || !selected}
+            className="flex-1 py-2 rounded-lg text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50 cursor-pointer"
             style={{ background: "#ea6d00" }}>
             {busy ? "Redirecting…" : "Pay & Feature"}
           </button>
         </div>
       </div>
+    </Modal>
+  );
+}
+
+// ── Featured detail modal ─────────────────────────────────────────────────────
+
+const PLAN_COLORS = {
+  BASIC:   { bg: "#f0fdf4", text: "#16a34a", border: "#bbf7d0" },
+  PREMIUM: { bg: "#fff7ed", text: "#c2410c", border: "#fed7aa" },
+  TOP:     { bg: "#fdf4ff", text: "#7e22ce", border: "#e9d5ff" },
+};
+
+const FEAT_STATUS_COLORS = {
+  ACTIVE:   { bg: "#dcfce7", text: "#16a34a" },
+  PENDING:  { bg: "#fef9c3", text: "#b45309" },
+  EXPIRED:  { bg: "#f1f5f9", text: "#64748b" },
+  REJECTED: { bg: "#fee2e2", text: "#dc2626" },
+  REMOVED:  { bg: "#f1f5f9", text: "#64748b" },
+};
+
+function FeaturedDetailModal({ listingId, onClose }) {
+  const [data,    setData]    = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [err,     setErr]     = useState("");
+
+  useEffect(() => {
+    getFeaturedByListing(listingId)
+      .then(setData)
+      .catch(e => setErr(e?.response?.data?.message ?? "Failed to load featured details."))
+      .finally(() => setLoading(false));
+  }, [listingId]);
+
+  const planColor   = data ? (PLAN_COLORS[data.plan]          ?? PLAN_COLORS.BASIC)              : null;
+  const statusColor = data ? (FEAT_STATUS_COLORS[data.status] ?? { bg: "#f1f5f9", text: "#64748b" }) : null;
+
+  return (
+    <Modal title="Featured Listing Details" onClose={onClose}>
+      {loading ? (
+        <div className="flex justify-center py-8">
+          <div className="w-6 h-6 border-2 border-brand-dark/20 border-t-brand-dark rounded-full animate-spin" />
+        </div>
+      ) : err ? (
+        <p className="text-sm text-red-600 text-center py-4">{err}</p>
+      ) : data && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between p-3 rounded-xl" style={{ background: planColor.bg, border: `1px solid ${planColor.border}` }}>
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-wide" style={{ color: planColor.text }}>Plan</p>
+              <p className="text-lg font-bold mt-0.5" style={{ color: planColor.text }}>{data.plan}</p>
+            </div>
+            <Star size={22} style={{ color: planColor.text }} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-gray-50 rounded-xl p-3">
+              <p className="text-[11px] text-brand-muted uppercase tracking-wide mb-1">Status</p>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded" style={{ background: statusColor.bg, color: statusColor.text }}>{data.status}</span>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-3">
+              <p className="text-[11px] text-brand-muted uppercase tracking-wide mb-1">Duration</p>
+              <p className="text-sm font-semibold text-brand-dark">{data.durationDays} days</p>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-3">
+              <p className="text-[11px] text-brand-muted uppercase tracking-wide mb-1">Amount Paid</p>
+              <p className="text-sm font-semibold text-brand-dark">{formatPKR(data.amount)}</p>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-3">
+              <p className="text-[11px] text-brand-muted uppercase tracking-wide mb-1">Start Date</p>
+              <p className="text-sm font-semibold text-brand-dark">{formatDate(data.startDate)}</p>
+            </div>
+          </div>
+          <div className="bg-gray-50 rounded-xl p-3">
+            <p className="text-[11px] text-brand-muted uppercase tracking-wide mb-1">End Date</p>
+            <p className="text-sm font-semibold text-brand-dark">{formatDate(data.endDate)}</p>
+            {data.endDate && data.status === "ACTIVE" && (() => {
+              const daysLeft = Math.ceil((new Date(data.endDate) - new Date()) / 86400000);
+              return daysLeft > 0
+                ? <p className="text-xs mt-1" style={{ color: daysLeft <= 3 ? "#dc2626" : "#16a34a" }}>{daysLeft} day{daysLeft !== 1 ? "s" : ""} remaining</p>
+                : <p className="text-xs mt-1 text-red-600">Expired</p>;
+            })()}
+          </div>
+        </div>
+      )}
     </Modal>
   );
 }
@@ -207,8 +327,8 @@ function DeletionRequestModal({ listing, onClose, onDone }) {
     if (!reason.trim()) { setErr("Please provide a reason."); return; }
     setBusy(true); setErr("");
     try {
-      await submitDeletionRequest(listing._id, reason);
-      onDone();
+      const res = await submitDeletionRequest(listing._id, reason);
+      onDone(res);
     } catch (e) {
       setErr(e?.response?.data?.message ?? "Failed to submit.");
       setBusy(false);
@@ -224,9 +344,9 @@ function DeletionRequestModal({ listing, onClose, onDone }) {
         style={{ border: "1px solid rgba(0,0,0,0.12)" }} />
       {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
       <div className="flex gap-2">
-        <button onClick={onClose} className="flex-1 py-2 rounded-lg text-sm font-semibold text-brand-muted bg-gray-50 hover:bg-gray-100 transition">Cancel</button>
+        <button onClick={onClose} className="flex-1 py-2 rounded-lg text-sm font-semibold text-brand-muted bg-gray-50 hover:bg-gray-100 transition cursor-pointer">Cancel</button>
         <button onClick={submit} disabled={busy}
-          className="flex-1 py-2 rounded-lg text-sm font-semibold text-white transition hover:opacity-90"
+          className="flex-1 py-2 rounded-lg text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50 cursor-pointer"
           style={{ background: "#ea6d00" }}>
           {busy ? "Submitting…" : "Submit Request"}
         </button>
@@ -235,27 +355,173 @@ function DeletionRequestModal({ listing, onClose, onDone }) {
   );
 }
 
-// ── Listing card ──────────────────────────────────────────────────────────────
+// ── Deletion detail modal ─────────────────────────────────────────────────────
 
-function ListingCard({ listing, onEdit, onDelete, onFeature, isManaged }) {
-  const navigate = useNavigate();
-  const car   = `${listing.year ?? ""} ${listing.brand?.name ?? ""} ${listing.carModel?.name ?? ""}`.trim();
-  const image = listing.images?.[0];
-  const badge = STATUS_BADGE[listing.status] ?? { bg: "#f1f5f9", text: "#64748b" };
-  const isFeatured = !!listing.featured;
+const DR_STATUS_STYLE = {
+  PENDING:  { bg: "#fef9c3", text: "#b45309" },
+  APPROVED: { bg: "#dcfce7", text: "#16a34a" },
+  REJECTED: { bg: "#fee2e2", text: "#dc2626" },
+};
+
+function DeletionDetailModal({ request, onClose }) {
+  const style = DR_STATUS_STYLE[request.status] ?? DR_STATUS_STYLE.PENDING;
+  return (
+    <div className="fixed inset-0 z-9000 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }}>
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-xl flex flex-col" style={{ maxHeight: "85vh" }}>
+        <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ borderBottom: "1px solid rgba(0,0,0,0.07)" }}>
+          <div className="flex items-center gap-2.5">
+            <FileText size={16} className="text-brand-muted" />
+            <p className="font-semibold text-brand-dark">Deletion Request</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded" style={{ background: style.bg, color: style.text }}>{request.status}</span>
+            <button onClick={onClose} className="text-brand-muted hover:text-brand-dark transition ml-1 cursor-pointer">
+              <FileText size={18} />
+            </button>
+          </div>
+        </div>
+        <div className="overflow-y-auto px-5 py-4 space-y-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-muted mb-2">Your reason for deletion</p>
+            <div className="bg-gray-50 rounded-xl p-3.5">
+              <p className="text-sm text-brand-dark leading-relaxed">{request.reason}</p>
+            </div>
+          </div>
+          {request.status === "REJECTED" && (
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-red-500 mb-2">Admin note</p>
+              <div className="rounded-xl p-3.5" style={{ background: "#fff5f5", border: "1px solid #fecaca" }}>
+                {request.adminNote
+                  ? <p className="text-sm text-red-800 leading-relaxed">{request.adminNote}</p>
+                  : <p className="text-sm text-red-400 italic">No note provided.</p>}
+              </div>
+            </div>
+          )}
+          {request.status === "APPROVED" && (
+            <div className="rounded-xl p-3.5" style={{ background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
+              <p className="text-sm text-green-700">Your deletion request was approved. The listing has been removed.</p>
+            </div>
+          )}
+          {request.status === "PENDING" && (
+            <div className="rounded-xl p-3.5" style={{ background: "#fefce8", border: "1px solid #fde68a" }}>
+              <p className="text-sm text-yellow-700">Your request is under review. The admin will process it shortly.</p>
+            </div>
+          )}
+        </div>
+        <div className="px-5 py-4 shrink-0" style={{ borderTop: "1px solid rgba(0,0,0,0.07)" }}>
+          <button onClick={onClose} className="w-full py-2 rounded-lg text-sm font-semibold text-brand-muted bg-gray-50 hover:bg-gray-100 transition cursor-pointer">Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── ExpiryCountdown — memo so each tick only re-renders this span ─────────────
+
+const ExpiryCountdown = memo(function ExpiryCountdown({ expiresAt }) {
+  const [timeLeft, setTimeLeft] = useState("");
+  const [urgent,   setUrgent]   = useState(false);
+
+  useEffect(() => {
+    function tick() {
+      const diff = new Date(expiresAt) - new Date();
+      if (diff <= 0) { setTimeLeft("Expired"); setUrgent(true); return; }
+      const m = Math.floor(diff / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setTimeLeft(`${m}m ${String(s).padStart(2, "0")}s`);
+      setUrgent(diff < 5 * 60 * 1000);
+    }
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [expiresAt]);
 
   return (
-    <div className="bg-white rounded-xl overflow-hidden flex gap-0 sm:flex-row flex-col" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
-      {/* Image */}
-      <div className="w-full sm:w-32 h-28 sm:h-auto bg-gray-100 shrink-0 relative">
+    <span className="text-xs font-semibold" style={{ color: urgent ? "#dc2626" : "#b45309" }}>
+      ⏱ {timeLeft}
+    </span>
+  );
+});
+
+// ── InspectionStrip — memo so fetch + render is isolated to each card ─────────
+
+const INSP_STATUS_MAP = {
+  PENDING:              { bg: "#fef9c3", text: "#b45309", icon: Clock,        label: "Inspection Requested" },
+  PENDING_COORDINATION: { bg: "#dbeafe", text: "#1d4ed8", icon: Calendar,     label: "Pending Coordination" },
+  SCHEDULED:            { bg: "#dbeafe", text: "#1d4ed8", icon: Calendar,     label: "Inspection Scheduled" },
+  IN_PROGRESS:          { bg: "#fef9c3", text: "#b45309", icon: ShieldCheck,  label: "Inspection In Progress" },
+  COMPLETED:            { bg: "#dcfce7", text: "#16a34a", icon: CheckCircle2, label: "Inspection Completed" },
+};
+
+const InspectionStrip = memo(function InspectionStrip({ listingId, isActive }) {
+  const navigate = useNavigate();
+  const [insp,    setInsp]    = useState(undefined);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!isActive) { setLoading(false); return; }
+    getListingInspectionStatus(listingId)
+      .then(d => setInsp(d ?? null))
+      .catch(() => setInsp(null))
+      .finally(() => setLoading(false));
+  }, [listingId, isActive]);
+
+  if (!isActive) return null;
+  if (loading) return (
+    <div className="mt-2 flex items-center gap-1.5 text-xs text-brand-muted">
+      <div className="w-3 h-3 border border-brand-muted/30 border-t-brand-muted rounded-full animate-spin" />
+      Loading inspection…
+    </div>
+  );
+  if (!insp) return (
+    <div className="mt-2">
+      <button onClick={() => navigate(`/inspection/book/${listingId}?mode=seller`)}
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-white hover:opacity-90 transition cursor-pointer"
+        style={{ background: "#16a34a" }}>
+        <ShieldCheck size={12} /> Request Inspection
+      </button>
+    </div>
+  );
+
+  const cfg  = INSP_STATUS_MAP[insp.status] ?? { bg: "#f1f5f9", text: "#64748b", icon: ShieldCheck, label: insp.status };
+  const Icon = cfg.icon;
+  return (
+    <div className="mt-2 flex items-center gap-1.5">
+      <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold" style={{ background: cfg.bg, color: cfg.text }}>
+        <Icon size={11} /> {cfg.label}
+      </span>
+      {insp.status === "COMPLETED" && insp.report?.pdfUrl && (
+        <a href={insp.report.pdfUrl} target="_blank" rel="noreferrer"
+          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition"
+          style={{ border: "1px solid rgba(0,0,0,0.1)", color: "#16a34a" }}>
+          <Download size={11} /> Report
+        </a>
+      )}
+    </div>
+  );
+});
+
+// ── ListingCard — memo so only the changed listing re-renders ─────────────────
+
+const ListingCard = memo(function ListingCard({ listing, onEdit, onDelete, onFeature, onFeaturedDetail, onMarkSold, isManaged }) {
+  const navigate   = useNavigate();
+  const image      = listing.images?.[0]?.url;
+  const badge      = STATUS_BADGE[listing.status] ?? { bg: "#f1f5f9", text: "#64748b" };
+  const isFeatured = !!listing.isFeatured;
+  const isActive   = listing.status === "ACTIVE";
+
+  return (
+    <div className="bg-white rounded-xl overflow-hidden flex flex-col sm:flex-row" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
+      {/* Thumbnail */}
+      <div className="w-full sm:w-44 h-32 sm:h-auto bg-gray-100 shrink-0 relative">
         {image
-          ? <img src={image} alt={car} className="w-full h-full object-cover" />
-          : <div className="w-full h-full flex items-center justify-center text-xs text-brand-muted">No image</div>
-        }
+          ? <img src={image} alt={carLabel(listing)} className="w-full h-full object-cover" />
+          : <div className="w-full h-full flex items-center justify-center text-xs text-brand-muted">No image</div>}
         {isFeatured && (
-          <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 text-[10px] font-semibold rounded text-white" style={{ background: "#ea6d00" }}>
-            FEATURED
-          </span>
+          <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 text-[10px] font-semibold rounded text-white" style={{ background: "#ea6d00" }}>FEATURED</span>
+        )}
+        {isManaged && (
+          <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 text-[10px] font-semibold rounded text-white" style={{ background: "#7c3aed" }}>MANAGED</span>
         )}
       </div>
 
@@ -263,40 +529,58 @@ function ListingCard({ listing, onEdit, onDelete, onFeature, isManaged }) {
       <div className="flex-1 px-4 py-3 min-w-0">
         <div className="flex items-start justify-between gap-2 flex-wrap">
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-brand-dark truncate">{car || "Unnamed listing"}</p>
+            <p className="text-sm font-semibold text-brand-dark truncate">{carLabel(listing)}</p>
             <p className="text-xs text-brand-muted mt-0.5">{listing.city?.name ?? "—"} · {formatDate(listing.createdAt)}</p>
           </div>
-          <span className="px-2 py-0.5 rounded text-xs font-semibold shrink-0"
-            style={{ background: badge.bg, color: badge.text }}>
+          <span className="px-2 py-0.5 rounded text-xs font-semibold shrink-0" style={{ background: badge.bg, color: badge.text }}>
             {listing.status?.replace("_", " ") ?? "—"}
           </span>
         </div>
+
         <p className="text-base font-bold text-brand-dark mt-1.5">{formatPKR(listing.price)}</p>
 
-        {/* Actions */}
+        <InspectionStrip listingId={listing._id} isActive={isActive} />
+
+        {/* Action buttons */}
         <div className="flex gap-2 mt-3 flex-wrap">
-          <button onClick={() => navigate(`/browse-cars/${listing._id}`)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-brand-muted hover:bg-gray-50 transition"
-            style={{ border: "1px solid rgba(0,0,0,0.1)" }}>
-            <ExternalLink size={12} /> View
-          </button>
+          {isActive && (
+            <button onClick={() => navigate(`/browse-cars/${listing._id}`)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-brand-muted hover:bg-gray-50 transition cursor-pointer"
+              style={{ border: "1px solid rgba(0,0,0,0.1)" }}>
+              <ExternalLink size={12} /> View
+            </button>
+          )}
           {listing.status !== "SOLD" && listing.status !== "REMOVED" && !isManaged && (
-            <button onClick={() => onEdit(listing)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition"
+            <button onClick={() => navigate(`/edit-listing/${listing._id}`)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition cursor-pointer"
               style={{ border: "1px solid rgba(0,0,0,0.1)", color: "#3b82f6" }}>
               <Edit2 size={12} /> Edit
             </button>
           )}
-          {listing.status === "ACTIVE" && !isFeatured && !isManaged && (
+          {isActive && !isFeatured && !isManaged && (
             <button onClick={() => onFeature(listing)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition cursor-pointer"
               style={{ border: "1px solid rgba(0,0,0,0.1)", color: "#ea6d00" }}>
               <Star size={12} /> Feature
             </button>
           )}
+          {isFeatured && (
+            <button onClick={() => onFeaturedDetail(listing._id)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition cursor-pointer"
+              style={{ border: "1px solid rgba(234,109,0,0.4)", color: "#ea6d00", background: "#fff7ed" }}>
+              <Info size={12} /> Featured Details
+            </button>
+          )}
+          {isActive && !isManaged && (
+            <button onClick={() => onMarkSold(listing)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition cursor-pointer"
+              style={{ border: "1px solid rgba(0,0,0,0.1)", color: "#1d4ed8" }}>
+              <Check size={12} /> Mark as Sold
+            </button>
+          )}
           {!isManaged && (
             <button onClick={() => onDelete(listing)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition cursor-pointer"
               style={{ border: "1px solid rgba(0,0,0,0.1)", color: "#dc2626" }}>
               <Trash2 size={12} /> Delete
             </button>
@@ -305,25 +589,32 @@ function ListingCard({ listing, onEdit, onDelete, onFeature, isManaged }) {
       </div>
     </div>
   );
-}
+});
 
-// ── Managed sub-section ───────────────────────────────────────────────────────
+// ── ManagedSection — scoped state for deletion reqs + commissions ──────────────
+
+const DR_BADGE = {
+  PENDING:  { bg: "#fef9c3", text: "#b45309" },
+  APPROVED: { bg: "#dcfce7", text: "#16a34a" },
+  REJECTED: { bg: "#fee2e2", text: "#dc2626" },
+};
 
 function ManagedSection({ listings }) {
-  const managedListings = listings.filter(l => ["SOLD", "PENDING_COMMISSION"].includes(l.status));
-  const [subTab, setSubTab] = useState("deletion");
+  const managedListings = listings.filter(l => l.saleMode === "MANAGED");
+  const [subTab,       setSubTab]       = useState("deletion");
   const [deletionReqs, setDeletionReqs] = useState([]);
   const [commissions,  setCommissions]  = useState([]);
-  const [loading, setLoading]           = useState(true);
+  const [loading,      setLoading]      = useState(true);
   const [requestTarget, setRequestTarget] = useState(null);
-  const [commPaying, setCommPaying]       = useState(false);
+  const [detailTarget,  setDetailTarget]  = useState(null);
+  const [commPaying,    setCommPaying]    = useState(false);
 
   useEffect(() => {
     Promise.all([
       getDeletionRequests().catch(() => []),
-      ...managedListings.filter(l => l.status === "PENDING_COMMISSION").map(l =>
-        getCommissionDetails(l._id).catch(() => null)
-      ),
+      ...managedListings
+        .filter(l => l.status === "PENDING_COMMISSION")
+        .map(l => getCommissionDetails(l._id).catch(() => null)),
     ]).then(([reqs, ...comms]) => {
       setDeletionReqs(Array.isArray(reqs) ? reqs : []);
       setCommissions(comms.filter(Boolean));
@@ -333,111 +624,130 @@ function ManagedSection({ listings }) {
   async function payCommission(comm) {
     setCommPaying(true);
     try {
-      const { url } = await initiateCommissionPayment(comm._id);
-      window.location.href = url;
+      const { checkoutUrl } = await initiateCommissionPayment(comm._id);
+      window.location.href = checkoutUrl;
     } catch {
       alert("Failed to initiate payment.");
     } finally { setCommPaying(false); }
   }
 
-  const DR_BADGE = {
-    PENDING:  { bg: "#fef9c3", text: "#b45309" },
-    APPROVED: { bg: "#dcfce7", text: "#16a34a" },
-    REJECTED: { bg: "#fee2e2", text: "#dc2626" },
-  };
+  // After a deletion request is submitted, add it to local state — no page reload.
+  function handleDeletionSubmitted(newRequest) {
+    setRequestTarget(null);
+    if (newRequest) setDeletionReqs(prev => [...prev, newRequest]);
+  }
 
   return (
     <div>
       {/* Sub-tabs */}
       <div className="flex gap-1 mb-4">
-        {["deletion", "commission"].map(t => (
-          <button key={t} onClick={() => setSubTab(t)}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold transition capitalize"
-            style={subTab === t
+        {[
+          { key: "deletion",    label: "Deletion Requests" },
+          { key: "commission",  label: "Commission Due" },
+        ].map(t => (
+          <button key={t.key} onClick={() => setSubTab(t.key)}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer"
+            style={subTab === t.key
               ? { background: "#ea6d00", color: "#fff" }
               : { background: "#f8f9fa", color: "#64748b" }}>
-            {t === "deletion" ? "Deletion Requests" : "Commission Due"}
+            {t.label}
           </button>
         ))}
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-8"><div className="w-5 h-5 border-2 border-brand-dark/20 border-t-brand-dark rounded-full animate-spin" /></div>
-      ) : subTab === "deletion" ? (
-        <div>
-          {managedListings.length > 0 && (
-            <div className="mb-4">
-              <p className="text-xs font-medium text-brand-muted mb-2">Request deletion for a managed listing:</p>
-              <div className="flex flex-wrap gap-2">
-                {managedListings.filter(l => !deletionReqs.some(r => r.listing === l._id)).map(l => {
-                  const car = `${l.year ?? ""} ${l.brand?.name ?? ""} ${l.carModel?.name ?? ""}`.trim();
-                  return (
-                    <button key={l._id} onClick={() => setRequestTarget(l)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium text-brand-muted hover:bg-gray-100 transition"
-                      style={{ border: "1px solid rgba(0,0,0,0.1)" }}>
-                      {car}
-                    </button>
-                  );
-                })}
+        <div className="space-y-3 animate-pulse">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="bg-white rounded-xl p-4 flex items-center gap-3" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
+              <div className="w-16 h-12 rounded-lg bg-gray-200 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="h-4 w-40 bg-gray-200 rounded mb-1.5" />
+                <div className="h-3 w-24 bg-gray-100 rounded" />
               </div>
+              <div className="h-8 w-24 bg-gray-100 rounded-lg shrink-0" />
             </div>
-          )}
-          {deletionReqs.length === 0 ? (
-            <p className="text-sm text-brand-muted text-center py-8">No deletion requests yet.</p>
-          ) : (
-            <div className="space-y-3">
-              {deletionReqs.map(req => {
-                const car = `${req.listing?.year ?? ""} ${req.listing?.brand?.name ?? ""} ${req.listing?.carModel?.name ?? ""}`.trim();
-                const b = DR_BADGE[req.status] ?? DR_BADGE.PENDING;
-                return (
-                  <div key={req._id} className="bg-white rounded-xl p-4 flex items-center justify-between gap-3"
-                    style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
-                    <div>
-                      <p className="text-sm font-semibold text-brand-dark">{car || "Unknown listing"}</p>
-                      <p className="text-xs text-brand-muted mt-0.5">{req.reason}</p>
-                      <p className="text-xs text-brand-muted mt-0.5">{formatDate(req.createdAt)}</p>
-                    </div>
-                    <span className="px-2 py-0.5 rounded text-xs font-semibold shrink-0"
-                      style={{ background: b.bg, color: b.text }}>
-                      {req.status}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          ))}
         </div>
-      ) : (
-        <div>
-          {commissions.length === 0 ? (
-            <p className="text-sm text-brand-muted text-center py-8">No commission payments due.</p>
-          ) : (
-            <div className="space-y-3">
-              {commissions.map(comm => {
-                const car = `${comm.listing?.year ?? ""} ${comm.listing?.brand?.name ?? ""} ${comm.listing?.carModel?.name ?? ""}`.trim();
-                return (
-                  <div key={comm._id} className="bg-white rounded-xl p-4 flex items-center justify-between gap-3"
-                    style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
-                    <div>
-                      <p className="text-sm font-semibold text-brand-dark">{car}</p>
-                      <p className="text-xs text-brand-muted mt-0.5">Commission: <strong>{formatPKR(comm.amount)}</strong></p>
-                      <p className="text-xs text-brand-muted">Due: {formatDate(comm.dueDate)}</p>
+      ) : subTab === "deletion" ? (
+        <div className="space-y-3">
+          {managedListings.length === 0 ? (
+            <p className="text-sm text-brand-muted text-center py-8">No managed listings.</p>
+          ) : managedListings.map(l => {
+            const image = l.images?.[0]?.url;
+            const existingReq = deletionReqs.find(r => (r.listing?._id ?? r.listing) === l._id);
+            const drBadge = existingReq ? (DR_BADGE[existingReq.status] ?? DR_BADGE.PENDING) : null;
+            return (
+              <div key={l._id} className="bg-white rounded-xl overflow-hidden flex flex-col sm:flex-row" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
+                <div className="w-full sm:w-44 h-32 sm:h-auto bg-gray-100 shrink-0">
+                  {image
+                    ? <img src={image} alt={carLabel(l)} className="w-full h-full object-cover" />
+                    : <div className="w-full h-full flex items-center justify-center text-xs text-brand-muted">No image</div>}
+                </div>
+                <div className="flex-1 px-4 py-3 min-w-0">
+                  <div className="flex items-start justify-between gap-2 flex-wrap">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-brand-dark truncate">{carLabel(l)}</p>
+                      <p className="text-xs text-brand-muted mt-0.5">{l.city?.name ?? "—"} · Updated {formatDate(l.updatedAt ?? l.createdAt)}</p>
                     </div>
-                    {comm.status !== "PAID" ? (
-                      <button onClick={() => payCommission(comm)} disabled={commPaying}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white hover:opacity-90 transition shrink-0"
-                        style={{ background: "#8b5cf6" }}>
-                        {commPaying ? "…" : "Pay Now"}
-                      </button>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold shrink-0 text-white" style={{ background: "#7c3aed" }}>MANAGED</span>
+                  </div>
+                  <p className="text-base font-bold text-brand-dark mt-1.5">{formatPKR(l.price)}</p>
+                  <div className="mt-3">
+                    {l.status === "SOLD" ? (
+                      <span className="text-xs font-semibold px-2.5 py-1.5 rounded-lg" style={{ background: "#dbeafe", color: "#1d4ed8" }}>
+                        Sold
+                      </span>
+                    ) : existingReq ? (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-semibold px-2.5 py-1.5 rounded-lg" style={{ background: drBadge.bg, color: drBadge.text }}>
+                          Deletion Request: {existingReq.status}
+                        </span>
+                        <button onClick={() => setDetailTarget(existingReq)}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition hover:opacity-80 cursor-pointer"
+                          style={{ border: "1px solid rgba(0,0,0,0.1)", color: "#64748b" }}>
+                          <FileText size={11} /> View Details
+                        </button>
+                      </div>
                     ) : (
-                      <span className="px-2 py-0.5 rounded text-xs font-semibold shrink-0"
-                        style={{ background: "#dcfce7", color: "#16a34a" }}>PAID</span>
+                      <button onClick={() => setRequestTarget(l)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white hover:opacity-90 transition cursor-pointer"
+                        style={{ background: "#dc2626" }}>
+                        <Trash2 size={12} /> Request Deletion
+                      </button>
                     )}
                   </div>
-                );
-              })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {commissions.length === 0 ? (
+            <p className="text-sm text-brand-muted text-center py-8">No commission payments due.</p>
+          ) : commissions.map(comm => (
+            <div key={comm._id} className="bg-white rounded-xl p-4 flex items-center justify-between gap-3" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
+              <div>
+                <p className="text-sm font-semibold text-brand-dark">{carLabel(comm.listing)}</p>
+                <p className="text-xs text-brand-muted mt-0.5">Commission: <strong>{formatPKR(comm.commissionAmount)}</strong></p>
+                <p className="text-xs text-brand-muted mt-0.5">Time left: <ExpiryCountdown expiresAt={comm.expiresAt} /></p>
+              </div>
+              {comm.status === "PAID" ? (
+                <span className="px-2 py-0.5 rounded text-xs font-semibold shrink-0" style={{ background: "#dcfce7", color: "#16a34a" }}>PAID</span>
+              ) : comm.status === "EXPIRED" || new Date() > new Date(comm.expiresAt) ? (
+                <div className="text-right shrink-0">
+                  <button disabled className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white opacity-40 cursor-not-allowed" style={{ background: "#8b5cf6" }}>Pay Now</button>
+                  <p className="text-[10px] text-red-500 mt-1">Window expired</p>
+                </div>
+              ) : (
+                <button onClick={() => payCommission(comm)} disabled={commPaying}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white hover:opacity-90 transition shrink-0 cursor-pointer disabled:opacity-50"
+                  style={{ background: "#8b5cf6" }}>
+                  {commPaying ? "…" : "Pay Now"}
+                </button>
+              )}
             </div>
-          )}
+          ))}
         </div>
       )}
 
@@ -445,22 +755,50 @@ function ManagedSection({ listings }) {
         <DeletionRequestModal
           listing={requestTarget}
           onClose={() => setRequestTarget(null)}
-          onDone={() => { setRequestTarget(null); window.location.reload(); }}
+          onDone={handleDeletionSubmitted}
         />
+      )}
+      {detailTarget && (
+        <DeletionDetailModal request={detailTarget} onClose={() => setDetailTarget(null)} />
       )}
     </div>
   );
 }
 
-// ── Main ─────────────────────────────────────────────────────────────────────
+// ── Skeleton ──────────────────────────────────────────────────────────────────
+
+function ListingSkeleton() {
+  return (
+    <div className="bg-white rounded-xl overflow-hidden flex flex-col sm:flex-row animate-pulse" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
+      <div className="w-full sm:w-44 h-32 bg-gray-200 shrink-0" />
+      <div className="flex-1 px-4 py-3 flex flex-col gap-2 min-w-0">
+        <div className="flex items-center justify-between gap-2">
+          <div className="h-4 w-48 bg-gray-200 rounded" />
+          <div className="h-5 w-16 bg-gray-100 rounded-full shrink-0" />
+        </div>
+        <div className="h-3 w-32 bg-gray-100 rounded" />
+        <div className="h-3 w-24 bg-gray-100 rounded" />
+        <div className="flex gap-2 mt-auto pt-2">
+          <div className="h-7 w-16 bg-gray-100 rounded-lg" />
+          <div className="h-7 w-16 bg-gray-100 rounded-lg" />
+          <div className="h-7 w-20 bg-gray-100 rounded-lg" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function MyListings() {
-  const [listings, setListings] = useState([]);
-  const [loading,  setLoading]  = useState(true);
-  const [tab,      setTab]      = useState("All");
-  const [editTarget,    setEditTarget]    = useState(null);
-  const [deleteTarget,  setDeleteTarget]  = useState(null);
-  const [featureTarget, setFeatureTarget] = useState(null);
+  const [listings,        setListings]        = useState([]);
+  const [loading,         setLoading]         = useState(true);
+  const [tab,             setTab]             = useState("All");
+  const [editTarget,      setEditTarget]      = useState(null);
+  const [deleteTarget,    setDeleteTarget]    = useState(null);
+  const [featureTarget,   setFeatureTarget]   = useState(null);
+  const [featuredDetailId, setFeaturedDetailId] = useState(null);
+  const [markSoldTarget,  setMarkSoldTarget]  = useState(null);
 
   function load() {
     setLoading(true);
@@ -472,15 +810,47 @@ export default function MyListings() {
 
   useEffect(load, []);
 
-  const filtered = tab === "All"     ? listings.filter(l => !["SOLD", "PENDING_COMMISSION"].includes(l.status) || tab !== "Managed")
-    : tab === "Managed" ? listings.filter(l => ["SOLD", "PENDING_COMMISSION"].includes(l.status))
-    : tab === "Active"  ? listings.filter(l => l.status === "ACTIVE")
-    : tab === "Pending" ? listings.filter(l => l.status === "PENDING")
-    : tab === "Rejected"? listings.filter(l => l.status === "REJECTED")
-    : tab === "Sold"    ? listings.filter(l => l.status === "SOLD")
+  // ── Targeted state updates ─────────────────────────────────────────────────
+
+  const handleEditSaved = useCallback((id, patch) => {
+    setEditTarget(null);
+    setListings(prev => prev.map(l => l._id === id ? { ...l, ...patch } : l));
+  }, []);
+
+  const handleDeleted = useCallback((id) => {
+    setDeleteTarget(null);
+    setListings(prev => prev.filter(l => l._id !== id));
+  }, []);
+
+  const handleMarkedSold = useCallback((id) => {
+    setMarkSoldTarget(null);
+    setListings(prev => prev.map(l => l._id === id ? { ...l, status: "SOLD" } : l));
+  }, []);
+
+  // Stable callbacks — useState setters are stable, but wrapping keeps intent clear.
+  const openEdit         = useCallback((l) => setEditTarget(l),         []);
+  const openDelete       = useCallback((l) => setDeleteTarget(l),       []);
+  const openFeature      = useCallback((l) => setFeatureTarget(l),      []);
+  const openFeaturedDetail = useCallback((id) => setFeaturedDetailId(id), []);
+  const openMarkSold     = useCallback((l) => setMarkSoldTarget(l),     []);
+
+  // ── Tab filter ─────────────────────────────────────────────────────────────
+
+  const filtered = tab === "All"      ? listings
+    : tab === "Managed"  ? listings.filter(l => l.saleMode === "MANAGED")
+    : tab === "Active"   ? listings.filter(l => l.status === "ACTIVE")
+    : tab === "Pending"  ? listings.filter(l => l.status === "PENDING")
+    : tab === "Rejected" ? listings.filter(l => l.status === "REJECTED")
+    : tab === "Sold"     ? listings.filter(l => l.status === "SOLD")
     : listings;
 
-  const displayListings = tab === "All" ? listings : filtered;
+  const tabCount = (t) =>
+    t === "All"      ? listings.length
+    : t === "Active"   ? listings.filter(l => l.status === "ACTIVE").length
+    : t === "Pending"  ? listings.filter(l => l.status === "PENDING").length
+    : t === "Rejected" ? listings.filter(l => l.status === "REJECTED").length
+    : t === "Sold"     ? listings.filter(l => l.status === "SOLD").length
+    : listings.filter(l => l.saleMode === "MANAGED").length;
 
   return (
     <div className="p-6 max-w-4xl">
@@ -489,15 +859,10 @@ export default function MyListings() {
       {/* Tabs */}
       <div className="flex gap-1.5 flex-wrap mb-5">
         {TABS.map(t => {
-          const count = t === "All"      ? listings.length
-            : t === "Active"   ? listings.filter(l => l.status === "ACTIVE").length
-            : t === "Pending"  ? listings.filter(l => l.status === "PENDING").length
-            : t === "Rejected" ? listings.filter(l => l.status === "REJECTED").length
-            : t === "Sold"     ? listings.filter(l => l.status === "SOLD").length
-            : listings.filter(l => ["SOLD", "PENDING_COMMISSION"].includes(l.status)).length;
+          const count = tabCount(t);
           return (
             <button key={t} onClick={() => setTab(t)}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold transition"
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer"
               style={tab === t
                 ? { background: "#ea6d00", color: "#fff" }
                 : { background: "#f8f9fa", color: "#64748b" }}>
@@ -507,37 +872,49 @@ export default function MyListings() {
         })}
       </div>
 
+      {/* Content */}
       {loading ? (
-        <div className="flex justify-center py-16"><div className="w-7 h-7 border-2 border-brand-dark/20 border-t-brand-dark rounded-full animate-spin" /></div>
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => <ListingSkeleton key={i} />)}
+        </div>
       ) : tab === "Managed" ? (
         <ManagedSection listings={listings} />
-      ) : displayListings.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="text-center py-16">
           <p className="text-brand-muted text-sm">No listings in this category.</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {displayListings.map(l => (
+          {filtered.map(l => (
             <ListingCard
               key={l._id}
               listing={l}
-              onEdit={setEditTarget}
-              onDelete={setDeleteTarget}
-              onFeature={setFeatureTarget}
-              isManaged={["SOLD", "PENDING_COMMISSION"].includes(l.status)}
+              onEdit={openEdit}
+              onDelete={openDelete}
+              onFeature={openFeature}
+              onFeaturedDetail={openFeaturedDetail}
+              onMarkSold={openMarkSold}
+              isManaged={l.saleMode === "MANAGED"}
             />
           ))}
         </div>
       )}
 
+      {/* Modals */}
       {editTarget && (
-        <EditModal listing={editTarget} onClose={() => setEditTarget(null)} onSaved={() => { setEditTarget(null); load(); }} />
+        <EditModal listing={editTarget} onClose={() => setEditTarget(null)} onSaved={handleEditSaved} />
       )}
       {deleteTarget && (
-        <DeleteModal listing={deleteTarget} onClose={() => setDeleteTarget(null)} onDeleted={() => { setDeleteTarget(null); load(); }} />
+        <DeleteModal listing={deleteTarget} onClose={() => setDeleteTarget(null)} onDeleted={handleDeleted} />
       )}
       {featureTarget && (
         <FeaturedModal listing={featureTarget} onClose={() => setFeatureTarget(null)} />
+      )}
+      {featuredDetailId && (
+        <FeaturedDetailModal listingId={featuredDetailId} onClose={() => setFeaturedDetailId(null)} />
+      )}
+      {markSoldTarget && (
+        <MarkSoldModal listing={markSoldTarget} onClose={() => setMarkSoldTarget(null)} onDone={handleMarkedSold} />
       )}
     </div>
   );

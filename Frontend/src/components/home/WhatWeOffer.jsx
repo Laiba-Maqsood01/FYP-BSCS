@@ -42,7 +42,7 @@ export default function WhatWeOffer() {
           >
             What We Offer
           </h2>
-          <p className="text-brand-muted text-base max-w-[36rem] mx-auto mt-2">
+          <p className="text-brand-muted text-base max-w-xl mx-auto mt-2">
             Everything you need to buy or sell a used car with confidence
           </p>
         </div>
@@ -51,7 +51,7 @@ export default function WhatWeOffer() {
           {OFFERS.map((item) => (
             <div
               key={item.title}
-              className="group relative rounded-2xl overflow-hidden border border-black/[0.06] shadow-[0_10px_25px_rgba(15,23,42,0.08)]"
+              className="group relative rounded-2xl overflow-hidden border border-black/6 shadow-[0_10px_25px_rgba(15,23,42,0.08)]"
               style={{ height: "400px" }}
             >
               {/* Background image */}
@@ -72,7 +72,7 @@ export default function WhatWeOffer() {
 
               {/* Content */}
               <div className="absolute bottom-0 left-0 right-0 p-6">
-                <div className="w-[38px] h-[38px] rounded-full bg-white/15 backdrop-blur-md border border-white/25 text-white flex items-center justify-center mb-3">
+                <div className="w-9.5 h-9.5 rounded-full bg-white/15 backdrop-blur-md border border-white/25 text-white flex items-center justify-center mb-3">
                   {item.icon}
                 </div>
                 <h3 className="text-white font-bold text-[1.15rem] tracking-tight mb-2">
