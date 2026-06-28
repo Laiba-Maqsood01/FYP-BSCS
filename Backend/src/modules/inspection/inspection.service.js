@@ -6,6 +6,7 @@ import { ApiError } from "../../utils/apiError.js";
 import userModel from "../../models/user.model.js";
 
 import { calculateInspectionFee } from "./inspectionPricing.js";
+import { getSettings } from "../../models/siteSettings.model.js";
 
 import { createStripeCheckoutSession } from "../payment/payment.service.js";
 import config from "../../config/config.js";
@@ -251,25 +252,30 @@ export async function createInspectionPayment(inspectionId, userId) {
         throw new ApiError(404, "Inspection not found");
     }
 
-    // prevent duplicate payment
+    const purposeParam = inspection.type === "RE_INSPECTION" ? "RE_INSPECTION" : "INSPECTION";
+    const successUrl = `${config.CLIENT_URL}/payment/success?purpose=${purposeParam}&session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl  = `${config.CLIENT_URL}/payment/failed?purpose=${purposeParam}`;
+
+    // If a pending payment already exists, reuse it — just create a new Stripe session
     const existingPayment = await paymentModel.findOne({
         referenceId: inspectionId,
         status: "PENDING"
     });
 
     if (existingPayment) {
-        throw new ApiError(
-            400,
-            "Payment already exists for this inspection"
-        );
+        const session = await createStripeCheckoutSession(existingPayment, { successUrl, cancelUrl });
+        return { payment: existingPayment, checkoutUrl: session.url };
     }
 
-    // Fetch user for payerSnapshot
+    // First-time payment — create the document
     const user = await userModel.findById(userId).select("username email");
     if (!user) throw new ApiError(404, "User not found");
 
-    // 🧠 FIXED: dynamic pricing based on listing
-    const amount = calculateInspectionFee(inspection.listing);
+    const settings = await getSettings();
+    const isReinspection = inspection.type === "RE_INSPECTION";
+    const amount = isReinspection
+      ? settings.inspectionFees.reinspection
+      : calculateInspectionFee(inspection.listing, settings.inspectionFees);
 
     const transactionId = crypto.randomUUID();
 
@@ -291,11 +297,7 @@ export async function createInspectionPayment(inspectionId, userId) {
     inspection.payment = payment._id;
     await inspection.save();
 
-    const purposeParam = inspection.type === "RE_INSPECTION" ? "RE_INSPECTION" : "INSPECTION";
-    const session = await createStripeCheckoutSession(payment, {
-        successUrl: `${config.CLIENT_URL}/payment/success?purpose=${purposeParam}&session_id={CHECKOUT_SESSION_ID}`,
-        cancelUrl:  `${config.CLIENT_URL}/payment/failed?purpose=${purposeParam}`,
-    });
+    const session = await createStripeCheckoutSession(payment, { successUrl, cancelUrl });
 
     // return {
     //     payment,
@@ -322,19 +324,26 @@ export async function getListingInspectionStatus(listingId) {
 
 export async function getAvailableSlots(dateStr) {
   const date = new Date(dateStr);
+  const dayOfWeek = date.getDay(); // 0=Sun … 6=Sat
+
+  const settings = await getSettings();
+  const activeSlots = settings.inspectionSlots.filter(
+    s => s.isActive && s.availableDays.includes(dayOfWeek)
+  );
+
   const start = new Date(date);
   start.setHours(0, 0, 0, 0);
   const end = new Date(date);
   end.setHours(23, 59, 59, 999);
 
-  const booked = await inspectionModel
+  const bookedSlots = await inspectionModel
     .find({
       scheduledDate: { $gte: start, $lte: end },
       status: { $in: ["PENDING", "SCHEDULED", "IN_PROGRESS"] },
     })
     .distinct("timeSlot");
 
-  return booked;
+  return { slots: activeSlots, bookedSlots };
 }
 
 export async function getMyInspections(userId, filters = {}) {
@@ -401,17 +410,12 @@ export async function getMyInspections(userId, filters = {}) {
         },
 
         // 4. filter by ownership (IMPORTANT PART)
+        // requestedBy is now an unwound object, so compare against ._id not the field itself
         {
             $match: {
                 $or: [
-                    {
-                        // You are the requester
-                        requestedBy: userId
-                    },
-                    {
-                        // You own the listing
-                        "listing.seller": userId
-                    }
+                    { "requestedBy._id": userId },
+                    { "listing.seller": userId }
                 ]
             }
         },
@@ -475,6 +479,9 @@ export async function getMyInspections(userId, filters = {}) {
                     year: "$listing.year",
                     price: "$listing.price",
                     status: "$listing.status",
+                    saleMode: "$listing.saleMode",
+                    seller: "$listing.seller",
+                    images: "$listing.images",
                     brand: {
                         _id: "$listing.brand._id",
                         name: "$listing.brand.name"

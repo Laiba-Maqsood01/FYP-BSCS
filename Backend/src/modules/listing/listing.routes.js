@@ -56,6 +56,13 @@ router.get(
   controller.getMyListingDetail
 );
 
+// PATCH /api/listings/:id/mark-sold (user marks own GENERAL listing as SOLD)
+router.patch(
+  "/:id/mark-sold",
+  authMiddleware,
+  controller.markListingSoldByUser
+);
+
 // GET /api/listings/:id (for public)
 router.get(
   "/:id",

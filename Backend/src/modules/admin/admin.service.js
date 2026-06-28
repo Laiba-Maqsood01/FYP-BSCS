@@ -1,8 +1,11 @@
+import mongoose from "mongoose";
 import userModel from "../../models/user.model.js";
+import { getSettings, updateSettings } from "../../models/siteSettings.model.js";
 import listingModel from "../listing/listing.model.js";
 import inspectionModel from "../inspection/inspection.model.js";
 import paymentModel from "../payment/payment.model.js";
 import featuredModel from "../featured/featured.model.js";
+import featuredPlanModel from "../featured/featured-plan.model.js";
 import favoriteModel from "../favorite/favorite.model.js"
 import sessionModel from "../../models/session.model.js"
 import { ApiError } from "../../utils/apiError.js";
@@ -11,6 +14,7 @@ import { ACCOUNT_STATUS } from "../../utils/constants.js";
 import { cleanupListingForDeletion } from "../../helpers/listing.cleanup.helper.js"
 import { processStripeRefund } from "../payment/payment.service.js";
 import { deleteImages, deleteFiles } from "../upload/upload.service.js";
+import { sendEmail } from "../../services/email.service.js";
 
 import listingDeletionRequestModel from "../managed-sale/listing-deletion-request.model.js";
 import commissionModel from "../managed-sale/commission.model.js";
@@ -19,7 +23,10 @@ import commissionModel from "../managed-sale/commission.model.js";
 
 // Dashboard
 export async function getDashboard() {
-  const [userStats, listingStats, inspectionStats, revenueStats, favoriteStats] = await Promise.all([
+  const now        = new Date();
+  const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+
+  const [userStats, listingStats, inspectionStats, revenueStats, weeklyRevenueStats, weeklyListingStats, favoriteStats] = await Promise.all([
     // User stats
     userModel.aggregate([
       {
@@ -132,6 +139,48 @@ export async function getDashboard() {
       },
     ]),
 
+    // Weekly revenue — last 7 days grouped by day
+    paymentModel.aggregate([
+      {
+        $match: {
+          status: "SUCCESS",
+          createdAt: { $gte: sevenDaysAgo },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            year:  { $year:  "$createdAt" },
+            month: { $month: "$createdAt" },
+            day:   { $dayOfMonth: "$createdAt" },
+          },
+          revenue: { $sum: "$amount" },
+        },
+      },
+      { $sort: { "_id.year": 1, "_id.month": 1, "_id.day": 1 } },
+    ]),
+
+    // Weekly listings — last 7 days grouped by day + saleMode
+    listingModel.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: sevenDaysAgo },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            year:     { $year:  "$createdAt" },
+            month:    { $month: "$createdAt" },
+            day:      { $dayOfMonth: "$createdAt" },
+            saleMode: "$saleMode",
+          },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { "_id.year": 1, "_id.month": 1, "_id.day": 1 } },
+    ]),
+
     // Favorite stats - users save as favorite
     favoriteModel.aggregate([
       {
@@ -181,6 +230,43 @@ export async function getDashboard() {
     {}
   );
 
+  // Build a day-label → revenue map for the past 7 days
+  const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const weeklyRevenueMap = {};
+  for (const entry of (weeklyRevenueStats ?? [])) {
+    const d   = new Date(entry._id.year, entry._id.month - 1, entry._id.day);
+    const key = DAY_NAMES[d.getDay()];
+    weeklyRevenueMap[key] = (weeklyRevenueMap[key] ?? 0) + entry.revenue;
+  }
+
+  // Build the 7-day labels starting from 7 days ago
+  const weeklyRevenue = [];
+  for (let i = 6; i >= 0; i--) {
+    const d   = new Date(now - i * 24 * 60 * 60 * 1000);
+    const key = DAY_NAMES[d.getDay()];
+    weeklyRevenue.push({ day: key, revenue: weeklyRevenueMap[key] ?? 0 });
+  }
+
+  // Build weekly listings map: key = "Mon" → { GENERAL: n, MANAGED: n }
+  const weeklyListingsMap = {};
+  for (const entry of (weeklyListingStats ?? [])) {
+    const d   = new Date(entry._id.year, entry._id.month - 1, entry._id.day);
+    const key = DAY_NAMES[d.getDay()];
+    if (!weeklyListingsMap[key]) weeklyListingsMap[key] = { GENERAL: 0, MANAGED: 0 };
+    weeklyListingsMap[key][entry._id.saleMode] = (weeklyListingsMap[key][entry._id.saleMode] ?? 0) + entry.count;
+  }
+
+  const weeklyListings = [];
+  for (let i = 6; i >= 0; i--) {
+    const d   = new Date(now - i * 24 * 60 * 60 * 1000);
+    const key = DAY_NAMES[d.getDay()];
+    weeklyListings.push({
+      day:     key,
+      General: weeklyListingsMap[key]?.GENERAL ?? 0,
+      Managed: weeklyListingsMap[key]?.MANAGED ?? 0,
+    });
+  }
+
   return {
     users: {
       total: count(userStats, "total"),
@@ -215,6 +301,8 @@ export async function getDashboard() {
       total: totalRevenue,
       byPurpose: revenueByPurpose,
     },
+    weeklyRevenue,
+    weeklyListings,
   };
 }
 
@@ -418,11 +506,9 @@ export async function deleteUser(userId) {
     { status: "REMOVED" }
   );
 
-  // Step 6 — anonymize and soft delete
+  // Step 6 — soft delete (keep credentials so they can't re-register with same email)
   user.isDeleted = true;
   user.deletedAt = new Date();
-  user.email = `deleted_${user._id}@deleted.com`;
-  user.username = `deleted_${user._id}`;
   user.accountStatus = ACCOUNT_STATUS.BLOCKED;
   user.blockedUntil = null;
   await user.save();
@@ -441,11 +527,13 @@ export async function getListings(query) {
     status,
     search,
     isFeatured,
+    seller,
   } = query;
 
   const matchStage = {};
 
-  if (status) matchStage.status = status;
+  if (status)    matchStage.status = status;
+  if (seller)    matchStage.seller = new mongoose.Types.ObjectId(seller);
   if (isFeatured !== undefined) matchStage.isFeatured = isFeatured === "true";
 
   // Search by title
@@ -503,6 +591,7 @@ export async function getListings(query) {
           price: 1,
           year: 1,
           status: 1,
+          saleMode: 1,
           isFeatured: 1,
           createdAt: 1,
           "seller._id": 1,
@@ -696,6 +785,7 @@ export async function getInspections(query) {
           inspectionAddress: 1,
           scheduledDate: 1,
           timeSlot: 1,
+          report: 1,
           createdAt: 1,
           "listing._id": 1,
           "listing.title": 1,
@@ -742,7 +832,7 @@ export async function assignInspector(inspectionId, assignedInspector) {
 }
 
 
-export async function updateInspectionStatus(inspectionId, status) {
+export async function updateInspectionStatus(inspectionId, status, cancelReason) {
   const inspection = await inspectionModel.findById(inspectionId);
 
   if (!inspection) throw new ApiError(404, "Inspection not found");
@@ -772,7 +862,26 @@ export async function updateInspectionStatus(inspectionId, status) {
     );
   }
 
+  // Capture the previous status before mutating, needed for refund eligibility check.
+  const previousStatus = inspection.status;
   inspection.status = status;
+
+  // When admin cancels a buyer inspection that was already paid for,
+  // mark it for refund so it appears in the ManageRefunds queue.
+  if (status === "CANCELLED") {
+    if (cancelReason) inspection.cancelReason = cancelReason;
+
+    const refundableStatuses = ["PENDING", "PENDING_COORDINATION", "SCHEDULED"];
+    if (
+      inspection.inspectionBy === "BUYER" &&
+      refundableStatuses.includes(previousStatus) &&
+      inspection.payment
+    ) {
+      inspection.refundRequired = true;
+      inspection.refundStatus = "PENDING";
+    }
+  }
+
   await inspection.save();
 
   return { message: "Inspection status updated successfully", inspection };
@@ -872,6 +981,7 @@ export async function getFeatured(query) {
           _id: 1,
           plan: 1,
           status: 1,
+          amount: 1,
           startDate: 1,
           endDate: 1,
           durationDays: 1,
@@ -1003,12 +1113,19 @@ export async function getRefunds(query) {
 
 // Approve refund
 export async function approveRefund(inspectionId) {
-  const inspection = await inspectionModel.findById(inspectionId);
+  const inspection = await inspectionModel
+    .findById(inspectionId)
+    .populate("requestedBy", "username email")
+    .populate("payment", "amount");
 
   if (!inspection) throw new ApiError(404, "Inspection not found");
   if (!inspection.refundRequired) throw new ApiError(400, "This inspection does not require a refund");
   if (inspection.refundStatus === "PROCESSED") throw new ApiError(400, "Refund already processed");
   if (inspection.refundStatus === "NOT_REQUIRED") throw new ApiError(400, "Refund not required");
+
+  // Get payment amount before processing
+  const payment = await paymentModel.findOne({ referenceId: inspectionId });
+  const amount = payment?.amount;
 
   // Payment logic stays in payment module
   await processStripeRefund(inspectionId);
@@ -1016,6 +1133,31 @@ export async function approveRefund(inspectionId) {
   // Only update DB after Stripe succeeds
   inspection.refundStatus = "PROCESSED";
   await inspection.save();
+
+  // Notify user by email
+  const user = inspection.requestedBy;
+  if (user?.email) {
+    const amountStr = amount ? `PKR ${amount.toLocaleString()}` : "your inspection fee";
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0">
+        <h2 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px">Refund Processed</h2>
+        <p style="font-size:14px;color:#64748b;margin:0 0 24px">Hi ${user.username}, your refund has been approved and processed.</p>
+
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 20px;margin-bottom:24px">
+          <p style="font-size:13px;color:#166534;margin:0 0 4px;font-weight:600">Amount refunded</p>
+          <p style="font-size:24px;font-weight:700;color:#15803d;margin:0">${amountStr}</p>
+        </div>
+
+        <p style="font-size:13px;color:#64748b;margin:0 0 8px">The refund has been sent back to your original payment method. Depending on your bank, it may take <strong>3–7 business days</strong> to appear in your account.</p>
+
+        <p style="font-size:13px;color:#64748b;margin:24px 0 0">If you have any questions, please contact our support team.</p>
+
+        <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0" />
+        <p style="font-size:12px;color:#94a3b8;margin:0">GearTrade.app — Pakistan's trusted car marketplace</p>
+      </div>
+    `;
+    await sendEmail(user.email, "Your Refund Has Been Processed — GearTrade", `Your refund of ${amountStr} has been processed.`, html);
+  }
 
   return { message: "Refund processed successfully", inspection };
 }
@@ -1033,7 +1175,7 @@ export async function getDeletionRequests(query) {
   const [requests, total] = await Promise.all([
     listingDeletionRequestModel
       .find(filter)
-      .populate("listing", "title saleMode status")
+      .populate({ path: "listing", select: "year saleMode status", populate: [{ path: "brand", select: "name" }, { path: "carModel", select: "name" }] })
       .populate("requestedBy", "username email")
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -1117,7 +1259,8 @@ export async function markListingSold(listingId, salePrice, adminId) {
   }
 
   // Calculate commission
-  const commissionRate = 0.009;
+  const settings = await getSettings();
+  const commissionRate = settings.commissionPercentage / 100;
   const commissionAmount = Math.round(salePrice * commissionRate * 100) / 100;
 
   // Set listing to PENDING_COMMISSION
@@ -1131,9 +1274,49 @@ export async function markListingSold(listingId, salePrice, adminId) {
     salePrice,
     commissionRate,
     commissionAmount,
-    expiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 mins
+    expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 mins (change back to 30 for production)
     initiatedBy: adminId,
   });
+
+  // Notify seller by email
+  const seller = await userModel.findById(listing.seller).select("username email");
+  if (seller?.email) {
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0">
+        <h2 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px">Your Car Has Been Sold!</h2>
+        <p style="font-size:14px;color:#64748b;margin:0 0 24px">Hi ${seller.username}, congratulations — GearTrade has successfully sold your managed listing.</p>
+
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;margin-bottom:20px">
+          <table style="width:100%;font-size:13px;border-collapse:collapse">
+            <tr>
+              <td style="color:#64748b;padding:4px 0">Sale price</td>
+              <td style="color:#0f172a;font-weight:600;text-align:right">PKR ${salePrice.toLocaleString()}</td>
+            </tr>
+            <tr>
+              <td style="color:#64748b;padding:4px 0">Commission (${settings.commissionPercentage}%)</td>
+              <td style="color:#0f172a;font-weight:600;text-align:right">PKR ${commissionAmount.toLocaleString()}</td>
+            </tr>
+          </table>
+        </div>
+
+        <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:14px 20px;margin-bottom:24px">
+          <p style="font-size:13px;color:#c2410c;margin:0;font-weight:600">⏰ Action required within 30 minutes</p>
+          <p style="font-size:13px;color:#9a3412;margin:6px 0 0">Please log in to your GearTrade dashboard and complete the commission payment to finalise the sale.</p>
+        </div>
+
+        <p style="font-size:13px;color:#64748b;margin:0">If you have any questions, contact our support team.</p>
+
+        <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0" />
+        <p style="font-size:12px;color:#94a3b8;margin:0">GearTrade.app — Pakistan's trusted car marketplace</p>
+      </div>
+    `;
+    await sendEmail(
+      seller.email,
+      "Your Car Has Been Sold — Commission Payment Required",
+      `Congratulations! Your listing has been sold for PKR ${salePrice.toLocaleString()}. Commission due: PKR ${commissionAmount.toLocaleString()}. Please pay within 30 minutes.`,
+      html
+    );
+  }
 
   return {
     message: "Listing marked as sold. Commission payment required from seller.",
@@ -1187,14 +1370,42 @@ export async function reinitiateCommission(commissionId) {
     throw new ApiError(400, "Cannot reinitiate a cancelled commission");
   }
 
-  // Reset expiry to 30 mins from now
-  commission.expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  // Reset expiry to 5 mins from now (change back to 30 for production)
+  commission.expiresAt = new Date(Date.now() + 5 * 60 * 1000);
   commission.status = "PENDING";
   await commission.save();
 
+  // Fire email without awaiting — don't block the response on mail delivery.
+  userModel.findById(commission.seller).select("username email").then(seller => {
+    if (!seller?.email) return;
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0">
+        <h2 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px">Commission Payment Reminder</h2>
+        <p style="font-size:14px;color:#64748b;margin:0 0 24px">Hi ${seller.username}, your commission payment window has been reset by an admin.</p>
+
+        <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:14px 20px;margin-bottom:20px">
+          <p style="font-size:13px;color:#c2410c;margin:0;font-weight:600">⏰ New 30-minute window started</p>
+          <p style="font-size:13px;color:#9a3412;margin:6px 0 0">Please log in to your GearTrade dashboard and complete the commission payment of <strong>PKR ${commission.commissionAmount.toLocaleString()}</strong> immediately.</p>
+        </div>
+
+        <p style="font-size:13px;color:#64748b;margin:0">If you have any questions, contact our support team.</p>
+
+        <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0" />
+        <p style="font-size:12px;color:#94a3b8;margin:0">GearTrade.app — Pakistan's trusted car marketplace</p>
+      </div>
+    `;
+    sendEmail(
+      seller.email,
+      "Commission Payment Reminder — GearTrade",
+      `Your commission payment of PKR ${commission.commissionAmount.toLocaleString()} is due. You have 30 minutes to pay.`,
+      html
+    ).catch(() => {});
+  }).catch(() => {});
+
   return {
     message: "Commission reinitiated. Seller has 30 minutes to pay.",
-    commission,
+    // Only return what the frontend needs to patch the row — not the full unpopulated doc.
+    commission: { _id: commission._id, status: commission.status, expiresAt: commission.expiresAt },
   };
 }
 
@@ -1264,4 +1475,77 @@ export async function scheduleInspection(inspectionId, { inspectionAddress, sche
   await inspection.save();
 
   return { message: "Inspection scheduled successfully", inspection };
+}
+// ── Featured Plans ────────────────────────────────────────────────────────────
+
+export async function getFeaturedPlans() {
+  return featuredPlanModel.find().sort({ amount: 1 });
+}
+
+export async function createFeaturedPlan({ name, label, amount, durationDays }) {
+  const existing = await featuredPlanModel.findOne({ name });
+  if (existing) throw new ApiError(409, `A plan named "${name}" already exists`);
+  return featuredPlanModel.create({ name, label, amount, durationDays });
+}
+
+export async function updateFeaturedPlan(planId, updates) {
+  const plan = await featuredPlanModel.findById(planId);
+  if (!plan) throw new ApiError(404, "Plan not found");
+  Object.assign(plan, updates);
+  await plan.save();
+  return plan;
+}
+
+
+// Site Settings
+export async function getSiteSettings() {
+  return getSettings();
+}
+
+export async function updateSiteSettings(fields) {
+  const allowed = {};
+  if (fields.companyPhone !== undefined) allowed.companyPhone = fields.companyPhone;
+  if (fields.commissionPercentage !== undefined) allowed.commissionPercentage = fields.commissionPercentage;
+  if (fields.inspectionFees !== undefined) {
+    const f = fields.inspectionFees;
+    if (f.standard     !== undefined) allowed["inspectionFees.standard"]     = f.standard;
+    if (f.managed      !== undefined) allowed["inspectionFees.managed"]      = f.managed;
+    if (f.premium      !== undefined) allowed["inspectionFees.premium"]      = f.premium;
+    if (f.reinspection !== undefined) allowed["inspectionFees.reinspection"] = f.reinspection;
+  }
+  return updateSettings(allowed);
+}
+
+// Inspection Slots
+export async function getInspectionSlots() {
+  const settings = await getSettings();
+  return settings.inspectionSlots;
+}
+
+export async function addInspectionSlot({ label, availableDays }) {
+  const settings = await getSettings();
+  settings.inspectionSlots.push({
+    label,
+    availableDays: availableDays ?? [0, 1, 2, 3, 4, 5, 6],
+    isActive: true,
+    isDefault: false,
+  });
+  await settings.save();
+  return settings.inspectionSlots;
+}
+
+export async function updateInspectionSlot(slotId, { label, availableDays, isActive }) {
+  const settings = await getSettings();
+  const slot = settings.inspectionSlots.id(slotId);
+  if (!slot) throw new ApiError(404, "Slot not found");
+
+  if (label !== undefined) {
+    if (slot.isDefault) throw new ApiError(400, "Cannot change the label of a default slot");
+    slot.label = label;
+  }
+  if (availableDays !== undefined) slot.availableDays = availableDays;
+  if (isActive !== undefined) slot.isActive = isActive;
+
+  await settings.save();
+  return settings.inspectionSlots;
 }

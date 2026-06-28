@@ -39,8 +39,7 @@ function validate(form) {
   return errors;
 }
 
-const inputCls =
-  "w-full bg-brand-surface border border-black/10 rounded-lg px-3 py-2.5 text-brand-dark2 text-sm outline-none focus:border-[#374151] focus:ring-2 focus:ring-[#37415114] transition placeholder:text-gray-400";
+const inputCls = "w-full bg-brand-surface border border-black/10 rounded-lg px-3 py-2.5 text-brand-dark2 text-sm outline-none focus:border-[#374151] focus:ring-2 focus:ring-[#37415114] transition placeholder:text-gray-400";
 
 export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
@@ -96,7 +95,7 @@ export default function Register() {
 
   return (
     <div className="min-h-[90vh] flex items-center justify-center px-4 py-10">
-      <div className="w-full max-w-[440px] bg-white rounded-2xl shadow-xl p-8">
+      <div className="w-full max-w-110 bg-white rounded-2xl shadow-xl p-8">
         <h3 className="text-center font-bold text-xl text-brand-dark mb-1">Create Account</h3>
         <p className="text-center text-brand-muted text-sm mb-6">
           Join the vehicle marketplace today
@@ -215,7 +214,7 @@ export default function Register() {
                 name="agreeToTerms"
                 checked={form.agreeToTerms}
                 onChange={handleChange}
-                className="mt-0.5 w-4 h-4 accent-brand-orange flex-shrink-0 cursor-pointer"
+                className="mt-0.5 w-4 h-4 accent-brand-orange shrink-0 cursor-pointer"
               />
               <span>
                 I agree to the{" "}

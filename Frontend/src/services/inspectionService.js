@@ -1,8 +1,9 @@
 import api from "./api";
 
-// Fetch booked slots for a given date (YYYY-MM-DD)
+// Fetch active slots + booked slots for a given date (YYYY-MM-DD)
+// Returns { slots: [{_id, label, ...}], bookedSlots: [label, ...] }
 export const getAvailableSlots = (date) =>
-  api.get(`/inspection/available-slots?date=${date}`).then(r => r.data.data.bookedSlots);
+  api.get(`/inspection/available-slots?date=${date}`).then(r => r.data.data);
 
 // Onboarding inspection — managed listing seller (listing is PENDING)
 export const requestManagedInspection = (listingId, body) =>

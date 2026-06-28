@@ -7,6 +7,9 @@ import { requestFeaturedSchema } from "./featured.validation.js";
 
 const router = Router();
 
+// GET /api/featured/plans  — public, returns active plans only
+router.get("/plans", controller.getActivePlans);
+
 // POST /api/featured/request
 router.post(
   "/request",
@@ -20,6 +23,13 @@ router.post(
   "/:featureId/payment",
   authMiddleware,
   controller.createFeaturedPayment
+);
+
+// GET /api/featured/listing/:listingId
+router.get(
+  "/listing/:listingId",
+  authMiddleware,
+  controller.getFeaturedByListing
 );
 
 export default router;

@@ -1,57 +1,81 @@
-import { useEffect, useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { Eye, EyeOff, Mail, Lock, AlertTriangle, Check, X, Trash2, Camera } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 import { showError, showSuccess } from "../../utils/toast";
 import api from "../../services/api";
+import { deleteAccount } from "../../services/authService";
+import axios from "axios";
 
-const inputCls =
-  "w-full bg-brand-surface border border-black/10 rounded-lg px-3 py-2.5 text-brand-dark2 text-sm outline-none focus:border-[#374151] focus:ring-2 focus:ring-[#37415114] transition placeholder:text-gray-400";
+const inputCls = "w-full bg-brand-surface border border-black/10 rounded-lg px-3 py-2.5 text-brand-dark2 text-sm outline-none focus:border-[#374151] focus:ring-2 focus:ring-[#37415114] transition placeholder:text-gray-400";
 
-function Section({ title, children }) {
+function PasswordField({ label, value, onChange, placeholder, show, onToggle }) {
   return (
-    <div className="border border-gray-100 rounded-xl p-5 mb-5 bg-white">
-      <h5 className="font-semibold text-brand-dark mb-4">{title}</h5>
-      {children}
+    <div>
+      <label className="block text-[11px] font-semibold text-brand-muted uppercase tracking-wide mb-1.5">{label}</label>
+      <div className="relative">
+        <input
+          type={show ? "text" : "password"}
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          className={inputCls + " pr-10"}
+        />
+        <button
+          type="button"
+          onClick={onToggle}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+        >
+          {show ? <EyeOff size={16} /> : <Eye size={16} />}
+        </button>
+      </div>
     </div>
   );
 }
 
-function PasswordField({ value, onChange, placeholder, show, onToggle }) {
+function SectionCard({ icon: Icon, iconBg, iconColor, title, subtitle, danger, children }) {
   return (
-    <div className="relative">
-      <input
-        type={show ? "text" : "password"}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        className={inputCls + " pr-10"}
-      />
-      <button
-        type="button"
-        onClick={onToggle}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+    <div
+      className="bg-white rounded-xl overflow-hidden mb-3.5"
+      style={{ border: danger ? "1px solid #fecaca" : "1px solid rgba(0,0,0,0.07)" }}
+    >
+      <div
+        className="flex items-center gap-3 px-5 py-4"
+        style={{ borderBottom: danger ? "1px solid #fecaca" : "1px solid rgba(0,0,0,0.06)" }}
       >
-        {show ? <EyeOff size={18} /> : <Eye size={18} />}
-      </button>
+        <div
+          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+          style={{ background: iconBg }}
+        >
+          <Icon size={15} style={{ color: iconColor }} />
+        </div>
+        <div>
+          <p className="text-sm font-semibold" style={{ color: danger ? "#dc2626" : "#0f172a" }}>{title}</p>
+          <p className="text-[11px] text-brand-muted mt-0.5">{subtitle}</p>
+        </div>
+      </div>
+      <div className="px-5 py-4">{children}</div>
     </div>
   );
 }
 
 export default function Profile() {
   const navigate = useNavigate();
+  const { setUser: setAuthUser } = useAuth();
   const [user, setUser] = useState(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef(null);
 
   const [newEmail, setNewEmail] = useState("");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
   const [requesting, setRequesting] = useState(false);
+  const [showEmailPassword, setShowEmailPassword] = useState(false);
 
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
-
   const [showOld, setShowOld] = useState(false);
   const [showNew, setShowNew] = useState(false);
-  const [showEmailPassword, setShowEmailPassword] = useState(false);
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -60,7 +84,88 @@ export default function Profile() {
     api.get("/auth/get-me").then((res) => setUser(res.data.data));
   }, []);
 
-  if (!user) return <p className="p-4">Loading...</p>;
+  if (!user) return (
+    <div className="max-w-xl px-6 py-8 animate-pulse">
+      <div className="mb-6">
+        <div className="h-6 w-44 bg-gray-200 rounded mb-2" />
+        <div className="h-4 w-64 bg-gray-100 rounded" />
+      </div>
+      {/* Profile card skeleton */}
+      <div className="bg-white rounded-xl mb-3.5 overflow-hidden" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
+        <div className="flex items-center gap-4 px-5 py-5" style={{ borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
+          <div className="w-14 h-14 rounded-full bg-gray-200 shrink-0" />
+          <div className="flex-1">
+            <div className="h-4 w-32 bg-gray-200 rounded mb-2" />
+            <div className="h-3 w-48 bg-gray-100 rounded mb-2" />
+            <div className="flex gap-2">
+              <div className="h-5 w-16 bg-gray-100 rounded-full" />
+              <div className="h-5 w-12 bg-gray-100 rounded-full" />
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-4 px-5 py-5">
+          {[...Array(4)].map((_, i) => (
+            <div key={i}>
+              <div className="h-3 w-16 bg-gray-100 rounded mb-1.5" />
+              <div className="h-4 w-28 bg-gray-200 rounded" />
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* Section card skeletons */}
+      {[...Array(3)].map((_, i) => (
+        <div key={i} className="bg-white rounded-xl mb-3.5 overflow-hidden" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
+          <div className="flex items-center gap-3 px-5 py-4" style={{ borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
+            <div className="w-8 h-8 rounded-lg bg-gray-200 shrink-0" />
+            <div className="flex-1">
+              <div className="h-4 w-36 bg-gray-200 rounded mb-1.5" />
+              <div className="h-3 w-52 bg-gray-100 rounded" />
+            </div>
+          </div>
+          <div className="px-5 py-4 space-y-3">
+            <div className="h-10 bg-gray-100 rounded-lg" />
+            <div className="h-10 bg-gray-100 rounded-lg" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const initials = user.username?.slice(0, 2).toUpperCase() || "??";
+
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAvatar(true);
+    try {
+      const sigRes = await api.post("/upload/sign", { folder: "avatars", count: 1, resource_type: "image" });
+      const sig = sigRes.data.data.signatures[0];
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("api_key", sig.api_key);
+      formData.append("timestamp", sig.timestamp);
+      formData.append("signature", sig.signature);
+      formData.append("folder", sig.folder);
+      const upload = await axios.post(
+        `https://api.cloudinary.com/v1_1/${sig.cloud_name}/image/upload`,
+        formData
+      );
+      const avatarUrl = upload.data.secure_url;
+      await api.patch("/auth/avatar", { avatarUrl });
+      setUser(prev => ({ ...prev, avatar: avatarUrl }));
+      setAuthUser(prev => prev ? { ...prev, avatar: avatarUrl } : prev);
+      showSuccess("Profile photo updated");
+    } catch {
+      showError("Failed to upload photo. Try again.");
+    } finally {
+      setUploadingAvatar(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = "";
+    }
+  };
+
+  const memberSince = user.createdAt
+    ? new Date(user.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })
+    : "—";
 
   const handleRequestEmailChange = async () => {
     try {
@@ -69,7 +174,7 @@ export default function Profile() {
       showSuccess("OTP sent to your new email");
       setUser((prev) => ({ ...prev, pendingEmail: newEmail }));
     } catch {
-      showError("Error");
+      showError("Failed to send OTP. Check your password and try again.");
     } finally {
       setRequesting(false);
     }
@@ -79,10 +184,10 @@ export default function Profile() {
     try {
       const res = await api.post("/auth/confirm-email-change", { otp });
       setUser((prev) => ({ ...prev, email: res.data.data.email, pendingEmail: null }));
-      showSuccess("Email updated successfully");
+      showSuccess("Email updated");
       setNewEmail(""); setPassword(""); setOtp("");
     } catch {
-      showError("Error");
+      showError("Invalid or expired OTP.");
     }
   };
 
@@ -92,180 +197,266 @@ export default function Profile() {
       setUser((prev) => ({ ...prev, pendingEmail: null }));
       showSuccess("Email change cancelled");
     } catch {
-      showError("Error");
+      showError("Failed to cancel. Try again.");
     }
   };
 
   const handleChangePassword = async () => {
     try {
       await api.post("/auth/change-password", { oldPassword, newPassword });
-      showSuccess("Password changed. Please login again.");
+      showSuccess("Password updated. Please log in again.");
       setTimeout(() => navigate("/login"), 2000);
     } catch {
-      showError("Error");
+      showError("Incorrect current password.");
     }
   };
 
   const confirmDeleteAccount = async () => {
     try {
       setDeleting(true);
-      await api.delete("/auth/delete-account");
-      showSuccess("Account deleted successfully");
+      await deleteAccount();
+      showSuccess("Account deleted");
       navigate("/login");
-    } catch {
-      showError("Error deleting account");
+    } catch (e) {
+      showError(e?.response?.data?.message ?? "Failed to delete account.");
     } finally {
       setDeleting(false);
       setShowDeleteModal(false);
     }
   };
 
-  const infoFields = [
-    { label: "Username", value: user.username },
-    { label: "Email", value: user.email },
-    { label: "Mobile Number", value: user.mobileNumber || "—" },
-    { label: "Role", value: user.role, capitalize: true },
-    { label: "Account Status", value: user.accountStatus },
-    { label: "Email Verified", value: user.verified ? "Yes" : "No" },
-  ];
-
   return (
-    <div className="max-w-3xl mx-auto px-6 py-8">
-      {/* Header */}
+    <div className="max-w-xl px-6 py-8">
+
+      {/* Page header */}
       <div className="mb-6">
-        <h3 className="text-2xl font-bold text-brand-dark">Account Settings</h3>
-        <p className="text-brand-muted text-sm mt-1">Manage your account details and security</p>
+        <h1 className="text-xl font-bold text-brand-dark">Account settings</h1>
+        <p className="text-sm text-brand-muted mt-0.5">Manage your profile and security preferences</p>
       </div>
 
-      {/* Profile Info */}
-      <Section title="Profile">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {infoFields.map(({ label, value, capitalize }) => (
+      {/* Profile card */}
+      <div className="bg-white rounded-xl mb-3.5 overflow-hidden" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
+        {/* Avatar + name row */}
+        <div className="flex items-center gap-4 px-5 py-5" style={{ borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
+          <div className="relative shrink-0">
+            {user.avatar ? (
+              <img
+                src={user.avatar}
+                alt={user.username}
+                className="w-14 h-14 rounded-full object-cover"
+                style={{ border: "2px solid rgba(234,109,0,0.15)" }}
+              />
+            ) : (
+              <div
+                className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold"
+                style={{ background: "#fff7ed", color: "#ea6d00", border: "2px solid rgba(234,109,0,0.15)" }}
+              >
+                {initials}
+              </div>
+            )}
+            <button
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={uploadingAvatar}
+              className="absolute bottom-0 right-0 w-5 h-5 rounded-full flex items-center justify-center text-white transition hover:opacity-80 disabled:opacity-50"
+              style={{ background: "#ea6d00" }}
+              title="Change photo"
+            >
+              {uploadingAvatar
+                ? <div className="w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin" />
+                : <Camera size={10} />
+              }
+            </button>
+            <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+          </div>
+          <div>
+            <p className="text-base font-bold text-brand-dark">{user.username}</p>
+            <p className="text-xs text-brand-muted mt-0.5">{user.email}</p>
+            <div className="flex gap-2 mt-2 flex-wrap">
+              {user.verified && (
+                <span className="flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#dcfce7", color: "#16a34a" }}>
+                  <Check size={10} /> Verified
+                </span>
+              )}
+              <span className="flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full capitalize" style={{ background: "#fff7ed", color: "#ea6d00" }}>
+                {user.role?.toLowerCase()}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Info grid */}
+        <div className="grid grid-cols-2 px-5 py-4 gap-y-4">
+          {[
+            { label: "Username",       value: user.username },
+            { label: "Mobile number",  value: user.mobileNumber || "—" },
+            { label: "Account status", value: user.accountStatus, color: "#16a34a" },
+            { label: "Member since",   value: memberSince },
+          ].map(({ label, value, color }) => (
             <div key={label}>
-              <label className="text-xs text-gray-400 block mb-0.5">{label}</label>
-              <p className={`font-medium text-brand-dark2 break-words${capitalize ? " capitalize" : ""}`}>
-                {value}
-              </p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-muted mb-1">{label}</p>
+              <p className="text-sm font-semibold text-brand-dark" style={color ? { color } : {}}>{value}</p>
             </div>
           ))}
         </div>
-      </Section>
+      </div>
 
       {/* Change Email */}
-      <Section title="Change Email">
-        {!user.pendingEmail ? (
+      <SectionCard
+        icon={Mail}
+        iconBg="#eff6ff"
+        iconColor="#3b82f6"
+        title="Email address"
+        subtitle="Change the email linked to your account"
+      >
+        {user.pendingEmail ? (
           <div className="space-y-3">
-            <input
-              className={inputCls}
-              placeholder="New Email"
-              value={newEmail}
-              onChange={(e) => setNewEmail(e.target.value)}
-            />
-            <PasswordField
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Confirm Password"
-              show={showEmailPassword}
-              onToggle={() => setShowEmailPassword(!showEmailPassword)}
-            />
-            <button
-              onClick={handleRequestEmailChange}
-              disabled={requesting}
-              className="bg-brand-btn text-white text-sm font-semibold px-5 py-2.5 rounded-lg hover:bg-brand-dark2 transition disabled:opacity-60"
-            >
-              {requesting ? "Sending..." : "Request Change"}
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <input
-              className={inputCls}
-              placeholder="Enter OTP sent to new email"
-              value={otp}
-              onChange={(e) => setOtp(e.target.value)}
-            />
-            <div className="flex gap-2">
+            {/* Pending banner */}
+            <div className="flex items-start gap-2.5 rounded-lg px-3.5 py-3" style={{ background: "#fefce8", border: "1px solid #fde68a" }}>
+              <span className="text-[11px] mt-0.5" style={{ color: "#d97706" }}>⏳</span>
+              <p className="text-xs leading-relaxed" style={{ color: "#92400e" }}>
+                A verification code was sent to <strong>{user.pendingEmail}</strong>. Enter it below to confirm, or cancel to keep your current email.
+              </p>
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-brand-muted uppercase tracking-wide mb-1.5">Verification code</label>
+              <input className={inputCls} placeholder="Enter OTP" value={otp} onChange={(e) => setOtp(e.target.value)} />
+            </div>
+            <div className="flex gap-2 pt-1">
               <button
                 onClick={handleConfirmEmail}
-                className="bg-brand-btn text-white text-sm font-semibold px-5 py-2.5 rounded-lg hover:bg-brand-dark2 transition"
-              >
-                Verify
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white hover:opacity-90 transition"
+                style={{ background: "#111827" }}>
+                <Check size={13} /> Verify
               </button>
               <button
                 onClick={handleCancelEmail}
-                className="border border-red-300 text-red-600 text-sm font-semibold px-5 py-2.5 rounded-lg hover:bg-red-50 transition"
-              >
-                Cancel
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-red-50 transition"
+                style={{ border: "1px solid rgba(220,38,38,0.25)", color: "#dc2626" }}>
+                <X size={13} /> Cancel change
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-[11px] font-semibold text-brand-muted uppercase tracking-wide mb-1.5">New email address</label>
+              <input className={inputCls} placeholder="newemail@example.com" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
+            </div>
+            <PasswordField
+              label="Confirm password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Your current password"
+              show={showEmailPassword}
+              onToggle={() => setShowEmailPassword(!showEmailPassword)}
+            />
+            <div className="pt-1">
+              <button
+                onClick={handleRequestEmailChange}
+                disabled={requesting}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white hover:opacity-90 transition disabled:opacity-60"
+                style={{ background: "#111827" }}>
+                <Mail size={13} /> {requesting ? "Sending…" : "Request change"}
               </button>
             </div>
           </div>
         )}
-      </Section>
+      </SectionCard>
 
       {/* Change Password */}
-      <Section title="Password">
+      <SectionCard
+        icon={Lock}
+        iconBg="#f5f3ff"
+        iconColor="#8b5cf6"
+        title="Password"
+        subtitle="Update your account password"
+      >
         <div className="space-y-3">
           <PasswordField
+            label="Current password"
             value={oldPassword}
             onChange={(e) => setOldPassword(e.target.value)}
-            placeholder="Old Password"
+            placeholder="••••••••"
             show={showOld}
             onToggle={() => setShowOld(!showOld)}
           />
           <PasswordField
+            label="New password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            placeholder="New Password"
+            placeholder="••••••••"
             show={showNew}
             onToggle={() => setShowNew(!showNew)}
           />
-          <button
-            onClick={handleChangePassword}
-            className="bg-brand-btn text-white text-sm font-semibold px-5 py-2.5 rounded-lg hover:bg-brand-dark2 transition"
-          >
-            Update Password
-          </button>
+          <div className="pt-1">
+            <button
+              onClick={handleChangePassword}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white hover:opacity-90 transition"
+              style={{ background: "#111827" }}>
+              <Lock size={13} /> Update password
+            </button>
+          </div>
         </div>
-      </Section>
+      </SectionCard>
 
       {/* Danger Zone */}
-      <div className="border border-red-200 rounded-xl p-5 bg-white">
-        <h5 className="font-semibold text-brand-dark mb-4">Danger Zone</h5>
-        <button
-          onClick={() => setShowDeleteModal(true)}
-          className="bg-red-600 text-white text-sm font-semibold px-5 py-2.5 rounded-lg hover:bg-red-700 transition"
-        >
-          Delete Account
-        </button>
-      </div>
+      <SectionCard
+        icon={AlertTriangle}
+        iconBg="#fee2e2"
+        iconColor="#dc2626"
+        title="Danger zone"
+        subtitle="Irreversible account actions"
+        danger
+      >
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-brand-dark mb-1">Delete account</p>
+            <p className="text-xs text-brand-muted leading-relaxed">
+              Permanently removes your account, listings, and all associated data. This cannot be undone.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowDeleteModal(true)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white hover:opacity-90 transition shrink-0"
+            style={{ background: "#dc2626" }}>
+            <Trash2 size={13} /> Delete
+          </button>
+        </div>
+      </SectionCard>
 
       {/* Delete Confirm Modal */}
       {showDeleteModal && (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
-          style={{ background: "rgba(15,23,42,0.45)", backdropFilter: "blur(3px)" }}
+          className="fixed inset-0 z-9999 flex items-center justify-center p-4"
+          style={{ background: "rgba(15,23,42,0.45)" }}
         >
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
-            <h5 className="font-bold text-lg text-brand-dark mb-3">Delete Account</h5>
-            <p className="text-brand-muted text-sm mb-6">
-              This action is <strong>permanent</strong> and cannot be undone.
-              Are you sure you want to delete your account?
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                disabled={deleting}
-                className="px-4 py-2 text-sm font-semibold border border-black/15 rounded-lg hover:bg-gray-50 transition disabled:opacity-60"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmDeleteAccount}
-                disabled={deleting}
-                className="px-4 py-2 text-sm font-semibold bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-60"
-              >
-                {deleting ? "Deleting..." : "Delete Account"}
-              </button>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
+            <div className="flex items-center gap-3 px-5 py-4" style={{ borderBottom: "1px solid rgba(0,0,0,0.07)" }}>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: "#fee2e2" }}>
+                <Trash2 size={15} style={{ color: "#dc2626" }} />
+              </div>
+              <p className="font-semibold text-brand-dark">Delete account</p>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-sm text-brand-muted leading-relaxed mb-5">
+                This action is <strong className="text-brand-dark">permanent</strong> and cannot be undone. All your listings, inspections, and data will be removed.
+              </p>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  disabled={deleting}
+                  className="px-4 py-2 text-sm font-semibold rounded-lg hover:bg-gray-50 transition disabled:opacity-60"
+                  style={{ border: "1px solid rgba(0,0,0,0.1)", color: "#374151" }}>
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDeleteAccount}
+                  disabled={deleting}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white rounded-lg hover:opacity-90 transition disabled:opacity-60"
+                  style={{ background: "#dc2626" }}>
+                  <Trash2 size={13} /> {deleting ? "Deleting…" : "Delete account"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

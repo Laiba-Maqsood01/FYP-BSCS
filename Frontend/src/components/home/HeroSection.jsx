@@ -31,12 +31,12 @@ function CityDropdown({ cities, value, onChange }) {
         <ChevronDown size={15} className="text-gray-400 shrink-0" />
       </button>
       {open && (
-        <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white border border-black/10 rounded-xl shadow-[0_10px_30px_rgba(15,23,42,0.1)] overflow-y-auto max-h-56 z-[500]">
+        <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white border border-black/10 rounded-xl shadow-[0_10px_30px_rgba(15,23,42,0.1)] overflow-y-auto max-h-56 z-500">
           <button
             type="button"
             onClick={() => { onChange(""); setOpen(false); }}
             className={`block w-full text-left px-4 py-2.5 text-[0.88rem] cursor-pointer transition ${
-              value === "" ? "bg-[#f1f5f9] font-semibold text-brand-dark" : "text-[#374151] hover:bg-[#f8fafc]"
+              value === "" ? "bg-[#f1f5f9] font-semibold text-brand-dark" : "text-[#374151] hover:bg-brand-surface"
             }`}
           >
             All Cities
@@ -47,7 +47,7 @@ function CityDropdown({ cities, value, onChange }) {
               type="button"
               onClick={() => { onChange(c._id); setOpen(false); }}
               className={`block w-full text-left px-4 py-2.5 text-[0.88rem] cursor-pointer transition ${
-                value === c._id ? "bg-[#f1f5f9] font-semibold text-brand-dark" : "text-[#374151] hover:bg-[#f8fafc]"
+                value === c._id ? "bg-[#f1f5f9] font-semibold text-brand-dark" : "text-[#374151] hover:bg-brand-surface"
               }`}
             >
               {c.name}
@@ -105,7 +105,7 @@ export default function HeroSection() {
             <span className="italic text-brand-btn">Used Car</span>
           </h1>
           <p
-            className="text-[#4b5563] max-w-[38rem] mb-7"
+            className="text-[#4b5563] max-w-152 mb-7"
             style={{ fontSize: "clamp(0.95rem, 1.5vw, 1.1rem)", lineHeight: 1.6 }}
           >
             Pakistan's trusted platform for buying and selling used cars with verified listings
@@ -141,7 +141,7 @@ export default function HeroSection() {
           }}
         >
           {/* Keyword */}
-          <div className="flex flex-col flex-[2] min-w-0">
+          <div className="flex flex-col flex-2 min-w-0">
             <label className={fieldLabel}>CAR MAKE OR MODEL</label>
             <div className="relative flex items-center">
               <Search size={15} className="absolute left-2.5 text-gray-400 pointer-events-none" />
@@ -157,7 +157,7 @@ export default function HeroSection() {
           </div>
 
           {/* Divider — desktop only */}
-          <div className="hidden lg:block w-px h-12 bg-black/10 mx-4 flex-shrink-0 self-end mb-0.5" />
+          <div className="hidden lg:block w-px h-12 bg-black/10 mx-4 shrink-0 self-end mb-0.5" />
 
           {/* City */}
           <div className="flex flex-col flex-1 min-w-0">
@@ -166,7 +166,7 @@ export default function HeroSection() {
           </div>
 
           {/* Divider — desktop only */}
-          <div className="hidden lg:block w-px h-12 bg-black/10 mx-4 flex-shrink-0 self-end mb-0.5" />
+          <div className="hidden lg:block w-px h-12 bg-black/10 mx-4 shrink-0 self-end mb-0.5" />
 
           {/* Price Range */}
           <div className="flex flex-col flex-1 min-w-0">
@@ -209,7 +209,7 @@ export default function HeroSection() {
           {/* Search button */}
           <button
             onClick={handleSearch}
-            className="lg:ml-4 lg:self-end inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-brand-btn text-white rounded-lg font-semibold text-[0.9rem] whitespace-nowrap flex-shrink-0 hover:bg-brand-dark2 hover:-translate-y-px hover:shadow-lg transition-all"
+            className="lg:ml-4 lg:self-end inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-brand-btn text-white rounded-lg font-semibold text-[0.9rem] whitespace-nowrap shrink-0 hover:bg-brand-dark2 hover:-translate-y-px hover:shadow-lg transition-all"
             style={{ borderRadius: "0.5rem" }}
           >
             <Search size={16} /> Search

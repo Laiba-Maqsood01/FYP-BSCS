@@ -8,9 +8,5 @@ export const requestFeaturedSchema = z.object({
       "Invalid listing id"
     ),
 
-  plan: z.enum([
-    "BASIC",
-    "PREMIUM",
-    "TOP"
-  ])
+  plan: z.string().min(1, "Plan is required").toUpperCase()
 });

@@ -594,12 +594,12 @@ function CarInfoStep({ saleMode, cities, brands, bodyTypes, onBack, onContinue }
             {errors.engineType && <p className="mt-1 text-xs text-red-500">{errors.engineType}</p>}
           </FormField>
 
-          {/* Engine Capacity */}
-          <FormField label="Engine Capacity (CC)" required>
+          {/* Engine / Battery Capacity */}
+          <FormField label={form.engineType === "electric" ? "Battery Capacity * (kWh)" : "Engine Capacity (CC)"} required>
             <input
               type="number"
               className={inputCls}
-              placeholder="e.g. 1300"
+              placeholder={form.engineType === "electric" ? "e.g. 75" : "e.g. 1300"}
               value={form.engineCapacity}
               onChange={e => set("engineCapacity", e.target.value)}
               min={1}
