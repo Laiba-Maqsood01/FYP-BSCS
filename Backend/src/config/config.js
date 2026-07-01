@@ -71,6 +71,17 @@ if (!process.env.CLOUDINARY_API_SECRET) {
     throw new Error("CLOUDINARY_API_SECRET is not defined in environment variables.");
 }
 
+// Twilio Verify (SMS OTP for seller contact reveal)
+// if (!process.env.TWILIO_ACCOUNT_SID) {
+//     throw new Error("TWILIO_ACCOUNT_SID is not defined in environment variables.");
+// }
+// if (!process.env.TWILIO_AUTH_TOKEN) {
+//     throw new Error("TWILIO_AUTH_TOKEN is not defined in environment variables.");
+// }
+// if (!process.env.TWILIO_VERIFY_SERVICE_SID) {
+//     throw new Error("TWILIO_VERIFY_SERVICE_SID is not defined in environment variables.");
+// }
+
 
 const config = {
     MONGO_URI: process.env.MONGO_URI,

@@ -12,6 +12,7 @@ import { createStripeCheckoutSession } from "../payment/payment.service.js";
 import config from "../../config/config.js";
 
 import crypto from "crypto";
+import InspectionReport from "../inspection-report/inspectionReport.model.js";
 
 export async function requestInspection(listingId, userId, payload = {}) {
     const { inspectionAddress, scheduledDate, timeSlot } = payload;
@@ -319,7 +320,17 @@ export async function getListingInspectionStatus(listingId) {
         .sort({ createdAt: -1 })
         .select("status type inspectionBy report _id");
 
-    return inspection; // null if none
+    if (!inspection) return null;
+
+    // Attach verifyToken from the published inspection report (if any)
+    const report = await InspectionReport
+        .findOne({ inspection: inspection._id, status: "PUBLISHED" })
+        .select("verifyToken")
+        .lean();
+
+    const result = inspection.toObject();
+    result.reportToken = report?.verifyToken ?? null;
+    return result;
 }
 
 export async function getAvailableSlots(dateStr) {

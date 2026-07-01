@@ -46,7 +46,10 @@ export default function Login() {
     setLoading(true);
     try {
       const result = await login(form, navigate);
-      if (!result.success) { showError(result.message || "Invalid credentials"); return; }
+      if (!result.success) {
+        if (!result.unverified) showError(result.message || "Invalid credentials");
+        return;
+      }
       showSuccess("You are logged in!");
     } catch {
       showError("Login failed");
