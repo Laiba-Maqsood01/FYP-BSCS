@@ -22,6 +22,7 @@ import { ApiResponse } from "./utils/apiResponse.js";
 import { startExpiryJobs  } from "./jobs/featured.expiry.job.js";
 
 import managedSaleRouter from "./modules/managed-sale/managed-sale.routes.js";
+import reportRouter from "./modules/inspection-report/inspectionReport.routes.js";
 
 import uploadRouter from "./modules/upload/upload.routes.js";
 
@@ -101,6 +102,9 @@ app.get("/api/settings", asyncHandler(async (_req, res) => {
   const settings = await getSettings();
   res.status(200).json(new ApiResponse(200, "Settings", { companyPhone: settings.companyPhone }));
 }));
+
+// Public inspection reports (verify by token)
+app.use("/api/reports", reportRouter);
 
 // use global error handler
 app.use(errorHandler);

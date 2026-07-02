@@ -66,6 +66,14 @@ export const cancelCommission     = (id, reason) => api.patch(`/admin/commission
 export const getSiteSettings    = ()       => api.get('/admin/settings').then(r => r.data.data);
 export const updateSiteSettings = (fields) => api.patch('/admin/settings', fields).then(r => r.data.data);
 
+// ── Inspection Report Builder ─────────────────────────────────────────────────
+export const initInspectionReport       = (inspectionId)         => api.post(`/admin/inspections/${inspectionId}/report`).then(r => r.data.data);
+export const getInspectionReportStatus  = (inspectionId)         => api.get(`/admin/inspections/${inspectionId}/report`).then(r => r.data.data);
+export const getChecklistMeta           = ()                     => api.get(`/admin/inspection-reports/meta`).then(r => r.data.data);
+export const getInspectionReport        = (reportId)             => api.get(`/admin/inspection-reports/${reportId}`).then(r => r.data.data);
+export const updateInspectionReport     = (reportId, data)       => api.patch(`/admin/inspection-reports/${reportId}`, data).then(r => r.data.data);
+export const publishInspectionReport    = (reportId)             => api.post(`/admin/inspection-reports/${reportId}/publish`).then(r => r.data.data);
+
 // ── Inspection Slots ──────────────────────────────────────────────────────────
 export const getInspectionSlots   = ()              => api.get('/admin/settings/slots').then(r => r.data.data);
 export const addInspectionSlot    = (data)          => api.post('/admin/settings/slots', data).then(r => r.data.data);

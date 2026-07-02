@@ -845,9 +845,12 @@ export async function updateInspectionStatus(inspectionId, status, cancelReason)
     throw new ApiError(400, "Cannot update status of a completed inspection");
   }
 
+  if (inspection.status === "PENDING") {
+    throw new ApiError(400, "Cannot update status of an unpaid inspection");
+  }
+
   // Guard valid transitions only
   const validTransitions = {
-    PENDING: ["PENDING_COORDINATION", "SCHEDULED", "CANCELLED"],
     PENDING_COORDINATION: ["SCHEDULED", "CANCELLED"],
     SCHEDULED: ["IN_PROGRESS", "CANCELLED"],
     IN_PROGRESS: ["COMPLETED"],

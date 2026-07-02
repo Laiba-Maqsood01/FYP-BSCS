@@ -463,7 +463,7 @@ function SaleModeStep({ selected, onChange, onContinue }) {
 
 // ── Step 1 – Car Information ──────────────────────────────────────────────────
 
-function CarInfoStep({ saleMode, cities, brands, bodyTypes, onBack, onContinue }) {
+function CarInfoStep({ saleMode, cities, provinces, brands, bodyTypes, onBack, onContinue }) {
   const [form, setForm] = useState({
     city: "",
     year: null,
@@ -702,9 +702,9 @@ function CarInfoStep({ saleMode, cities, brands, bodyTypes, onBack, onContinue }
             <CustomSelect
               value={form.registeredIn}
               onChange={v => set("registeredIn", v)}
-              placeholder="Select Registration City"
+              placeholder="Select Province"
               disabled={!form.isRegistered}
-              options={[{ value: "", label: "Select Registration City" }, ...cities.map(c => ({ value: c._id, label: c.name }))]}
+              options={[{ value: "", label: "Select Province" }, ...provinces.map(p => ({ value: p._id, label: p.name }))]}
             />
             {errors.registeredIn && <p className="mt-1 text-xs text-red-500">{errors.registeredIn}</p>}
           </FormField>
@@ -1059,16 +1059,19 @@ export default function PostAd() {
   const [submitting, setSubmitting] = useState(false);
 
   const [cities, setCities]       = useState([]);
+  const [provinces, setProvinces] = useState([]);
   const [brands, setBrands]       = useState([]);
   const [bodyTypes, setBodyTypes] = useState([]);
 
   useEffect(() => {
     Promise.all([
       masterService.getCities(),
+      masterService.getProvinces(),
       masterService.getBrands(),
       masterService.getBodyTypes(),
-    ]).then(([c, b, bt]) => {
+    ]).then(([c, p, b, bt]) => {
       setCities(c);
+      setProvinces(p);
       setBrands(b);
       setBodyTypes(bt);
     }).catch(() => showError("Failed to load form data. Please refresh."));
@@ -1111,6 +1114,7 @@ export default function PostAd() {
           <CarInfoStep
             saleMode={saleMode}
             cities={cities}
+            provinces={provinces}
             brands={brands}
             bodyTypes={bodyTypes}
             onBack={() => setStep(0)}

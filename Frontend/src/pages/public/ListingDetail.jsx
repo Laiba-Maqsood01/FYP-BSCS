@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Heart, Share2, ChevronLeft, ChevronRight, Phone, ShieldCheck, Download, Clock, CheckCircle2, MapPin, Calendar, Gauge, Flame, Settings2, AlertCircle, Check,
+import { Heart, Share2, ChevronLeft, ChevronRight, Phone, ShieldCheck, ExternalLink, Clock, CheckCircle2, MapPin, Calendar, Gauge, Flame, Settings2, AlertCircle, Check,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { getListingDetail } from "../../services/listingService";
@@ -186,7 +186,7 @@ function StatsRow({ year, mileage, engineType, transmission }) {
 
 // ─── InspectionSection ────────────────────────────────────────────────────────
 
-function InspectionSection({ listingId, inspection, isAuthenticated, isOwner, navigate, onDownload, isManaged }) {
+function InspectionSection({ listingId, inspection, isAuthenticated, isOwner, navigate, isManaged }) {
   const handleRequest = () => {
     if (!isAuthenticated) { navigate("/login"); return; }
     const mode = isOwner ? "seller" : "buyer";
@@ -219,7 +219,8 @@ function InspectionSection({ listingId, inspection, isAuthenticated, isOwner, na
   };
 
   if (isCompleted) {
-    const hasReport = !!inspection?.report?.url;
+    const reportToken = inspection?.reportToken;
+    const hasReport   = !!reportToken;
     return (
       <div className="rounded-xl p-5 mt-5" style={{ background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
         <div className="flex items-center gap-3 mb-4">
@@ -230,37 +231,48 @@ function InspectionSection({ listingId, inspection, isAuthenticated, isOwner, na
             <p className="font-semibold text-sm text-green-800">This Car Has Been Inspected</p>
             <p className="text-xs text-green-700 mt-0.5">
               {hasReport
-                ? "Our certified inspector has evaluated this car and generated a full report."
+                ? "Our certified inspector has evaluated this car and the full report is available."
                 : "Inspection completed. The report is being prepared and will be available shortly."}
             </p>
           </div>
         </div>
 
         {hasReport && (
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={onDownload}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white rounded-lg transition hover:opacity-90"
-              style={{ background: "#16a34a", borderRadius: "0.5rem" }}
-            >
-              <Download size={15} />
-              Download Report
-            </button>
-            <button
-              onClick={handleRequest}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition hover:opacity-90"
-              style={{ background: "#fff", border: "1px solid #bbf7d0", color: "#16a34a", borderRadius: "0.5rem" }}
-            >
-              <ShieldCheck size={15} />
-              {!isAuthenticated ? "Login to Re-inspect" : "Request Re-inspection"}
-            </button>
-          </div>
-        )}
+          <>
+            {/* Trust badge */}
+            <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg"
+              style={{ background: "#dcfce7", border: "1px solid #86efac" }}>
+              <ShieldCheck size={14} style={{ color: "#16a34a", flexShrink: 0 }} />
+              <p className="text-xs font-semibold text-green-800">
+                GearTrade Verified — This report is authenticated and tamper-proof
+              </p>
+            </div>
 
-        {hasReport && (
-          <p className="text-[11px] text-green-700 mt-3 opacity-70">
-            Re-inspection creates a fresh evaluation — useful if the car has been modified or repaired since the last report.
-          </p>
+            <div className="flex flex-wrap gap-2">
+              <a
+                href={`/reports/${reportToken}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white rounded-lg transition hover:opacity-90"
+                style={{ background: "#16a34a" }}
+              >
+                <ShieldCheck size={15} />
+                View Inspection Report
+                <ExternalLink size={12} />
+              </a>
+              <button
+                onClick={handleRequest}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition hover:opacity-90"
+                style={{ background: "#fff", border: "1px solid #bbf7d0", color: "#16a34a" }}
+              >
+                {!isAuthenticated ? "Login to Re-inspect" : "Request Re-inspection"}
+              </button>
+            </div>
+
+            <p className="text-[11px] text-green-700 mt-3 opacity-70">
+              Re-inspection creates a fresh evaluation — useful if the car has been modified or repaired since the last report.
+            </p>
+          </>
         )}
       </div>
     );
@@ -499,17 +511,6 @@ export default function ListingDetail() {
     }
   };
 
-  const handleDownloadReport = () => {
-    const url = inspection?.report?.url;
-    if (!url) return;
-    const a = document.createElement("a");
-    a.href = url;
-    a.setAttribute("download", "inspection-report.pdf");
-    a.target = "_blank";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
 
   // ── Loading ──
   if (loading) {
@@ -666,7 +667,6 @@ export default function ListingDetail() {
             isAuthenticated={isAuthenticated}
             isOwner={isOwner}
             navigate={navigate}
-            onDownload={handleDownloadReport}
             isManaged={listing.saleMode === "MANAGED"}
           />
 

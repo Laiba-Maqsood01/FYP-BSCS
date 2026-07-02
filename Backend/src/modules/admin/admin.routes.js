@@ -3,6 +3,7 @@ import { authMiddleware } from "../../middlewares/auth.middleware.js";
 import { authorizeRoles } from "../../middlewares/role.middleware.js";
 import { validate } from "../../middlewares/validate.middleware.js";
 import * as adminController from "./admin.controller.js";
+import * as reportController from "../inspection-report/inspectionReport.controller.js";
 
 import { blockUserSchema, assignInspectorSchema, updateInspectionStatusSchema, uploadReportSchema, rejectListingSchema, rejectDeletionRequestSchema, markSoldSchema, cancelCommissionSchema, createFeaturedPlanSchema, updateFeaturedPlanSchema, addSlotSchema, updateSlotSchema, updateSiteSettingsSchema } from "./admin.validation.js";
 
@@ -95,13 +96,6 @@ adminRouter.patch(
     adminController.updateInspectionStatus
 );
 
-
-// POST /api/admin/inspections/:id/report
-adminRouter.post(
-    "/inspections/:id/report",
-    validate(uploadReportSchema),
-    adminController.uploadInspectionReport
-);
 
 // ---------- Featured Management ----------
 
@@ -214,5 +208,24 @@ adminRouter.get("/settings/slots", adminController.getInspectionSlots);
 adminRouter.post("/settings/slots", validate(addSlotSchema), adminController.addInspectionSlot);
 // PATCH /api/admin/settings/slots/:slotId
 adminRouter.patch("/settings/slots/:slotId", validate(updateSlotSchema), adminController.updateInspectionSlot);
+
+// ---------- Inspection Report Builder ----------
+// POST   /api/admin/inspections/:inspectionId/report  — init (create or return existing)
+adminRouter.post("/inspections/:inspectionId/report", reportController.initReport);
+
+// GET    /api/admin/inspections/:inspectionId/report  — check existence
+adminRouter.get("/inspections/:inspectionId/report", reportController.getReportByInspection);
+
+// GET    /api/admin/inspection-reports/meta  — checklist definition (must be before /:reportId)
+adminRouter.get("/inspection-reports/meta", reportController.getChecklistMeta);
+
+// GET    /api/admin/inspection-reports/:reportId
+adminRouter.get("/inspection-reports/:reportId", reportController.getReport);
+
+// PATCH  /api/admin/inspection-reports/:reportId
+adminRouter.patch("/inspection-reports/:reportId", reportController.updateReport);
+
+// POST   /api/admin/inspection-reports/:reportId/publish
+adminRouter.post("/inspection-reports/:reportId/publish", reportController.publishReport);
 
 export default adminRouter;

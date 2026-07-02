@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback, useRef, memo } from "react";
-import { getAdminInspections, assignInspector, updateInspectionStatus, scheduleInspection, uploadInspectionReport } from "../../../services/adminService";
+import { useNavigate } from "react-router-dom";
+import { getAdminInspections, assignInspector, updateInspectionStatus, scheduleInspection, uploadInspectionReport, initInspectionReport } from "../../../services/adminService";
 import { getAvailableSlots } from "../../../services/inspectionService";
 import { showSuccess, showError } from "../../../utils/toast";
-import { CalendarDays, User, ChevronDown, FileUp, X, Loader2, RefreshCw } from "lucide-react";
+import { CalendarDays, User, ChevronDown, FileUp, ClipboardList, X, Loader2, RefreshCw } from "lucide-react";
 import { getPdfUploadSignature, uploadPdfToCloudinary,} from "../../../services/adminService";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -17,8 +18,8 @@ const STATUS_TABS = [
   { label: "Cancelled", value: "CANCELLED" },
 ];
 
+// PENDING means the requester hasn't paid yet — admin cannot transition out of it.
 const VALID_TRANSITIONS = {
-  PENDING: ["PENDING_COORDINATION", "SCHEDULED", "CANCELLED"],
   PENDING_COORDINATION: ["SCHEDULED", "CANCELLED"],
   SCHEDULED: ["IN_PROGRESS", "CANCELLED"],
   IN_PROGRESS: ["COMPLETED"],
@@ -495,7 +496,8 @@ const ActionsDropdown = memo(function ActionsDropdown({ inspection, onAction }) 
   const btnRef = useRef(null);
   const transitions = VALID_TRANSITIONS[inspection.status] || [];
   const canSchedule = ["PENDING_COORDINATION", "SCHEDULED"].includes(inspection.status);
-  const canUploadReport = inspection.status === "COMPLETED" && !inspection.report?.url;
+  const canUploadReport  = inspection.status === "COMPLETED" && !inspection.report?.url;
+  const canBuildReport   = inspection.status === "COMPLETED";
 
   function handleToggle() {
     if (btnRef.current) {
@@ -532,10 +534,16 @@ const ActionsDropdown = memo(function ActionsDropdown({ inspection, onAction }) 
                 <ChevronDown size={13} /> Update Status
               </button>
             )}
+            {canBuildReport && (
+              <button onClick={() => { setOpen(false); onAction("buildReport"); }}
+                className="w-full text-left px-4 py-2 hover:bg-gray-50 cursor-pointer flex items-center gap-2 text-brand-dark">
+                <ClipboardList size={13} /> Build Report
+              </button>
+            )}
             {canUploadReport && (
               <button onClick={() => { setOpen(false); onAction("report"); }}
-                className="w-full text-left px-4 py-2 hover:bg-gray-50 cursor-pointer flex items-center gap-2 text-brand-dark">
-                <FileUp size={13} /> Upload Report
+                className="w-full text-left px-4 py-2 hover:bg-gray-50 cursor-pointer flex items-center gap-2 text-brand-muted">
+                <FileUp size={13} /> Upload PDF Report
               </button>
             )}
           </div>
@@ -649,6 +657,7 @@ const InspectionCard = memo(function InspectionCard({ insp, onAction }) {
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function ManageInspections() {
+  const navigate = useNavigate();
   const [inspections, setInspections] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
   const [loading, setLoading] = useState(true);
@@ -712,12 +721,22 @@ export default function ManageInspections() {
   const openStatus   = useCallback((insp) => setStatusTarget(insp),   []);
   const openReport   = useCallback((insp) => setReportTarget(insp),   []);
 
+  const handleBuildReport = useCallback(async (insp) => {
+    try {
+      const report = await initInspectionReport(insp._id);
+      navigate(`/admin/inspection-reports/${report._id}/build`);
+    } catch {
+      showError("Failed to open report builder.");
+    }
+  }, [navigate]);
+
   const handleAction = useCallback((insp, action) => {
     if (action === "assign")        openAssign(insp);
     else if (action === "schedule") openSchedule(insp);
     else if (action === "status")   openStatus(insp);
     else if (action === "report")   openReport(insp);
-  }, [openAssign, openSchedule, openStatus, openReport]);
+    else if (action === "buildReport") handleBuildReport(insp);
+  }, [openAssign, openSchedule, openStatus, openReport, handleBuildReport]);
 
   return (
     <div className="p-4 sm:p-6">

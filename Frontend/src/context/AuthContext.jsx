@@ -38,10 +38,19 @@ export const AuthProvider = ({ children }) => {
       return { success: true, user };
 
     } catch (error) {
-      return {
-        success: false,
-        message: error.response?.data?.message || "Login failed",
-      };
+      const message = error.response?.data?.message || "Login failed";
+      const isUnverified =
+        error.response?.status === 403 &&
+        message.toLowerCase().includes("verify");
+
+      if (isUnverified) {
+        const email = data.email;
+        try { await authService.resendOTP(email); } catch (_) {}
+        navigate("/verify-email", { state: { email } });
+        return { success: false, unverified: true };
+      }
+
+      return { success: false, message };
     }
   };
 

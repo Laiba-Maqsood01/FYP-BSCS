@@ -2,9 +2,11 @@ import { Routes, Route, Navigate } from "react-router-dom";
 
 // Public Pages
 import Home          from "../pages/public/Home";
-import Login         from "../pages/auth/Login";
-import Register      from "../pages/auth/Register";
-import VerifyEmail   from "../pages/auth/VerifyEmail";
+import Login           from "../pages/auth/Login";
+import Register        from "../pages/auth/Register";
+import VerifyEmail     from "../pages/auth/VerifyEmail";
+import ForgotPassword  from "../pages/auth/ForgotPassword";
+import ResetPassword   from "../pages/auth/ResetPassword";
 import BrowseCars    from "../pages/public/BrowseCars";
 import ListingDetail from "../pages/public/ListingDetail";
 import PaymentSuccess from "../pages/public/PaymentSuccess";
@@ -37,6 +39,8 @@ import ManageRefunds       from "../pages/admin/dashboard/ManageRefunds";
 import ManageCommissions   from "../pages/admin/dashboard/ManageCommissions";
 import ManageDeletions     from "../pages/admin/dashboard/ManageDeletions";
 import SiteSettings        from "../pages/admin/dashboard/SiteSettings";
+import ReportBuilder       from "../pages/admin/dashboard/ReportBuilder";
+import InspectionReport    from "../pages/public/InspectionReport";
 
 // Guards
 import ProtectedRoute from "../components/auth/ProtectedRoute";
@@ -48,11 +52,14 @@ const AppRoutes = () => {
       <Route path="/"            element={<Home />}         />
       <Route path="/login"       element={<Login />}        />
       <Route path="/register"    element={<Register />}     />
-      <Route path="/verify-email" element={<VerifyEmail />} />
+      <Route path="/verify-email"    element={<VerifyEmail />}    />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password"  element={<ResetPassword />}  />
       <Route path="/browse-cars"     element={<BrowseCars />}       />
       <Route path="/browse-cars/:id" element={<ListingDetail />}    />
       <Route path="/payment/success" element={<PaymentSuccess />}   />
       <Route path="/payment/failed"  element={<PaymentFailed />}    />
+      <Route path="/reports/:verifyToken" element={<InspectionReport />} />
 
       {/* ── AUTHENTICATED (user + admin) ── */}
       <Route path="/profile" element={
@@ -96,6 +103,7 @@ const AppRoutes = () => {
         <Route path="commissions" element={<ManageCommissions />} />
         <Route path="deletions"   element={<ManageDeletions />}   />
         <Route path="settings"    element={<SiteSettings />}      />
+        <Route path="inspection-reports/:reportId/build" element={<ReportBuilder />} />
       </Route>
 
       {/* ── NOT FOUND ── */}

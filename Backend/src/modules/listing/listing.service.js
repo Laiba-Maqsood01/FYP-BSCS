@@ -200,6 +200,12 @@ export async function updateListing(listingId, userId, data) {
   //APPLY UPDATE
   Object.assign(listing, sanitizedData);
 
+  // re-edited after rejection → send back for admin review
+  if (listing.status === "REJECTED") {
+    listing.status = "PENDING";
+    listing.rejectionReason = undefined;
+  }
+
   await listing.save();
   // to tell user that unallowed fields are not updated!
   return {
