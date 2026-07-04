@@ -51,17 +51,10 @@ export default function AppNavbar({
   );
 
   const Logo = () => (
-    <Link to={brand.url} className="inline-flex items-center gap-2 no-underline">
-      {/* 2rem × 2rem dark-gradient square logo — matches .app-navbar-logo */}
-      <span
-        className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs font-bold text-white shrink-0"
-        style={{ background: "linear-gradient(135deg, #1f2937, #0f172a)" }}
-      >
-        {brand.short}
-      </span>
-      {/* .app-navbar-title */}
-      <span style={{ fontSize: "1.05rem", fontWeight: 700, letterSpacing: "-0.01em", color: "#0f172a" }}>
-        {brand.title}
+    <Link to={brand.url} className="inline-flex items-center gap-1 no-underline">
+      <img src="/logo2.svg" alt={brand.title} className="h-10 w-auto shrink-0" />
+      <span style={{ fontSize: "1.15rem", fontWeight: 700, letterSpacing: "-0.01em", color: "#0f172a" }}>
+        GearTrade
       </span>
     </Link>
   );

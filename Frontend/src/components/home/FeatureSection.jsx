@@ -107,7 +107,7 @@ export default function FeatureSection({
                     {listing.description?.slice(0, 80)}{listing.description?.length > 80 ? "…" : ""}
                   </p>
                   <div className="flex flex-wrap gap-x-2 gap-y-1 text-[0.78rem] text-[#475569] mb-3">
-                    <span>{listing.engineCapacity}cc · {listing.transmission}</span>
+                    <span>{listing.engineCapacity}{listing.engineType === "electric" ? " kWh" : "cc"} · {listing.transmission}</span>
                     <span>{listing.mileage?.toLocaleString()} km</span>
                   </div>
                   <div className="flex items-center justify-between mt-3">

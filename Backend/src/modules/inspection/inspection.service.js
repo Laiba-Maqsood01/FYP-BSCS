@@ -333,7 +333,7 @@ export async function getListingInspectionStatus(listingId) {
     return result;
 }
 
-export async function getAvailableSlots(dateStr) {
+export async function getAvailableSlots(dateStr, excludeInspectionId) {
   const date = new Date(dateStr);
   const dayOfWeek = date.getDay(); // 0=Sun … 6=Sat
 
@@ -347,12 +347,16 @@ export async function getAvailableSlots(dateStr) {
   const end = new Date(date);
   end.setHours(23, 59, 59, 999);
 
-  const bookedSlots = await inspectionModel
-    .find({
-      scheduledDate: { $gte: start, $lte: end },
-      status: { $in: ["PENDING", "SCHEDULED", "IN_PROGRESS"] },
-    })
-    .distinct("timeSlot");
+  const bookedFilter = {
+    scheduledDate: { $gte: start, $lte: end },
+    status: { $in: ["PENDING", "SCHEDULED", "IN_PROGRESS"] },
+  };
+  // When rescheduling, don't count the inspection's own current slot as taken
+  if (excludeInspectionId) {
+    bookedFilter._id = { $ne: excludeInspectionId };
+  }
+
+  const bookedSlots = await inspectionModel.find(bookedFilter).distinct("timeSlot");
 
   return { slots: activeSlots, bookedSlots };
 }

@@ -108,3 +108,10 @@ export const createListingSchema = z.object({
 
 export const updateListingSchema =
   createListingSchema.partial();
+
+// OTP code entered by the buyer to reveal a seller's contact number.
+// Optional here because owner/admin skip OTP; the service enforces the code
+// for regular buyers.
+export const verifyContactOtpSchema = z.object({
+  code: z.string().optional(),
+});

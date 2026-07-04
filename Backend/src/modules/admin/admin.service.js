@@ -15,6 +15,7 @@ import { cleanupListingForDeletion } from "../../helpers/listing.cleanup.helper.
 import { processStripeRefund } from "../payment/payment.service.js";
 import { deleteImages, deleteFiles } from "../upload/upload.service.js";
 import { sendEmail } from "../../services/email.service.js";
+import { sendSms } from "../../services/sms.service.js";
 
 import listingDeletionRequestModel from "../managed-sale/listing-deletion-request.model.js";
 import commissionModel from "../managed-sale/commission.model.js";
@@ -580,6 +581,27 @@ export async function getListings(query) {
       },
       { $unwind: "$carModel" },
 
+      // Latest non-cancelled inspection — the UI uses this to hide Reject
+      // once the inspection is IN_PROGRESS or COMPLETED.
+      {
+        $lookup: {
+          from: "inspections",
+          let: { listingId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ["$listing", "$$listingId"] },
+                status: { $ne: "CANCELLED" },
+              },
+            },
+            { $sort: { createdAt: -1 } },
+            { $limit: 1 },
+            { $project: { status: 1 } },
+          ],
+          as: "activeInspection",
+        },
+      },
+
       { $sort: { createdAt: -1 } },
       { $skip: skip },
       { $limit: Number(limit) },
@@ -594,6 +616,7 @@ export async function getListings(query) {
           saleMode: 1,
           isFeatured: 1,
           createdAt: 1,
+          inspectionStatus: { $arrayElemAt: ["$activeInspection.status", 0] },
           "seller._id": 1,
           "seller.username": 1,
           "seller.email": 1,
@@ -654,13 +677,38 @@ export async function rejectListing(listingId, reason) {
     throw new ApiError(400, `Cannot reject a listing with status ${listing.status}`);
   }
 
-  // Delete images from Cloudinary — rejected listing won't be published
-  const imageFileIds = (listing.images || [])
-    .map((img) => img.fileId)
-    .filter(Boolean);
+  // Rejection is only allowed BEFORE the inspection starts. Once the
+  // inspector is on site (IN_PROGRESS) or done (COMPLETED), the admin must
+  // use Remove instead — the frontend hides Reject in those states, and this
+  // guard enforces it server-side.
+  const inspection = await inspectionModel.findOne({
+    listing: listingId,
+    status: { $ne: "CANCELLED" },
+  });
 
-  await deleteImages(imageFileIds);
+  if (inspection && ["IN_PROGRESS", "COMPLETED"].includes(inspection.status)) {
+    throw new ApiError(
+      400,
+      `Cannot reject: this listing's inspection is ${inspection.status.replace("_", " ").toLowerCase()}. Use Remove instead.`
+    );
+  }
 
+  // Cancel the not-yet-started inspection. If the requester already paid,
+  // queue a refund in the ManageRefunds queue — the admin is rejecting the
+  // listing, so the paid service will never be delivered.
+  if (inspection) {
+    const refundRequired = !!inspection.payment;
+
+    inspection.status = "CANCELLED";
+    inspection.cancelReason = "Listing rejected by admin";
+    inspection.refundRequired = refundRequired;
+    inspection.refundStatus = refundRequired ? "PENDING" : "NOT_REQUIRED";
+    await inspection.save();
+  }
+
+  // Images are intentionally kept — a rejected listing can be edited and
+  // resubmitted, and deleting the Cloudinary files would leave broken image
+  // URLs on resubmission. Images are cleaned up on removal/deletion instead.
   listing.status = "REJECTED";
   listing.rejectionReason = reason;
   await listing.save();
@@ -1453,7 +1501,10 @@ export async function cancelCommission(commissionId, cancelReason) {
 // Admin will schedule inspection after adding address, time and date. It can be for buyer and owner both
 export async function scheduleInspection(inspectionId, { inspectionAddress, scheduledDate, timeSlot }) {
 
-  const inspection = await inspectionModel.findById(inspectionId);
+  const inspection = await inspectionModel
+    .findById(inspectionId)
+    .populate("requestedBy", "mobileNumber")
+    .populate({ path: "listing", populate: { path: "seller", select: "mobileNumber" } });
 
   if (!inspection)
     throw new ApiError(404, "Inspection not found");
@@ -1466,6 +1517,8 @@ export async function scheduleInspection(inspectionId, { inspectionAddress, sche
   if (!inspectionAddress || !scheduledDate || !timeSlot)
     throw new ApiError(400, "inspectionAddress, scheduledDate and timeSlot are all required");
 
+  const wasAlreadyScheduled = inspection.status === "SCHEDULED";
+
   inspection.inspectionAddress = inspectionAddress;
   inspection.scheduledDate = new Date(scheduledDate);
   inspection.timeSlot = timeSlot;
@@ -1476,6 +1529,32 @@ export async function scheduleInspection(inspectionId, { inspectionAddress, sche
   }
 
   await inspection.save();
+
+  // Notify by SMS — both on first scheduling and on reschedule.
+  // Requester always gets it; seller also gets it only when they're a different
+  // person (i.e. inspectionBy === "BUYER").
+  const dateStr = inspection.scheduledDate.toLocaleDateString("en-GB", {
+    day: "numeric", month: "short", year: "numeric",
+  });
+  const action = wasAlreadyScheduled ? "rescheduled" : "scheduled";
+
+  const requesterPhone = inspection.requestedBy?.mobileNumber;
+  if (requesterPhone) {
+    sendSms(
+      requesterPhone,
+      `GearTrade: Your inspection has been ${action} for ${dateStr} at ${timeSlot}, ${inspectionAddress}.`
+    );
+  }
+
+  if (inspection.inspectionBy === "BUYER") {
+    const sellerPhone = inspection.listing?.seller?.mobileNumber;
+    if (sellerPhone) {
+      sendSms(
+        sellerPhone,
+        `GearTrade: An inspection for your car listing has been ${action} for ${dateStr} at ${timeSlot}. Please have the car available at ${inspectionAddress}.`
+      );
+    }
+  }
 
   return { message: "Inspection scheduled successfully", inspection };
 }

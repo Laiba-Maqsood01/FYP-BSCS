@@ -80,6 +80,14 @@ const inspectionSchema = new mongoose.Schema(
       default: null,
     },
 
+    // The scheduledDate a day-before reminder SMS was last sent for.
+    // Lets the reminder cron avoid duplicate sends while still re-notifying
+    // after a reschedule (new scheduledDate won't match this).
+    reminderSentFor: {
+      type: Date,
+      default: null,
+    },
+
     report: {
       url: { type: String, default: null },
       fileId: { type: String, default: null }

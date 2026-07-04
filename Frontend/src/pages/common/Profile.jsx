@@ -399,30 +399,32 @@ export default function Profile() {
         </div>
       </SectionCard>
 
-      {/* Danger Zone */}
-      <SectionCard
-        icon={AlertTriangle}
-        iconBg="#fee2e2"
-        iconColor="#dc2626"
-        title="Danger zone"
-        subtitle="Irreversible account actions"
-        danger
-      >
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold text-brand-dark mb-1">Delete account</p>
-            <p className="text-xs text-brand-muted leading-relaxed">
-              Permanently removes your account, listings, and all associated data. This cannot be undone.
-            </p>
+      {/* Danger Zone — account deletion is not available to admins */}
+      {user.role !== "admin" && (
+        <SectionCard
+          icon={AlertTriangle}
+          iconBg="#fee2e2"
+          iconColor="#dc2626"
+          title="Danger zone"
+          subtitle="Irreversible account actions"
+          danger
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-brand-dark mb-1">Delete account</p>
+              <p className="text-xs text-brand-muted leading-relaxed">
+                Permanently removes your account, listings, and all associated data. This cannot be undone.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white hover:opacity-90 transition shrink-0"
+              style={{ background: "#dc2626" }}>
+              <Trash2 size={13} /> Delete
+            </button>
           </div>
-          <button
-            onClick={() => setShowDeleteModal(true)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white hover:opacity-90 transition shrink-0"
-            style={{ background: "#dc2626" }}>
-            <Trash2 size={13} /> Delete
-          </button>
-        </div>
-      </SectionCard>
+        </SectionCard>
+      )}
 
       {/* Delete Confirm Modal */}
       {showDeleteModal && (

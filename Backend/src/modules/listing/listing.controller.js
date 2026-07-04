@@ -98,3 +98,16 @@ export const markListingSoldByUser = asyncHandler(async (req, res) => {
     const listing = await listingService.markListingSoldByUser(req.params.id, req.user._id);
     res.status(200).json(new ApiResponse(200, "Listing marked as sold", listing));
 });
+
+// Step 1 — send OTP to the requesting buyer's own number before revealing seller contact
+export const requestContactOtp = asyncHandler(async (req, res) => {
+    const data = await listingService.requestContactOtp(req.params.id, req.user);
+    res.status(200).json(new ApiResponse(200, "OTP sent", data));
+});
+
+// Step 2 — verify OTP and return the seller's real contact number(s)
+export const verifyContactOtp = asyncHandler(async (req, res) => {
+    const ip = req.headers["x-forwarded-for"] || req.socket?.remoteAddress || null;
+    const data = await listingService.verifyContactOtp(req.params.id, req.user, req.body.code, ip);
+    res.status(200).json(new ApiResponse(200, "Contact revealed", data));
+});

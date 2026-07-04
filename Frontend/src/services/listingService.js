@@ -40,3 +40,10 @@ export const deleteListing = (id) =>
 
 export const markMyListingSold = (id) =>
   api.patch(`/listings/${id}/mark-sold`).then(r => r.data.data);
+
+// Seller contact reveal (OTP-gated)
+export const requestContactOtp = (id) =>
+  api.post(`/listings/${id}/contact/request-otp`).then(r => r.data.data);
+
+export const verifyContactOtp = (id, code) =>
+  api.post(`/listings/${id}/contact/verify-otp`, { code }).then(r => r.data.data);

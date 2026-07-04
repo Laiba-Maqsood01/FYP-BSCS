@@ -2,8 +2,10 @@ import api from "./api";
 
 // Fetch active slots + booked slots for a given date (YYYY-MM-DD)
 // Returns { slots: [{_id, label, ...}], bookedSlots: [label, ...] }
-export const getAvailableSlots = (date) =>
-  api.get(`/inspection/available-slots?date=${date}`).then(r => r.data.data);
+// Pass excludeInspectionId when rescheduling so the inspection's own current
+// slot isn't shown as unavailable.
+export const getAvailableSlots = (date, excludeInspectionId) =>
+  api.get(`/inspection/available-slots`, { params: { date, excludeInspectionId } }).then(r => r.data.data);
 
 // Onboarding inspection — managed listing seller (listing is PENDING)
 export const requestManagedInspection = (listingId, body) =>

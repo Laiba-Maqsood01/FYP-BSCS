@@ -8,7 +8,6 @@ const QUICK_LINKS = [
   { name: "Home",           href: "/",           internal: true },
   { name: "Browse Cars",    href: "/browse-cars", internal: true },
   { name: "Post an Ad",     href: "/post-ad",     internal: true },
-  { name: "Car Inspection", href: "/inspection",  internal: true },
 ];
 
 const SOCIAL_LINKS = [
@@ -49,23 +48,11 @@ export default function AppFooter({
             <Link
               to={brand.href}
               className="inline-flex items-center no-underline"
-              style={{ gap: "0.55rem", marginBottom: "0.85rem" }}
+              style={{ gap: "0.25rem", marginBottom: "0.85rem" }}
             >
               {/* .app-footer-logo */}
-              <span
-                className="inline-flex items-center justify-center shrink-0 font-bold text-white"
-                style={{
-                  width: "2rem",
-                  height: "2rem",
-                  borderRadius: "0.5rem",
-                  fontSize: "0.75rem",
-                  background: "linear-gradient(135deg, #1f2937, #0f172a)",
-                }}
-              >
-                {brand.short}
-              </span>
-              {/* .app-footer-title */}
-              <span style={{ color: "#0f172a", fontSize: "1.05rem", fontWeight: 700 }}>
+              <img src="/logo2.svg" alt={brand.title} className="h-10 w-auto shrink-0" />
+              <span style={{ fontSize: "1.15rem", fontWeight: 700, letterSpacing: "-0.01em", color: "#0f172a" }}>
                 {brand.title}
               </span>
             </Link>

@@ -256,8 +256,13 @@ function ScheduleModal({ inspection, onClose, onDone }) {
 
   useEffect(() => {
     if (!date) { setSlots([]); return; }
-    getAvailableSlots(date).then(data => setSlots(data.slots ?? [])).catch(() => setSlots([]));
-  }, [date]);
+    getAvailableSlots(date, inspection._id)
+      .then(data => {
+        const booked = new Set(data.bookedSlots ?? []);
+        setSlots((data.slots ?? []).filter(s => !booked.has(s.label)));
+      })
+      .catch(() => setSlots([]));
+  }, [date, inspection._id]);
 
   async function handleSubmit(e) {
     e.preventDefault();

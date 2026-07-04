@@ -1,4 +1,5 @@
 import axios from "axios";
+import { showError } from "../utils/toast";
 
 const BASE_URL = import.meta.env.VITE_API_URL;
 
@@ -25,17 +26,36 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Rate-limit toast throttle — a burst of parallel requests all hitting 429
+// shouldn't stack up a dozen identical toasts.
+let lastRateLimitToast = 0;
+
 // RESPONSE INTERCEPTOR (AUTO REFRESH)
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
-    // If access token expired
+    // Rate limited — surface the backend's message globally so individual
+    // pages' silent catch blocks don't swallow it.
+    if (error.response?.status === 429) {
+      const now = Date.now();
+      if (now - lastRateLimitToast > 5000) {
+        lastRateLimitToast = now;
+        showError(error.response?.data?.message || "Too many requests, please try again later.");
+      }
+      return Promise.reject(error);
+    }
+
+    // If access token expired.
+    // /auth/login is excluded: a 401 there means wrong credentials, not an
+    // expired token — retrying via refresh would swallow the real error
+    // ("Invalid credentials") and surface "Refresh token not found!" instead.
     if (
       error.response?.status === 401 &&
       !originalRequest._retry &&
-      !originalRequest.url.includes("/auth/refresh-token")
+      !originalRequest.url.includes("/auth/refresh-token") &&
+      !originalRequest.url.includes("/auth/login")
     ) {
       originalRequest._retry = true;
 

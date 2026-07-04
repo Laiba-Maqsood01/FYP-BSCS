@@ -429,6 +429,10 @@ export async function deleteAccount(userId) {
     const user = await userModel.findById(userId);
     if (!user) throw new ApiError(404, "User not found");
 
+    if (user.role === "admin") {
+        throw new ApiError(403, "Admin accounts cannot be deleted");
+    }
+
     const listings = await listingModel.find(
         { seller: userId },
         { _id: 1, saleMode: 1, status: 1 }

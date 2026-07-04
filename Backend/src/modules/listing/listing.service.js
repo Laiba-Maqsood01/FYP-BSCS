@@ -4,9 +4,21 @@ import featuredModel from "../featured/featured.model.js"
 import brandModel from "../master/models/brand.model.js"
 import car_Model from "../master/models/carModel.model.js"
 import cityModel from "../master/models/city.model.js"
+import userModel from "../../models/user.model.js";
+import contactRevealModel from "./contactReveal.model.js";
 import { ApiError } from "../../utils/apiError.js";
 import { deleteImages, deleteFiles } from "../upload/upload.service.js";
 import { MANAGED_SALE_CITY_NAMES } from "../../config/constants.js";
+import { sendOtp, verifyOtp } from "../../services/sms.service.js";
+
+// Mask a phone number for public display: keep first 4 + last 2, star the rest.
+// 03001234567 -> 0300*****67
+export function maskPhone(num) {
+  if (!num) return null;
+  const s = String(num).trim();
+  if (s.length <= 6) return s;
+  return `${s.slice(0, 4)}${"*".repeat(s.length - 6)}${s.slice(-2)}`;
+}
 
 // For creating listing
 export async function createListing(data, userId) {
@@ -461,10 +473,14 @@ export async function getPublicListings(query) {
 
   const skip = (Number(page) - 1) * Number(limit);
 
-  const sort = {
-    isFeatured: -1,
-    [sortBy]: sortOrder === "asc" ? 1 : -1
-  };
+  // Default view (Newest First) pins featured listings on top for their paid
+  // visibility boost. Once the user explicitly sorts (price/year/mileage/oldest),
+  // the chosen field applies globally and featured listings are sorted in with
+  // the rest — the buyer's intent wins.
+  const isDefaultView = sortBy === "createdAt" && sortOrder === "desc";
+  const sort = {};
+  if (isDefaultView) sort.isFeatured = -1;
+  sort[sortBy] = sortOrder === "asc" ? 1 : -1;
 
   const listings = await listingModel
     .find(filters)
@@ -492,6 +508,9 @@ export async function getPublicListings(query) {
   const listingsWithInspection = listings.map(l => {
     const obj = l.toObject();
     obj.isInspected = inspectedSet.has(l._id.toString());
+    // Don't leak raw seller numbers in the public grid
+    obj.mobileNumber    = maskPhone(obj.mobileNumber);
+    obj.secondaryNumber = maskPhone(obj.secondaryNumber);
     return obj;
   });
 
@@ -541,7 +560,65 @@ export async function getListingDetails(listingId) {
     throw new ApiError(404, "Listing not found");
   }
 
-  return listing;
+  // Never expose raw seller contact numbers in the public payload — they are
+  // revealed only through the OTP-gated reveal endpoint.
+  const obj = listing.toObject();
+  obj.mobileNumber    = maskPhone(obj.mobileNumber);
+  obj.secondaryNumber = maskPhone(obj.secondaryNumber);
+
+  return obj;
+}
+
+// ── Seller contact reveal (OTP-gated) ─────────────────────────────────────────
+
+// Step 1: send an OTP to the requesting buyer's own registered number.
+// Owner (viewing own listing) and admins skip OTP entirely.
+export async function requestContactOtp(listingId, user) {
+  const listing = await listingModel.findOne({ _id: listingId, status: "ACTIVE" });
+  if (!listing) throw new ApiError(404, "Listing not found");
+
+  const isOwner = listing.seller.toString() === user._id.toString();
+  if (isOwner || user.role === "admin") {
+    return { otpRequired: false };
+  }
+
+  if (!user.mobileNumber) {
+    throw new ApiError(400, "Your account has no mobile number to send the code to");
+  }
+
+  await sendOtp(user.mobileNumber);
+  return { otpRequired: true, sentTo: maskPhone(user.mobileNumber) };
+}
+
+// Step 2: verify the OTP, log the reveal, and return the real seller number(s).
+export async function verifyContactOtp(listingId, user, code, ip) {
+  const listing = await listingModel.findById(listingId);
+  if (!listing || listing.status !== "ACTIVE") throw new ApiError(404, "Listing not found");
+
+  const isOwner = listing.seller.toString() === user._id.toString();
+  const privileged = isOwner || user.role === "admin";
+
+  if (!privileged) {
+    if (!code) throw new ApiError(400, "Verification code is required");
+    const ok = await verifyOtp(user.mobileNumber, code);
+    if (!ok) throw new ApiError(400, "Invalid or expired code");
+  }
+
+  // Audit every reveal by a non-owner buyer (skip owner viewing own listing).
+  if (!isOwner) {
+    await contactRevealModel.create({
+      listing: listing._id,
+      seller:  listing.seller,
+      viewer:  user._id,
+      ip:      ip || null,
+    });
+  }
+
+  return {
+    mobileNumber:    listing.mobileNumber,
+    secondaryNumber: listing.secondaryNumber || null,
+    whatsappAllowed: listing.whatsappAllowed,
+  };
 }
 // User marks their own GENERAL listing as SOLD
 export async function markListingSoldByUser(listingId, userId) {

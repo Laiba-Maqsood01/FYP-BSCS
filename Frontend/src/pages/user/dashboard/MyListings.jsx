@@ -550,7 +550,10 @@ const ListingCard = memo(function ListingCard({ listing, onEdit, onDelete, onFea
               <ExternalLink size={12} /> View
             </button>
           )}
-          {listing.status !== "SOLD" && listing.status !== "REMOVED" && !isManaged && (
+          {/* Managed listings are team-handled — owner can only edit one that
+              was rejected (to fix and resubmit). General listings edit as before. */}
+          {listing.status !== "SOLD" && listing.status !== "REMOVED" &&
+            (!isManaged || listing.status === "REJECTED") && (
             <button onClick={() => navigate(`/edit-listing/${listing._id}`)}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition cursor-pointer"
               style={{ border: "1px solid rgba(0,0,0,0.1)", color: "#3b82f6" }}>
@@ -578,7 +581,9 @@ const ListingCard = memo(function ListingCard({ listing, onEdit, onDelete, onFea
               <Check size={12} /> Mark as Sold
             </button>
           )}
-          {!isManaged && (
+          {/* A rejected managed listing was never accepted by the team, so the
+              owner may delete it directly — no deletion request needed. */}
+          {(!isManaged || listing.status === "REJECTED") && (
             <button onClick={() => onDelete(listing)}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition cursor-pointer"
               style={{ border: "1px solid rgba(0,0,0,0.1)", color: "#dc2626" }}>
@@ -696,6 +701,13 @@ function ManagedSection({ listings }) {
                     {l.status === "SOLD" ? (
                       <span className="text-xs font-semibold px-2.5 py-1.5 rounded-lg" style={{ background: "#dbeafe", color: "#1d4ed8" }}>
                         Sold
+                      </span>
+                    ) : l.status === "REJECTED" ? (
+                      // Never approved by the team — no deletion request needed.
+                      // Edit / Delete are available on the listing card in the
+                      // All and Rejected tabs.
+                      <span className="text-xs font-semibold px-2.5 py-1.5 rounded-lg" style={{ background: "#fee2e2", color: "#dc2626" }}>
+                        Rejected — edit &amp; resubmit or delete from the All tab
                       </span>
                     ) : existingReq ? (
                       <div className="flex items-center gap-2 flex-wrap">

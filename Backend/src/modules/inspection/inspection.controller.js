@@ -86,11 +86,11 @@ export const createInspectionPayment = asyncHandler(async (req, res) => {
 });
 
 export const getAvailableSlots = asyncHandler(async (req, res) => {
-    const { date } = req.query;
+    const { date, excludeInspectionId } = req.query;
     if (!date) {
         return res.status(400).json({ success: false, message: "date query param required (YYYY-MM-DD)" });
     }
-    const data = await inspectionService.getAvailableSlots(date);
+    const data = await inspectionService.getAvailableSlots(date, excludeInspectionId);
     res.status(200).json(new ApiResponse(200, "Available slots fetched", data));
 });
 
