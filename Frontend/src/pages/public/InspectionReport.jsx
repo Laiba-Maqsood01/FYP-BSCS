@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Printer, Shield, CheckCircle2, AlertTriangle, XCircle, MinusCircle, Camera } from "lucide-react";
+import { Printer, CheckCircle2, AlertTriangle, XCircle, MinusCircle, Camera } from "lucide-react";
 import { getPublicReport } from "../../services/reportService";
 import CarDiagram from "../../components/CarDiagram";
 
@@ -405,7 +405,7 @@ export default function InspectionReport() {
                 </div>
 
                 <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
-                  <Shield size={16} color="#16a34a" style={{ flexShrink:0 }} />
+                  <img src="/logo2.svg" alt="GearTrade" style={{ height:"32px", width:"auto", flexShrink:0 }} />
                   <div>
                     <p style={{ color:"#16a34a", fontSize:"12px", fontWeight:700, margin:0, lineHeight:1.2 }}>GearTrade Verified Report</p>
                   </div>

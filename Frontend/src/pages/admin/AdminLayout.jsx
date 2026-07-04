@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Outlet, useNavigate } from "react-router-dom";
+import { Outlet, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { LayoutDashboard, Users, Car, ShieldCheck, Star, ReceiptText, Banknote, Trash2, Settings, PanelLeftClose, PanelLeftOpen,
+import { LayoutDashboard, Users, Car, ShieldCheck, Star, ReceiptText, Banknote, Trash2, Settings, User, PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 import AdminSideNavLink from "../../components/admin/AdminSideNavLink";
 import UserAvatar from "../../components/common/UserAvatar";
@@ -39,6 +39,7 @@ const NAV_SECTIONS = [
     label: "Configuration",
     items: [
       { to: "/admin/settings", label: "Site Settings", icon: Settings },
+      { to: "/admin/profile",  label: "Profile",       icon: User     },
     ],
   },
 ];
@@ -80,7 +81,7 @@ export default function AdminLayout() {
           style={{ borderBottom: "1px solid rgba(0,0,0,0.07)", minHeight: "68px" }}
         >
           {!collapsed && (
-            <div className="flex-1 min-w-0 mr-2">
+            <Link to="/admin/profile" className="flex-1 min-w-0 mr-2 no-underline hover:opacity-80 transition">
               <UserAvatar user={user} size={32} className="mb-1.5" />
               <p className="font-semibold text-xs text-brand-dark truncate">
                 {user?.username ?? "Admin"}
@@ -88,7 +89,7 @@ export default function AdminLayout() {
               <p className="text-[11px] text-brand-muted truncate">
                 {user?.email ?? ""}
               </p>
-            </div>
+            </Link>
           )}
 
           <button

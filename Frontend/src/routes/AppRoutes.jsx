@@ -11,6 +11,8 @@ import BrowseCars    from "../pages/public/BrowseCars";
 import ListingDetail from "../pages/public/ListingDetail";
 import PaymentSuccess from "../pages/public/PaymentSuccess";
 import PaymentFailed  from "../pages/public/PaymentFailed";
+import PrivacyPolicy  from "../pages/public/PrivacyPolicy";
+import TermsOfService from "../pages/public/TermsOfService";
 import NotFound      from "../pages/common/NotFound";
 
 // Authenticated pages
@@ -59,6 +61,8 @@ const AppRoutes = () => {
       <Route path="/browse-cars/:id" element={<ListingDetail />}    />
       <Route path="/payment/success" element={<PaymentSuccess />}   />
       <Route path="/payment/failed"  element={<PaymentFailed />}    />
+      <Route path="/privacy-policy"  element={<PrivacyPolicy />}    />
+      <Route path="/terms"           element={<TermsOfService />}   />
       <Route path="/reports/:verifyToken" element={<InspectionReport />} />
 
       {/* ── AUTHENTICATED (user + admin) ── */}
@@ -103,6 +107,7 @@ const AppRoutes = () => {
         <Route path="commissions" element={<ManageCommissions />} />
         <Route path="deletions"   element={<ManageDeletions />}   />
         <Route path="settings"    element={<SiteSettings />}      />
+        <Route path="profile"     element={<Profile />}           />
         <Route path="inspection-reports/:reportId/build" element={<ReportBuilder />} />
       </Route>
 

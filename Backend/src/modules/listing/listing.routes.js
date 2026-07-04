@@ -2,7 +2,8 @@ import { Router } from "express";
 import * as controller from "./listing.controller.js";
 import { authMiddleware } from "../../middlewares/auth.middleware.js";
 import { validate } from "../../middlewares/validate.middleware.js";
-import { createListingSchema, updateListingSchema } from "./listing.validation.js";
+import { contactOtpLimiter } from "../../middlewares/rateLimit.middleware.js";
+import { createListingSchema, updateListingSchema, verifyContactOtpSchema } from "./listing.validation.js";
 
 
 const router = Router();
@@ -61,6 +62,22 @@ router.patch(
   "/:id/mark-sold",
   authMiddleware,
   controller.markListingSoldByUser
+);
+
+// POST /api/listings/:id/contact/request-otp (send OTP to buyer before reveal)
+router.post(
+  "/:id/contact/request-otp",
+  authMiddleware,
+  contactOtpLimiter,
+  controller.requestContactOtp
+);
+
+// POST /api/listings/:id/contact/verify-otp (verify OTP, reveal seller number)
+router.post(
+  "/:id/contact/verify-otp",
+  authMiddleware,
+  validate(verifyContactOtpSchema),
+  controller.verifyContactOtp
 );
 
 // GET /api/listings/:id (for public)

@@ -209,7 +209,7 @@ function ListingCard({ listing }) {
         </p>
         <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[0.76rem] text-[#475569] mb-2.5
           [&>span]:after:content-['·'] [&>span]:after:ml-2 [&>span]:after:text-[#cbd5e1] [&>span:last-child]:after:content-['']">
-          <span>{listing.engineCapacity}cc</span>
+          <span>{listing.engineCapacity}{listing.engineType === "electric" ? " kWh" : "cc"}</span>
           <span>{listing.transmission}</span>
           <span>{listing.mileage?.toLocaleString()} km</span>
         </div>

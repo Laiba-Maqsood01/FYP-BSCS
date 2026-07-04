@@ -71,16 +71,19 @@ if (!process.env.CLOUDINARY_API_SECRET) {
     throw new Error("CLOUDINARY_API_SECRET is not defined in environment variables.");
 }
 
-// Twilio Verify (SMS OTP for seller contact reveal)
-// if (!process.env.TWILIO_ACCOUNT_SID) {
-//     throw new Error("TWILIO_ACCOUNT_SID is not defined in environment variables.");
-// }
-// if (!process.env.TWILIO_AUTH_TOKEN) {
-//     throw new Error("TWILIO_AUTH_TOKEN is not defined in environment variables.");
-// }
-// if (!process.env.TWILIO_VERIFY_SERVICE_SID) {
-//     throw new Error("TWILIO_VERIFY_SERVICE_SID is not defined in environment variables.");
-// }
+// Twilio (SMS OTP + inspection reminders)
+if (!process.env.TWILIO_ACCOUNT_SID) {
+    throw new Error("TWILIO_ACCOUNT_SID is not defined in environment variables.");
+}
+if (!process.env.TWILIO_AUTH_TOKEN) {
+    throw new Error("TWILIO_AUTH_TOKEN is not defined in environment variables.");
+}
+if (!process.env.TWILIO_VERIFY_SERVICE_SID) {
+    throw new Error("TWILIO_VERIFY_SERVICE_SID is not defined in environment variables.");
+}
+if (!process.env.TWILIO_PHONE_NUMBER) {
+    throw new Error("TWILIO_PHONE_NUMBER is not defined in environment variables.");
+}
 
 
 const config = {
@@ -105,6 +108,12 @@ const config = {
     CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME,
     CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY,
     CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET,
+
+    // Twilio (SMS OTP + inspection reminders)
+    TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID,
+    TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN,
+    TWILIO_VERIFY_SERVICE_SID: process.env.TWILIO_VERIFY_SERVICE_SID,
+    TWILIO_PHONE_NUMBER: process.env.TWILIO_PHONE_NUMBER,
 
 }
 

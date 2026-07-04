@@ -20,6 +20,7 @@ import { asyncHandler } from "./utils/asyncHandler.js";
 import { ApiResponse } from "./utils/apiResponse.js";
 
 import { startExpiryJobs  } from "./jobs/featured.expiry.job.js";
+import { startInspectionReminderJob } from "./jobs/inspection.reminder.job.js";
 
 import managedSaleRouter from "./modules/managed-sale/managed-sale.routes.js";
 import reportRouter from "./modules/inspection-report/inspectionReport.routes.js";
@@ -34,16 +35,16 @@ import cors from "cors";
 const app = express()
 
 
-// Rate limiter FIRST (global protection)
-app.use(apiLimiter);
-
-//for now just use 
-// app.use(cors());
-
+// CORS must run BEFORE the rate limiter — otherwise 429 responses go out
+// without Access-Control-Allow-Origin and the browser blocks them, so the
+// frontend can never read the "Too many requests" message.
 app.use(cors({
   origin: "http://localhost:5173", // useful when frontend is integrated
   credentials: true
 }));
+
+// Rate limiter (global protection)
+app.use(apiLimiter);
 
 
 // Helmet for securing extra information, like hackers can check our tool(express) then can find the vulnerability and attack our website.
@@ -52,6 +53,9 @@ app.use(helmet());
 
 // Start cron jobs to auto handle featured expiry every midnight, and commission expiry after every 5mins
 startExpiryJobs();
+
+// Daily day-before inspection reminder SMS (Twilio)
+startInspectionReminderJob();
 
 // for stripe webhook  /api/payment
 app.use(

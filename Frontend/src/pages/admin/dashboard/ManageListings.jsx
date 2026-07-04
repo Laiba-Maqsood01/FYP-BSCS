@@ -26,7 +26,10 @@ const STATUS_FILTERS = [
 // ── Action buttons — shown per listing based on its status ────────────────────
 
 const ListingActions = memo(function ListingActions({ listing, onApprove, onReject, onRemove, onMarkSold }) {
-  const { status, saleMode } = listing;
+  const { status, saleMode, inspectionStatus } = listing;
+  // Once the inspector is on site or done, rejection is no longer allowed —
+  // only Remove (backend enforces this too).
+  const inspectionStarted = ["IN_PROGRESS", "COMPLETED"].includes(inspectionStatus);
   return (
     <div className="flex items-center gap-2 flex-wrap">
       {status === "ACTIVE" && (
@@ -43,7 +46,7 @@ const ListingActions = memo(function ListingActions({ listing, onApprove, onReje
           <CheckCircle size={12} /> Approve
         </button>
       )}
-      {status === "PENDING" && (
+      {status === "PENDING" && !inspectionStarted && (
         <button onClick={() => onReject(listing)}
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg transition"
           style={{ background: "#fff7ed", color: "#9a3412", border: "1px solid #fed7aa" }}>

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Heart, Share2, ChevronLeft, ChevronRight, Phone, ShieldCheck, ExternalLink, Clock, CheckCircle2, MapPin, Calendar, Gauge, Flame, Settings2, AlertCircle, Check,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import { getListingDetail } from "../../services/listingService";
+import { getListingDetail, requestContactOtp, verifyContactOtp } from "../../services/listingService";
 import { getListingInspectionStatus } from "../../services/inspectionService";
 import { checkFavoriteStatus, addFavorite, removeFavorite } from "../../services/favoriteService";
 import api from "../../services/api";
@@ -398,7 +398,7 @@ function CarDetails({ listing }) {
     ["Registered In",  listing.isRegistered ? (listing.registeredIn?.name || "—") : "Un-Registered"],
     ["Assembly",        cap(listing.assembly)],
     ["Body Type",       listing.bodyType?.name || "—"],
-    ["Engine Capacity", listing.engineCapacity ? `${listing.engineCapacity} cc` : "—"],
+    ["Engine Capacity", listing.engineCapacity ? `${listing.engineCapacity} ${listing.engineType === "electric" ? "kWh" : "cc"}` : "—"],
     ["Color",           listing.exteriorColor || "—"],
     ["Last Updated",    formatDate(listing.updatedAt)],
   ];
@@ -453,6 +453,13 @@ export default function ListingDetail() {
   const [copied,        setCopied]        = useState(false);
   const [companyPhone,  setCompanyPhone]  = useState(null);
 
+  // Seller contact reveal (OTP) state
+  const [revealedPhone,   setRevealedPhone]   = useState(null);  // real number after OTP
+  const [otpStage,        setOtpStage]        = useState(false); // showing OTP input
+  const [otpCode,         setOtpCode]         = useState("");
+  const [otpSentTo,       setOtpSentTo]       = useState("");
+  const [contactLoading,  setContactLoading]  = useState(false);
+
   useEffect(() => {
     setLoading(true);
     setError(false);
@@ -479,7 +486,46 @@ export default function ListingDetail() {
   const isOwner  = !!(user && sellerId && sellerId.toString() === user._id?.toString());
   const isInspected = inspection?.status === "COMPLETED";
   const isManaged = listing?.saleMode === "MANAGED";
-  const displayPhone = isManaged ? (companyPhone ?? "—") : listing?.mobileNumber;
+  // Managed → GearTrade company number (public). Regular → real number only after OTP reveal.
+  const displayPhone = isManaged ? (companyPhone ?? "—") : (revealedPhone ?? listing?.mobileNumber);
+
+  // Step 1: buyer clicks "Show Phone Number" → send OTP to their own number.
+  // Owner/admin get otpRequired:false and skip straight to reveal.
+  const handleRequestContact = async () => {
+    if (!isAuthenticated) { navigate("/login"); return; }
+    setContactLoading(true);
+    try {
+      const res = await requestContactOtp(id);
+      if (res.otpRequired === false) {
+        const data = await verifyContactOtp(id, "");
+        setRevealedPhone(data.mobileNumber);
+        setPhoneRevealed(true);
+      } else {
+        setOtpSentTo(res.sentTo || "");
+        setOtpStage(true);
+      }
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Could not send code. Try again.");
+    } finally {
+      setContactLoading(false);
+    }
+  };
+
+  // Step 2: buyer submits the OTP → reveal the real seller number.
+  const handleVerifyContact = async () => {
+    if (!otpCode.trim()) { toast.error("Enter the code sent to your phone"); return; }
+    setContactLoading(true);
+    try {
+      const data = await verifyContactOtp(id, otpCode.trim());
+      setRevealedPhone(data.mobileNumber);
+      setPhoneRevealed(true);
+      setOtpStage(false);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Invalid or expired code");
+    } finally {
+      setContactLoading(false);
+    }
+  };
 
   const handleFavoriteToggle = async () => {
     if (!isAuthenticated) { navigate("/login"); return; }
@@ -728,21 +774,53 @@ export default function ListingDetail() {
                     <Phone size={16} />
                     {displayPhone}
                   </div>
+                ) : otpStage ? (
+                  <div className="mb-3 rounded-xl p-4" style={{ border: "1px solid rgba(0,0,0,0.1)" }}>
+                    <p className="text-xs text-brand-muted mb-1">
+                      We sent a code by SMS to your number{otpSentTo ? ` ${otpSentTo}` : ""}.
+                    </p>
+                    <p className="text-xs text-brand-muted mb-3">Enter it to view the seller's contact.</p>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      value={otpCode}
+                      onChange={e => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                      placeholder="Enter code"
+                      className="w-full text-center tracking-[0.3em] font-semibold bg-brand-surface border border-black/10 rounded-lg px-3 py-2.5 text-brand-dark2 text-sm outline-none focus:border-[#374151] focus:ring-2 focus:ring-[#37415114] transition mb-3"
+                    />
+                    <button
+                      onClick={handleVerifyContact}
+                      disabled={contactLoading}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-white font-semibold text-sm transition hover:opacity-90 disabled:opacity-60"
+                      style={{ background: "#16a34a", borderRadius: "0.75rem" }}
+                    >
+                      {contactLoading ? "Verifying…" : "Verify & Show Number"}
+                    </button>
+                    <button
+                      onClick={handleRequestContact}
+                      disabled={contactLoading}
+                      className="w-full text-xs text-brand-muted mt-2 hover:text-brand-dark transition disabled:opacity-60"
+                    >
+                      Resend code
+                    </button>
+                  </div>
                 ) : (
                   <button
-                    onClick={() => setPhoneRevealed(true)}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-white font-semibold text-sm mb-3 transition hover:opacity-90"
+                    onClick={handleRequestContact}
+                    disabled={contactLoading}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-white font-semibold text-sm mb-3 transition hover:opacity-90 disabled:opacity-60"
                     style={{ background: "#16a34a", borderRadius: "0.75rem" }}
                   >
                     <Phone size={16} />
-                    Show Phone Number
+                    {contactLoading ? "Sending code…" : "Show Phone Number"}
                   </button>
                 )
               )}
 
-              {!isManaged && listing.whatsappAllowed && listing.mobileNumber && (
+              {!isManaged && listing.whatsappAllowed && revealedPhone && (
                 <a
-                  href={`https://wa.me/92${listing.mobileNumber.replace(/^0/, "")}`}
+                  href={`https://wa.me/92${revealedPhone.replace(/^0/, "")}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-white font-semibold text-sm transition hover:opacity-90"

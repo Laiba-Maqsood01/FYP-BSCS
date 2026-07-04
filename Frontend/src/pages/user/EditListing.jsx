@@ -325,8 +325,16 @@ export default function EditListing() {
         secondaryNumber: form.secondaryNumber || undefined,
         whatsappAllowed: form.whatsappAllowed,
       });
-      showSuccess("Listing updated successfully!");
-      navigate("/dashboard/listings");
+      // A rejected MANAGED listing goes back to PENDING on edit, but its paid
+      // onboarding inspection was cancelled (and refunded) on rejection — the
+      // owner must book and pay a fresh inspection to resubmit.
+      if (listing?.saleMode === "MANAGED" && listing?.status === "REJECTED") {
+        showSuccess("Listing updated! Now book its onboarding inspection to resubmit.");
+        navigate(`/inspection/book/${id}?mode=managed`);
+      } else {
+        showSuccess("Listing updated successfully!");
+        navigate("/dashboard/listings");
+      }
     } catch (err) {
       showError(err?.response?.data?.message ?? "Failed to update listing.");
     } finally { setSaving(false); }
