@@ -30,7 +30,6 @@ const inspectionSchema = new mongoose.Schema(
       type: String,
       enum: [
         "PENDING",
-        "PENDING_COORDINATION",
         "SCHEDULED",
         "IN_PROGRESS",
         "COMPLETED",

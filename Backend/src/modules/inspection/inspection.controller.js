@@ -8,7 +8,12 @@ export const requestInspection = asyncHandler(async (req, res) => {
 
     const inspection = await inspectionService.requestInspection(
         listingId,
-        req.user._id
+        req.user._id,
+        {
+            inspectionAddress: req.body.inspectionAddress,
+            scheduledDate: req.body.scheduledDate,
+            timeSlot: req.body.timeSlot
+        }
     );
 
     res.status(201).json(

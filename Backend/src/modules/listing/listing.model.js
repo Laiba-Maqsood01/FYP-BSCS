@@ -29,10 +29,10 @@ const listingSchema = new mongoose.Schema(
       default: true
     },
 
-    // registered city (null when isRegistered = false)
+    // province where the car is registered (null when isRegistered = false)
     registeredIn: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "cities",
+      ref: "provinces",
       default: null
     },
 

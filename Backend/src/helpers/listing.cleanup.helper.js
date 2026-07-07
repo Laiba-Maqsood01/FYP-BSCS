@@ -1,6 +1,7 @@
 import inspectionModel from "../modules/inspection/inspection.model.js";
 import featuredModel from "../modules/featured/featured.model.js";
 import listingModel from "../modules/listing/listing.model.js";
+import { voidPendingPayments } from "../modules/payment/payment.service.js";
 
 import { ApiError } from "../utils/apiError.js";
 
@@ -39,19 +40,21 @@ export async function cancelInspectionForListing(listingId, forceCancel = false,
     inspection.refundRequired = false;
     inspection.refundStatus = "NOT_REQUIRED";
     await inspection.save();
+    await voidPendingPayments(inspection._id);
     return { blocked: false, refundRequired: false };
   }
 
   // Refund only when buyer paid and inspection not yet delivered
   const refundRequired =
     inspection.inspectionBy === "BUYER" &&
-    ["PENDING_COORDINATION", "SCHEDULED"].includes(inspection.status);
+    inspection.status === "SCHEDULED";
 
   inspection.status = "CANCELLED";
   inspection.cancelReason = cancelReason;
   inspection.refundRequired = refundRequired;
   inspection.refundStatus = refundRequired ? "PENDING" : "NOT_REQUIRED";
   await inspection.save();
+  await voidPendingPayments(inspection._id);
 
   return { blocked: false, refundRequired };
 }

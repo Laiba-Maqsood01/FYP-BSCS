@@ -1,6 +1,5 @@
 const STAGES = [
   { key: "PENDING",              label: "Pending",             color: "#0f172a" },
-  { key: "PENDING_COORDINATION", label: "Pending coordination",color: "#185FA5" },
   { key: "SCHEDULED",            label: "Scheduled",           color: "#1D9E75" },
   { key: "IN_PROGRESS",          label: "In progress",         color: "#854F0B" },
   { key: "COMPLETED",            label: "Completed",           color: "#3B6D11" },

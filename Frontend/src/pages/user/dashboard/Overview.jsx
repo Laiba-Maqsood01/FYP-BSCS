@@ -121,7 +121,6 @@ function buildActivity(listings, inspections) {
       COMPLETED:            { text: `Inspection completed for ${car || "your listing"}`,   dot: "#16a34a" },
       SCHEDULED:            { text: `Inspection scheduled for ${car || "your listing"}`,   dot: "#3b82f6" },
       IN_PROGRESS:          { text: `Inspection in progress for ${car || "your listing"}`, dot: "#ea6d00" },
-      PENDING_COORDINATION: { text: `Inspection requested for ${car || "your listing"}`,   dot: "#d97706" },
     };
     const ev = map[i.status];
     if (ev) events.push({ ...ev, date: i.createdAt });

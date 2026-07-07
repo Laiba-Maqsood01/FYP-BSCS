@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Heart, Share2, ChevronLeft, ChevronRight, Phone, ShieldCheck, ExternalLink, Clock, CheckCircle2, MapPin, Calendar, Gauge, Flame, Settings2, AlertCircle, Check,
+import { Heart, Share2, ChevronLeft, ChevronRight, Phone, ShieldCheck, ExternalLink, Clock, CheckCircle2, MapPin, Calendar, Gauge, Flame, Settings2, AlertCircle, Check, X,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { getListingDetail, requestContactOtp, verifyContactOtp } from "../../services/listingService";
+import { getAdminListingDetail } from "../../services/adminService";
 import { getListingInspectionStatus } from "../../services/inspectionService";
+import { isManagedCity } from "../../utils/managedCities";
 import { checkFavoriteStatus, addFavorite, removeFavorite } from "../../services/favoriteService";
 import api from "../../services/api";
 import { toast } from "react-toastify";
@@ -186,24 +188,18 @@ function StatsRow({ year, mileage, engineType, transmission }) {
 
 // ─── InspectionSection ────────────────────────────────────────────────────────
 
-function InspectionSection({ listingId, inspection, isAuthenticated, isOwner, navigate, isManaged }) {
+function InspectionSection({ listingId, inspection, isAuthenticated, isOwner, navigate, isManaged, listingStatus, serviceAvailable }) {
   const handleRequest = () => {
     if (!isAuthenticated) { navigate("/login"); return; }
     const mode = isOwner ? "seller" : "buyer";
     navigate(`/inspection/book/${listingId}?mode=${mode}`);
   };
 
-  const activeStatuses = ["PENDING_COORDINATION", "SCHEDULED", "IN_PROGRESS"];
+  const activeStatuses = ["SCHEDULED", "IN_PROGRESS"];
   const isActive    = inspection && activeStatuses.includes(inspection.status);
   const isCompleted = inspection?.status === "COMPLETED";
 
   const statusConfig = {
-    PENDING_COORDINATION: {
-      color: "#d97706", bg: "#fffbeb", border: "#fde68a",
-      icon: <Clock size={18} style={{ color: "#d97706" }} />,
-      label: "Inspection Requested",
-      sub: "Our team is coordinating with all parties to schedule the inspection.",
-    },
     SCHEDULED: {
       color: "#1D4ED8", bg: "#eff6ff", border: "#bfdbfe",
       icon: <Calendar size={18} style={{ color: "#1D4ED8" }} />,
@@ -305,6 +301,28 @@ function InspectionSection({ listingId, inspection, isAuthenticated, isOwner, na
     );
   }
 
+  // Non-active managed listing whose inspection was cancelled — only admins
+  // can open these, so show the cancelled state instead of the marketing copy.
+  // (General ACTIVE listings with a cancelled inspection skip this and fall
+  // through to the "Request Inspection" CTA below.)
+  if (isManaged && listingStatus !== "ACTIVE" && inspection?.status === "CANCELLED") {
+    return (
+      <div className="rounded-xl p-5 mt-5" style={{ background: "#fef2f2", border: "1px solid #fecaca" }}>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "#dc262620" }}>
+            <X size={20} style={{ color: "#dc2626" }} />
+          </div>
+          <div>
+            <p className="font-semibold text-sm" style={{ color: "#dc2626" }}>Inspection Cancelled</p>
+            <p className="text-xs text-brand-muted mt-0.5">
+              {inspection.cancelReason || "The onboarding inspection for this managed listing was cancelled."}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Managed listing with pending inspection — no CTA, inspection is handled by admin
   if (isManaged) {
     return (
@@ -322,13 +340,22 @@ function InspectionSection({ listingId, inspection, isAuthenticated, isOwner, na
     );
   }
 
-  // Default: show CTA
+  // Default: show CTA (disabled when the listing's city is outside our
+  // inspection service area)
   return (
-    <div className="rounded-xl p-5 mt-5" style={{ background: "#f8fafc", border: "1px solid rgba(0,0,0,0.08)" }}>
+    <div className="relative rounded-xl p-5 mt-5" style={{ background: "#f8fafc", border: "1px solid rgba(0,0,0,0.08)" }}>
+      {!serviceAvailable && (
+        <span
+          className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold"
+          style={{ background: "#fef2f2", color: "#b91c1c", border: "1px solid #fecaca" }}
+        >
+          <AlertCircle size={11} /> Our services are not available in this city
+        </span>
+      )}
       <div className="flex items-start gap-3 mb-4">
         <div
           className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
-          style={{ background: "#ea6d00" }}
+          style={{ background: serviceAvailable ? "#ea6d00" : "#94a3b8" }}
         >
           <ShieldCheck size={20} color="#fff" />
         </div>
@@ -349,14 +376,21 @@ function InspectionSection({ listingId, inspection, isAuthenticated, isOwner, na
       </div>
       <button
         onClick={handleRequest}
+        disabled={!serviceAvailable}
         className="px-5 py-2 text-sm font-semibold text-white rounded-lg transition hover:opacity-90"
-        style={{ background: "#ea6d00", borderRadius: "0.5rem" }}
+        style={{
+          background: serviceAvailable ? "#ea6d00" : "#cbd5e1",
+          borderRadius: "0.5rem",
+          cursor: serviceAvailable ? "pointer" : "not-allowed",
+        }}
       >
-        {!isAuthenticated
-          ? "Login to Request Inspection"
-          : isOwner
-            ? "Schedule Inspection"
-            : "Request Inspection"}
+        {!serviceAvailable
+          ? "Inspection Unavailable"
+          : !isAuthenticated
+            ? "Login to Request Inspection"
+            : isOwner
+              ? "Schedule Inspection"
+              : "Request Inspection"}
       </button>
     </div>
   );
@@ -395,7 +429,7 @@ function SafetyTips() {
 
 function CarDetails({ listing }) {
   const rows = [
-    ["Registered In",  listing.isRegistered ? (listing.registeredIn?.name || "—") : "Un-Registered"],
+    ["Registered In",  listing.isRegistered ? (listing.registeredIn?.name || "Not specified") : "Un-Registered"],
     ["Assembly",        cap(listing.assembly)],
     ["Body Type",       listing.bodyType?.name || "—"],
     ["Engine Capacity", listing.engineCapacity ? `${listing.engineCapacity} ${listing.engineType === "electric" ? "kWh" : "cc"}` : "—"],
@@ -441,7 +475,7 @@ function Description({ text }) {
 export default function ListingDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
 
   const [listing,       setListing]       = useState(null);
   const [inspection,    setInspection]    = useState(undefined); // undefined = not yet fetched
@@ -461,11 +495,16 @@ export default function ListingDetail() {
   const [contactLoading,  setContactLoading]  = useState(false);
 
   useEffect(() => {
+    // Wait for the session refresh to settle first — until then we don't know
+    // the viewer's role, and admins fetch through the admin endpoint (which
+    // also returns PENDING / REJECTED listings for review).
+    if (authLoading) return;
+
     setLoading(true);
     setError(false);
 
     const promises = [
-      getListingDetail(id),
+      user?.role === "admin" ? getAdminListingDetail(id) : getListingDetail(id),
       getListingInspectionStatus(id).catch(() => null),
       isAuthenticated ? checkFavoriteStatus(id).catch(() => null) : Promise.resolve(null),
       api.get("/settings").then(r => r.data.data).catch(() => null),
@@ -480,7 +519,7 @@ export default function ListingDetail() {
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
-  }, [id, isAuthenticated]);
+  }, [id, isAuthenticated, authLoading, user?.role]);
 
   const sellerId = listing?.seller?._id ?? listing?.seller;
   const isOwner  = !!(user && sellerId && sellerId.toString() === user._id?.toString());
@@ -714,6 +753,8 @@ export default function ListingDetail() {
             isOwner={isOwner}
             navigate={navigate}
             isManaged={listing.saleMode === "MANAGED"}
+            listingStatus={listing.status}
+            serviceAvailable={isManagedCity(listing.city?.name)}
           />
 
           <CarDetails listing={listing} />

@@ -16,59 +16,15 @@ import config from "../../config/config.js"
 const stripe = new Stripe(config.STRIPE_SECRET_KEY);
 
 
-export async function markSandboxSuccess(transactionId) {
-  const payment = await paymentModel.findOne({ transactionId });
-
-  if (!payment) {
-    throw new ApiError(404, "Payment not found");
-  }
-
-  // prevents duplicate success processing
-  if (payment.status === "SUCCESS") {
-    return payment;
-  }
-
-  payment.status = "SUCCESS";
-  await payment.save();
-
-  // Void any other PENDING payments for the same reference (stale retry attempts)
-  if (payment.referenceId) {
-    await paymentModel.updateMany(
-      { referenceId: payment.referenceId, status: "PENDING", _id: { $ne: payment._id } },
-      { $set: { status: "FAILED" } }
-    );
-  }
-
-  // FEATURED PAYMENT
-  if (payment.purpose === "FEATURED") {
-    const feature = await featuredModel.findById(payment.referenceId);
-    if (!feature) throw new ApiError(404, "Feature not found");
-
-    feature.status = "ACTIVE";
-    feature.startDate = new Date();
-    feature.endDate = new Date(Date.now() + feature.durationDays * 24 * 60 * 60 * 1000);
-
-    await feature.save();
-
-    const listing = await listingModel.findById(payment.listing);
-    listing.isFeatured = true;
-    await listing.save();
-  }
-
-  // INSPECTION PAYMENT
-  if (payment.purpose === "INSPECTION" || payment.purpose === "RE_INSPECTION") {
-    const inspection = await inspectionModel.findById(payment.referenceId);
-    if (!inspection) throw new ApiError(404, "Inspection not found");
-
-    if (inspection.inspectionBy === "OWNER") {
-      inspection.status = "SCHEDULED";
-    } else {
-      inspection.status = "PENDING_COORDINATION";
-    }
-    await inspection.save();
-  }
-
-  return payment;
+// Void any still-PENDING payment attempts for a reference (e.g. when its
+// inspection is cancelled) so the user's payments page stops offering retry.
+// Money that still lands through an already-open Stripe session is caught by
+// the webhook, which sees the cancelled inspection and queues a refund.
+export async function voidPendingPayments(referenceId) {
+  await paymentModel.updateMany(
+    { referenceId, status: "PENDING" },
+    { $set: { status: "FAILED" } }
+  );
 }
 
 export async function createStripeCheckoutSession(payment, options = {}) {
@@ -202,32 +158,41 @@ async function handleCheckoutSessionCompleted(session) {
     const inspection = await inspectionModel.findById(payment.referenceId);
     if (!inspection) return;
 
-    inspection.status =
-      inspection.inspectionBy === "OWNER"
-        ? "SCHEDULED"
-        : "PENDING_COORDINATION";
+    // The inspection may have been cancelled while the user was on the
+    // Stripe page (e.g. admin rejected the listing). Never resurrect it —
+    // the money landed for a dead inspection, so queue a refund instead.
+    if (inspection.status === "CANCELLED") {
+      inspection.refundRequired = true;
+      inspection.refundStatus = "PENDING";
+      await inspection.save();
+      return;
+    }
+
+    // Both owner and buyer book the schedule themselves at request time,
+    // so a successful payment always moves the inspection to SCHEDULED.
+    inspection.status = "SCHEDULED";
 
     await inspection.save();
-  }    
+  }
 
-    // COMMISSION FLOW
-    if (payment.purpose === "COMMISSION") {
-      const commission = await commissionModel.findById(payment.referenceId);
-      if (!commission) return;
+  // COMMISSION FLOW
+  if (payment.purpose === "COMMISSION") {
+    const commission = await commissionModel.findById(payment.referenceId);
+    if (!commission) return;
 
-      // Mark commission as paid
-      commission.status = "PAID";
-      commission.payment = payment._id;
-      await commission.save();
+    // Mark commission as paid
+    commission.status = "PAID";
+    commission.payment = payment._id;
+    await commission.save();
 
-      // Mark listing as SOLD
-      const listing = await listingModel.findById(payment.listing);
-      if (listing) {
-        listing.status = "SOLD";
-        await listing.save();
-      }
+    // Mark listing as SOLD
+    const listing = await listingModel.findById(payment.listing);
+    if (listing) {
+      listing.status = "SOLD";
+      await listing.save();
     }
   }
+}
 
 
 export async function getMyPayments(
@@ -253,7 +218,7 @@ export async function getMyPayments(
       path: "listing",
       select: "year images",
       populate: [
-        { path: "brand",    select: "name" },
+        { path: "brand", select: "name" },
         { path: "carModel", select: "name" },
       ],
     })

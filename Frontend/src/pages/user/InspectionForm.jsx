@@ -1,14 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
-import { ChevronRight, ChevronDown, X, Check, AlertCircle, Calendar, Clock } from "lucide-react";
+import { ChevronRight, AlertCircle, Calendar, Clock } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import * as inspectionService from "../../services/inspectionService";
 import { showError } from "../../utils/toast";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-
-const MANAGED_CITY_NAMES = ["Rahim Yar Khan", "Khanpur", "Liaqat Pur", "Sadiqabad"];
-
 
 // Build 7 date options: tomorrow → +7 days
 function buildDateOptions() {
@@ -30,56 +27,6 @@ const DATE_OPTIONS = buildDateOptions();
 // ── Shared Styles ─────────────────────────────────────────────────────────────
 
 const inputCls =  "w-full bg-brand-surface border border-black/10 rounded-lg px-3 py-2.5 text-brand-dark2 text-sm outline-none focus:border-[#374151] focus:ring-2 focus:ring-[#37415114] transition placeholder:text-gray-400";
-
-const selectCls =
-  "w-full bg-brand-surface border border-black/10 rounded-lg px-3 py-2.5 text-brand-dark2 text-sm outline-none focus:border-[#374151] focus:ring-2 focus:ring-[#37415114] transition appearance-none cursor-pointer";
-
-function CustomSelect({ value, onChange, options, placeholder }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const selected = options.find(o => o.value === value);
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(p => !p)}
-        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border border-black/10 text-sm text-left transition"
-        style={{ background: "rgba(255,255,255,0.8)", backdropFilter: "blur(8px)", cursor: "pointer" }}
-      >
-        <span className={selected ? "text-brand-dark2" : "text-gray-400"}>
-          {selected ? selected.label : placeholder}
-        </span>
-        <ChevronDown size={15} className="text-gray-400 shrink-0" />
-      </button>
-      {open && (
-        <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white border border-black/10 rounded-xl shadow-[0_10px_30px_rgba(15,23,42,0.1)] overflow-y-auto max-h-56 z-500">
-          {options.map(opt => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => { onChange(opt.value); setOpen(false); }}
-              className={`block w-full text-left px-4 py-2.5 text-[0.88rem] cursor-pointer transition ${
-                value === opt.value
-                  ? "bg-[#f1f5f9] font-semibold text-brand-dark"
-                  : "text-[#374151] hover:bg-brand-surface"
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 const cardCls = "bg-white rounded-2xl shadow-xl p-8";
 
@@ -306,41 +253,27 @@ export default function InspectionForm() {
     fetch
       .then(l => {
         setListing(l);
+        // City always comes from the listing — not user-editable
+        setCity(l.city?.name || "");
         // Prefill name from auth user
         if (user?.username) setFullName(user.username);
-        // Prefill phone
+        // Prefill phone — owner: listing contact, buyer: own registered number
         if (isOwner && l.mobileNumber) setPhone(l.mobileNumber);
-        // Prefill city if buyer and city is a managed city
-        if (isBuyer && l.city) {
-          const cityName = l.city?.name || "";
-          if (MANAGED_CITY_NAMES.some(n => n.toLowerCase() === cityName.toLowerCase())) {
-            setCity(cityName);
-          }
-        }
+        if (isBuyer && user?.mobileNumber) setPhone(user.mobileNumber);
       })
       .catch(() => setFetchErr(true));
   }, [listingId]);
-
-  // Managed city check for buyer
-  const carCityName = listing?.city?.name || "";
-  const carCityIsManaged = MANAGED_CITY_NAMES.some(
-    n => n.toLowerCase() === carCityName.toLowerCase()
-  );
 
   const carLabel = listing
     ? `${listing.year} ${listing.brand?.name || ""} ${listing.carModel?.name || ""}`.trim()
     : "";
 
-  // Which city to show in the city dropdown for owner forms
-  const cityOptions = MANAGED_CITY_NAMES;
-
+  // Same form for buyer and seller — the buyer coordinates day/time/place
+  // with the seller directly, then books it here.
   const validate = () => {
     const e = {};
-    if (isOwner) {
-      if (!city)    e.city    = "City is required";
-      if (!address) e.address = "Address is required";
-      if (!slot)    e.slot    = "Please select an inspection slot";
-    }
+    if (!address) e.address = "Address is required";
+    if (!slot)    e.slot    = "Please select an inspection slot";
     if (!fullName.trim()) e.fullName = "Full name is required";
     if (!phone || !/^03\d{9}$/.test(phone))
       e.phone = "Enter a valid 11-digit number starting with 03";
@@ -356,19 +289,18 @@ export default function InspectionForm() {
     try {
       let inspection;
 
+      const body = {
+        inspectionAddress: `${city}, ${address}`,
+        scheduledDate: new Date(slot.date.iso).toISOString(),
+        ...(slot.slot ? { timeSlot: slot.slot } : {}),
+      };
+
       if (isBuyer) {
-        inspection = await inspectionService.requestBuyerInspection(listingId);
+        inspection = await inspectionService.requestBuyerInspection(listingId, body);
+      } else if (mode === "managed") {
+        inspection = await inspectionService.requestManagedInspection(listingId, body);
       } else {
-        const ownerBody = {
-          inspectionAddress: `${city}, ${address}`,
-          scheduledDate: new Date(slot.date.iso).toISOString(),
-          ...(slot.slot ? { timeSlot: slot.slot } : {}),
-        };
-        if (mode === "managed") {
-          inspection = await inspectionService.requestManagedInspection(listingId, ownerBody);
-        } else {
-          inspection = await inspectionService.requestSellerReInspection(listingId, ownerBody);
-        }
+        inspection = await inspectionService.requestSellerReInspection(listingId, body);
       }
 
       // Create Stripe payment session
@@ -424,55 +356,29 @@ export default function InspectionForm() {
             <p className="text-sm text-brand-muted">
               {mode === "managed" && "Our inspector will visit to onboard your car for managed sale."}
               {mode === "seller"  && "Book a slot for our inspector to evaluate your car."}
-              {mode === "buyer"   && "We'll inspect the car and send you a detailed report."}
+              {mode === "buyer"   && "Agree on a time and place with the seller, then book the slot here — our inspector will meet you both there."}
             </p>
           </div>
 
           <div className="space-y-4">
-            {/* ── CITY ── */}
-            {isOwner && (
-              <Field label="City" required error={errors.city}>
-                <CustomSelect
-                  value={city}
-                  onChange={setCity}
-                  placeholder="Select City"
-                  options={[{ value: "", label: "Select City" }, ...cityOptions.map(c => ({ value: c, label: c }))]}
-                />
-              </Field>
-            )}
-
-            {/* Buyer: show city info */}
-            {isBuyer && listing && (
-              <div className="rounded-lg border border-black/10 bg-brand-surface px-4 py-3">
-                <p className="text-xs font-semibold text-brand-muted uppercase tracking-wide mb-1">Inspection City</p>
-                {carCityIsManaged ? (
-                  <p className="text-sm font-medium text-brand-dark2">{carCityName}</p>
-                ) : (
-                  <div className="flex items-start gap-2">
-                    <AlertCircle size={15} className="text-amber-500 mt-0.5 shrink-0" />
-                    <p className="text-sm text-brand-muted leading-relaxed">
-                      This car is listed in <span className="font-medium text-brand-dark2">{carCityName || "an unsupported city"}</span>.
-                      Our team will contact the seller to arrange inspection in a managed city.
-                      If unavailable, your payment will be refunded.
-                    </p>
-                  </div>
-                )}
+            {/* ── CITY (auto-filled from the listing, non-editable) ── */}
+            <Field label="City" hint="Inspection takes place in the listing's city">
+              <div className={`${inputCls} bg-gray-50 cursor-default`} style={{ pointerEvents: "none" }}>
+                {listing ? (city || "—") : <span className="text-gray-400">Loading…</span>}
               </div>
-            )}
+            </Field>
 
-            {/* ── ADDRESS (owner only) ── */}
-            {isOwner && (
-              <Field label="Inspection Address" required error={errors.address}
-                hint="House/Building No, Street, Area">
-                <input
-                  type="text"
-                  className={inputCls}
-                  placeholder="e.g. House 12, Street 4, Model Town"
-                  value={address}
-                  onChange={e => setAddress(e.target.value)}
-                />
-              </Field>
-            )}
+            {/* ── ADDRESS ── */}
+            <Field label="Inspection Address" required error={errors.address}
+              hint="House/Building No, Street, Area">
+              <input
+                type="text"
+                className={inputCls}
+                placeholder="e.g. House 12, Street 4, Model Town"
+                value={address}
+                onChange={e => setAddress(e.target.value)}
+              />
+            </Field>
 
             {/* ── CAR (auto-filled) ── */}
             <Field label="Car">
@@ -481,23 +387,21 @@ export default function InspectionForm() {
               </div>
             </Field>
 
-            {/* ── INSPECTION SLOT (owner only, buyer slot is admin-determined) ── */}
-            {isOwner && (
-              <Field label="Inspection Slot" required error={errors.slot}>
-                <button
-                  type="button"
-                  onClick={() => setShowPicker(true)}
-                  className="w-full text-left rounded-lg px-3 py-2.5 text-sm border border-black/10 bg-brand-surface flex items-center justify-between transition hover:border-gray-400"
-                  style={{ color: slotLabel ? "#1f2937" : "#9ca3af" }}
-                >
-                  <span className="flex items-center gap-2">
-                    <Clock size={15} className="text-brand-muted shrink-0" />
-                    {slotLabel || "Select date & time slot"}
-                  </span>
-                  <ChevronRight size={15} className="text-gray-400 shrink-0" />
-                </button>
-              </Field>
-            )}
+            {/* ── INSPECTION SLOT ── */}
+            <Field label="Inspection Slot" required error={errors.slot}>
+              <button
+                type="button"
+                onClick={() => setShowPicker(true)}
+                className="w-full text-left rounded-lg px-3 py-2.5 text-sm border border-black/10 bg-brand-surface flex items-center justify-between transition hover:border-gray-400"
+                style={{ color: slotLabel ? "#1f2937" : "#9ca3af" }}
+              >
+                <span className="flex items-center gap-2">
+                  <Clock size={15} className="text-brand-muted shrink-0" />
+                  {slotLabel || "Select date & time slot"}
+                </span>
+                <ChevronRight size={15} className="text-gray-400 shrink-0" />
+              </button>
+            </Field>
 
             {/* ── FULL NAME ── */}
             <Field label="Full Name" required error={errors.fullName}>

@@ -9,6 +9,12 @@ import * as listingService from "../../services/listingService";
 
 const MANAGED_CITY_NAMES = ["Rahim Yar Khan", "Khanpur", "Liaqat Pur", "Sadiqabad"];
 
+// Compare city names ignoring case, spaces and hyphens, so DB spellings like
+// "Khan Pur" or "Liaqatpur" still count as managed cities.
+const normalizeCityName = (name) => String(name || "").toLowerCase().replace(/[\s-]+/g, "");
+const isManagedCity = (name) =>
+  MANAGED_CITY_NAMES.some(n => normalizeCityName(n) === normalizeCityName(name));
+
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: CURRENT_YEAR - 1949 }, (_, i) => CURRENT_YEAR - i);
 
@@ -483,9 +489,7 @@ function CarInfoStep({ saleMode, cities, provinces, brands, bodyTypes, onBack, o
   const [showYMM, setShowYMM] = useState(false);
   const [errors, setErrors] = useState({});
 
-  const managedCities = cities.filter(c =>
-    MANAGED_CITY_NAMES.some(n => n.toLowerCase() === c.name.toLowerCase())
-  );
+  const managedCities = cities.filter(c => isManagedCity(c.name));
   const displayCities = saleMode === "MANAGED" ? managedCities : cities;
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
@@ -506,7 +510,7 @@ function CarInfoStep({ saleMode, cities, provinces, brands, bodyTypes, onBack, o
     if (form.mileage === "" || isNaN(Number(form.mileage)) || Number(form.mileage) < 0)
       e.mileage = "Valid mileage is required";
     if (form.isRegistered && !form.registeredIn)
-      e.registeredIn = "Registration city is required";
+      e.registeredIn = "Registration province is required";
     return e;
   };
 

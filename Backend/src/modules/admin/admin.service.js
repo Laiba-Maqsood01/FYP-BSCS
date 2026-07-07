@@ -12,7 +12,8 @@ import { ApiError } from "../../utils/apiError.js";
 import { ACCOUNT_STATUS } from "../../utils/constants.js";
 
 import { cleanupListingForDeletion } from "../../helpers/listing.cleanup.helper.js"
-import { processStripeRefund } from "../payment/payment.service.js";
+import { getListingDetails } from "../listing/listing.service.js";
+import { processStripeRefund, voidPendingPayments } from "../payment/payment.service.js";
 import { deleteImages, deleteFiles } from "../upload/upload.service.js";
 import { sendEmail } from "../../services/email.service.js";
 import { sendSms } from "../../services/sms.service.js";
@@ -85,10 +86,6 @@ export async function getDashboard() {
           total: [{ $count: "count" }],
           pending: [
             { $match: { status: "PENDING" } },
-            { $count: "count" },
-          ],
-          pending_coordination: [
-            { $match: { status: "PENDING_COORDINATION" } },
             { $count: "count" },
           ],
           scheduled: [
@@ -286,7 +283,6 @@ export async function getDashboard() {
     inspections: {
       total: count(inspectionStats, "total"),
       pending: count(inspectionStats, "pending"),
-      pending_coordination: count(inspectionStats, "pending_coordination"),
       scheduled: count(inspectionStats, "scheduled"),
       inProgress: count(inspectionStats, "inProgress"),
       completed: count(inspectionStats, "completed"),
@@ -643,6 +639,12 @@ export async function getListings(query) {
 }
 
 
+// Admin can open a listing's detail page in any status (PENDING, REJECTED, …).
+// Reuses the public detail service with the status filter disabled.
+export async function getListingDetail(listingId) {
+  return getListingDetails(listingId, true);
+}
+
 export async function approveListing(listingId) {
   const listing = await listingModel.findById(listingId);
 
@@ -693,17 +695,42 @@ export async function rejectListing(listingId, reason) {
     );
   }
 
+  // Managed listings can only be rejected AFTER the seller has paid the
+  // onboarding inspection fee (SCHEDULED is set only by the payment webhook).
+  // Before payment there is nothing to refund, and a reject could race the
+  // seller's open Stripe checkout page.
+  if (listing.saleMode === "MANAGED") {
+    const paidStatuses = ["SCHEDULED"];
+    if (!inspection || !paidStatuses.includes(inspection.status)) {
+      throw new ApiError(
+        400,
+        "A managed listing can only be rejected after the seller has paid the inspection fee."
+      );
+    }
+  }
+
   // Cancel the not-yet-started inspection. If the requester already paid,
   // queue a refund in the ManageRefunds queue — the admin is rejecting the
   // listing, so the paid service will never be delivered.
   if (inspection) {
-    const refundRequired = !!inspection.payment;
+    // inspection.payment is linked as soon as a checkout session is created,
+    // even if the user never paid — only a SUCCESS payment is refundable.
+    // (If payment completes after this rejection, the Stripe webhook detects
+    // the CANCELLED inspection and queues the refund itself.)
+    const refundRequired = !!(await paymentModel.exists({
+      referenceId: inspection._id,
+      status: "SUCCESS",
+    }));
 
     inspection.status = "CANCELLED";
     inspection.cancelReason = "Listing rejected by admin";
     inspection.refundRequired = refundRequired;
     inspection.refundStatus = refundRequired ? "PENDING" : "NOT_REQUIRED";
     await inspection.save();
+
+    // Kill unpaid payment attempts so the user can't "Complete Payment"
+    // for an inspection that no longer exists.
+    await voidPendingPayments(inspection._id);
   }
 
   // Images are intentionally kept — a rejected listing can be edited and
@@ -723,6 +750,22 @@ export async function removeListing(listingId) {
   if (!listing) throw new ApiError(404, "Listing not found");
   if (listing.status === "REMOVED") {
     throw new ApiError(400, "Listing is already removed");
+  }
+
+  // A pending managed listing whose inspection fee hasn't been paid can't be
+  // removed either — the seller may be mid-checkout and there would be
+  // nothing to refund. Same rule as rejectListing.
+  if (listing.saleMode === "MANAGED" && listing.status === "PENDING") {
+    const paidInspection = await inspectionModel.exists({
+      listing: listingId,
+      status: { $in: ["SCHEDULED", "IN_PROGRESS", "COMPLETED"] },
+    });
+    if (!paidInspection) {
+      throw new ApiError(
+        400,
+        "A managed listing can only be removed after the seller has paid the inspection fee."
+      );
+    }
   }
 
   // Force cancel any inspection including IN_PROGRESS (admin override)
@@ -806,6 +849,26 @@ export async function getInspections(query) {
       },
       { $unwind: "$listing" },
 
+      // Join brand + carModel (for the listing name in the admin table)
+      {
+        $lookup: {
+          from: "brands",
+          localField: "listing.brand",
+          foreignField: "_id",
+          as: "listing.brand",
+        },
+      },
+      { $unwind: "$listing.brand" },
+      {
+        $lookup: {
+          from: "car_models",
+          localField: "listing.carModel",
+          foreignField: "_id",
+          as: "listing.carModel",
+        },
+      },
+      { $unwind: "$listing.carModel" },
+
       // Join requestedBy user
       {
         $lookup: {
@@ -836,9 +899,11 @@ export async function getInspections(query) {
           report: 1,
           createdAt: 1,
           "listing._id": 1,
-          "listing.title": 1,
+          "listing.year": 1,
           "listing.saleMode": 1,
           "listing.status": 1,
+          "listing.brand.name": 1,
+          "listing.carModel.name": 1,
           "requestedBy._id": 1,
           "requestedBy.username": 1,
           "requestedBy.email": 1,
@@ -899,7 +964,6 @@ export async function updateInspectionStatus(inspectionId, status, cancelReason)
 
   // Guard valid transitions only
   const validTransitions = {
-    PENDING_COORDINATION: ["SCHEDULED", "CANCELLED"],
     SCHEDULED: ["IN_PROGRESS", "CANCELLED"],
     IN_PROGRESS: ["COMPLETED"],
   };
@@ -922,7 +986,7 @@ export async function updateInspectionStatus(inspectionId, status, cancelReason)
   if (status === "CANCELLED") {
     if (cancelReason) inspection.cancelReason = cancelReason;
 
-    const refundableStatuses = ["PENDING", "PENDING_COORDINATION", "SCHEDULED"];
+    const refundableStatuses = ["PENDING", "SCHEDULED"];
     if (
       inspection.inspectionBy === "BUYER" &&
       refundableStatuses.includes(previousStatus) &&
@@ -1109,12 +1173,20 @@ export async function getRefunds(query) {
       },
       { $unwind: "$requestedBy" },
 
-      // Join payment to get amount + paymentIntentId
+      // Join the SUCCESS payment only — pending/failed attempts are not
+      // refundable money and must not surface an amount here.
       {
         $lookup: {
           from: "payments",
-          localField: "_id",
-          foreignField: "referenceId",
+          let: { inspectionId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                status: "SUCCESS",
+                $expr: { $eq: ["$referenceId", "$$inspectionId"] },
+              },
+            },
+          ],
           as: "payment",
         },
       },
@@ -1174,9 +1246,19 @@ export async function approveRefund(inspectionId) {
   if (inspection.refundStatus === "PROCESSED") throw new ApiError(400, "Refund already processed");
   if (inspection.refundStatus === "NOT_REQUIRED") throw new ApiError(400, "Refund not required");
 
-  // Get payment amount before processing
-  const payment = await paymentModel.findOne({ referenceId: inspectionId });
-  const amount = payment?.amount;
+  // Refunds are only possible for money that actually arrived. Entries queued
+  // for a payment that never completed (legacy rows) are auto-cleared here.
+  const payment = await paymentModel.findOne({ referenceId: inspectionId, status: "SUCCESS" });
+  if (!payment) {
+    inspection.refundRequired = false;
+    inspection.refundStatus = "NOT_REQUIRED";
+    await inspection.save();
+    return {
+      message: "No completed payment exists for this inspection — refund marked as not required.",
+      inspection,
+    };
+  }
+  const amount = payment.amount;
 
   // Payment logic stays in payment module
   await processStripeRefund(inspectionId);
@@ -1509,24 +1591,16 @@ export async function scheduleInspection(inspectionId, { inspectionAddress, sche
   if (!inspection)
     throw new ApiError(404, "Inspection not found");
 
-  // Admin can set/update these fields in these statuses only
-  const allowedStatuses = ["PENDING_COORDINATION", "SCHEDULED"];
-  if (!allowedStatuses.includes(inspection.status))
-    throw new ApiError(400, `Cannot schedule an inspection with status ${inspection.status}. Allowed statuses: ${allowedStatuses.join(", ")}`);
+  // Admin can set/update these fields for scheduled inspections only
+  if (inspection.status !== "SCHEDULED")
+    throw new ApiError(400, `Cannot schedule an inspection with status ${inspection.status}. Only SCHEDULED inspections can be rescheduled.`);
 
   if (!inspectionAddress || !scheduledDate || !timeSlot)
     throw new ApiError(400, "inspectionAddress, scheduledDate and timeSlot are all required");
 
-  const wasAlreadyScheduled = inspection.status === "SCHEDULED";
-
   inspection.inspectionAddress = inspectionAddress;
   inspection.scheduledDate = new Date(scheduledDate);
   inspection.timeSlot = timeSlot;
-
-  // Only transition status if still in coordination — rescheduling keeps it SCHEDULED
-  if (inspection.status === "PENDING_COORDINATION") {
-    inspection.status = "SCHEDULED";
-  }
 
   await inspection.save();
 
@@ -1536,7 +1610,8 @@ export async function scheduleInspection(inspectionId, { inspectionAddress, sche
   const dateStr = inspection.scheduledDate.toLocaleDateString("en-GB", {
     day: "numeric", month: "short", year: "numeric",
   });
-  const action = wasAlreadyScheduled ? "rescheduled" : "scheduled";
+  // Users book the schedule themselves at request time, so an admin change is always a reschedule
+  const action = "rescheduled";
 
   const requesterPhone = inspection.requestedBy?.mobileNumber;
   if (requesterPhone) {

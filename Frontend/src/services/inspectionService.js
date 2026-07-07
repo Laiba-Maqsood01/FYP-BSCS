@@ -15,9 +15,10 @@ export const requestManagedInspection = (listingId, body) =>
 export const requestSellerReInspection = (listingId, body) =>
   api.post(`/inspection/${listingId}/reinspection`, body).then(r => r.data.data);
 
-// Buyer inspection request
-export const requestBuyerInspection = (listingId) =>
-  api.post(`/inspection/${listingId}/request`).then(r => r.data.data);
+// Buyer inspection request — buyer coordinates schedule with the seller
+// and books address/date/slot just like the seller flow
+export const requestBuyerInspection = (listingId, body) =>
+  api.post(`/inspection/${listingId}/request`, body).then(r => r.data.data);
 
 // Create payment session — returns { payment, checkoutUrl }
 export const createInspectionPayment = (inspectionId) =>

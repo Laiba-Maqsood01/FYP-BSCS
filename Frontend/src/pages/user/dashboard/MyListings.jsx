@@ -447,7 +447,6 @@ const ExpiryCountdown = memo(function ExpiryCountdown({ expiresAt }) {
 
 const INSP_STATUS_MAP = {
   PENDING:              { bg: "#fef9c3", text: "#b45309", icon: Clock,        label: "Inspection Requested" },
-  PENDING_COORDINATION: { bg: "#dbeafe", text: "#1d4ed8", icon: Calendar,     label: "Pending Coordination" },
   SCHEDULED:            { bg: "#dbeafe", text: "#1d4ed8", icon: Calendar,     label: "Inspection Scheduled" },
   IN_PROGRESS:          { bg: "#fef9c3", text: "#b45309", icon: ShieldCheck,  label: "Inspection In Progress" },
   COMPLETED:            { bg: "#dcfce7", text: "#16a34a", icon: CheckCircle2, label: "Inspection Completed" },
@@ -461,7 +460,9 @@ const InspectionStrip = memo(function InspectionStrip({ listingId, isActive }) {
   useEffect(() => {
     if (!isActive) { setLoading(false); return; }
     getListingInspectionStatus(listingId)
-      .then(d => setInsp(d ?? null))
+      // A cancelled inspection is not an active one — the seller can simply
+      // request a new inspection, so treat it like "none".
+      .then(d => setInsp(d && d.status !== "CANCELLED" ? d : null))
       .catch(() => setInsp(null))
       .finally(() => setLoading(false));
   }, [listingId, isActive]);
@@ -582,8 +583,9 @@ const ListingCard = memo(function ListingCard({ listing, onEdit, onDelete, onFea
             </button>
           )}
           {/* A rejected managed listing was never accepted by the team, so the
-              owner may delete it directly — no deletion request needed. */}
-          {(!isManaged || listing.status === "REJECTED") && (
+              owner may delete it directly — no deletion request needed.
+              Already-removed listings have nothing left to delete. */}
+          {listing.status !== "REMOVED" && (!isManaged || listing.status === "REJECTED") && (
             <button onClick={() => onDelete(listing)}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition cursor-pointer"
               style={{ border: "1px solid rgba(0,0,0,0.1)", color: "#dc2626" }}>
@@ -720,6 +722,11 @@ function ManagedSection({ listings }) {
                           <FileText size={11} /> View Details
                         </button>
                       </div>
+                    ) : l.status === "REMOVED" ? (
+                      // Removed listings (e.g. by admin) can't request deletion — nothing left to delete
+                      <span className="text-xs font-semibold px-2.5 py-1.5 rounded-lg" style={{ background: "#f1f5f9", color: "#64748b" }}>
+                        Removed
+                      </span>
                     ) : (
                       <button onClick={() => setRequestTarget(l)}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white hover:opacity-90 transition cursor-pointer"

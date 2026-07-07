@@ -30,6 +30,7 @@ export const deleteAdminUser      = (id)         => api.patch(`/admin/users/${id
 
 // ── Listings ──────────────────────────────────────────────────────────────────
 export const getAdminListings     = (params)     => api.get("/admin/listings", { params });
+export const getAdminListingDetail = (id)        => api.get(`/admin/listings/${id}`).then(r => r.data.data);
 export const approveListing       = (id)         => api.patch(`/admin/listings/${id}/approve`);
 export const rejectListing        = (id, reason) => api.patch(`/admin/listings/${id}/reject`, { reason });
 export const removeListing        = (id)         => api.patch(`/admin/listings/${id}/remove`);

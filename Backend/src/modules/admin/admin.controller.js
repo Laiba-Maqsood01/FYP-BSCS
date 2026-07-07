@@ -77,6 +77,18 @@ export const getListings = asyncHandler(async (req, res) => {
     );
 });
 
+export const getListingDetail = asyncHandler(async (req, res) => {
+    const data = await adminService.getListingDetail(req.params.id);
+
+    res.status(200).json(
+        new ApiResponse(
+            200,
+            "Listing details fetched",
+            data
+        )
+    );
+});
+
 export const approveListing = asyncHandler(async (req, res) => {
     const data = await adminService.approveListing(req.params.id);
 

@@ -3,14 +3,14 @@ import { CheckCircle } from "lucide-react";
 
 const CONTENT = {
   INSPECTION: {
-    title: "Inspection Requested!",
-    subtitle: "Your payment was successful. Our team will now coordinate with the seller to schedule the inspection.",
+    title: "Inspection Scheduled!",
+    subtitle: "Your payment was successful. Your inspection is booked for the date and slot you selected.",
     badge: "Car Inspection",
     badgeColor: "#ea6d00",
     badgeBg: "#fff7ed",
     steps: [
-      "Our team contacts the seller to arrange a date",
-      "Inspector visits the seller's location",
+      "Our inspector arrives at the booked address and time",
+      "The car is evaluated on the spot",
       "A detailed 200+ point report is generated",
       "Inspection report is attached to the listing",
     ],

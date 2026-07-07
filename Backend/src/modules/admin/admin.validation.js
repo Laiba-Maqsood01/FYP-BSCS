@@ -22,7 +22,6 @@ export const assignInspectorSchema = z.object({
 export const updateInspectionStatusSchema = z.object({
     status: z.enum([
         "PENDING",
-        "PENDING_COORDINATION",
         "SCHEDULED",
         "IN_PROGRESS",
         "COMPLETED",

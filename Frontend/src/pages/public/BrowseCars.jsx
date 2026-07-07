@@ -68,12 +68,12 @@ function SelectionModal({ title, searchPlaceholder, items, selected, onSelect, o
 
   return (
     <div
-      className="fixed inset-0 z-1000 flex items-center justify-center p-4"
+      className="fixed inset-0 z-1000 flex items-center justify-center p-4 pt-[86px]"
       style={{ background: "rgba(15,23,42,0.45)", backdropFilter: "blur(3px)" }}
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl w-full max-w-160 max-h-[90vh] flex flex-col shadow-[0_20px_60px_rgba(15,23,42,0.2)]"
+        className="bg-white rounded-2xl w-full max-w-160 max-h-[calc(100vh-102px)] flex flex-col shadow-[0_20px_60px_rgba(15,23,42,0.2)]"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}

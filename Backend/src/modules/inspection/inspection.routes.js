@@ -31,6 +31,7 @@ router.post(
     "/:listingId/request",
     authMiddleware,
     validate(requestInspectionParamsSchema, "params"),
+    validate(inspectionRequestSchema),
     controller.requestInspection
 );
 
