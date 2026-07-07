@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { getAdminInspections, assignInspector, updateInspectionStatus, scheduleInspection, uploadInspectionReport, initInspectionReport } from "../../../services/adminService";
 import { getAvailableSlots } from "../../../services/inspectionService";
 import { showSuccess, showError } from "../../../utils/toast";
-import { CalendarDays, User, ChevronDown, FileUp, ClipboardList, X, Loader2, RefreshCw } from "lucide-react";
+import { CalendarDays, User, ChevronDown, FileUp, ClipboardList, X, Loader2, RefreshCw, ExternalLink } from "lucide-react";
 import { getPdfUploadSignature, uploadPdfToCloudinary,} from "../../../services/adminService";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -11,7 +11,6 @@ import { getPdfUploadSignature, uploadPdfToCloudinary,} from "../../../services/
 const STATUS_TABS = [
   { label: "All", value: "" },
   { label: "Pending", value: "PENDING" },
-  { label: "Coordination", value: "PENDING_COORDINATION" },
   { label: "Scheduled", value: "SCHEDULED" },
   { label: "In Progress", value: "IN_PROGRESS" },
   { label: "Completed", value: "COMPLETED" },
@@ -20,14 +19,12 @@ const STATUS_TABS = [
 
 // PENDING means the requester hasn't paid yet — admin cannot transition out of it.
 const VALID_TRANSITIONS = {
-  PENDING_COORDINATION: ["SCHEDULED", "CANCELLED"],
   SCHEDULED: ["IN_PROGRESS", "CANCELLED"],
   IN_PROGRESS: ["COMPLETED"],
 };
 
 const STATUS_COLORS = {
   PENDING: "bg-yellow-50 text-yellow-700 border-yellow-200",
-  PENDING_COORDINATION: "bg-blue-50 text-blue-700 border-blue-200",
   SCHEDULED: "bg-indigo-50 text-indigo-700 border-indigo-200",
   IN_PROGRESS: "bg-orange-50 text-orange-700 border-orange-200",
   COMPLETED: "bg-green-50 text-green-700 border-green-200",
@@ -36,7 +33,6 @@ const STATUS_COLORS = {
 
 const STATUS_LABELS = {
   PENDING: "Pending",
-  PENDING_COORDINATION: "Coordination",
   SCHEDULED: "Scheduled",
   IN_PROGRESS: "In Progress",
   COMPLETED: "Completed",
@@ -500,7 +496,7 @@ const ActionsDropdown = memo(function ActionsDropdown({ inspection, onAction }) 
   const [pos, setPos] = useState({ top: 0, right: 0 });
   const btnRef = useRef(null);
   const transitions = VALID_TRANSITIONS[inspection.status] || [];
-  const canSchedule = ["PENDING_COORDINATION", "SCHEDULED"].includes(inspection.status);
+  const canSchedule = inspection.status === "SCHEDULED";
   const canUploadReport  = inspection.status === "COMPLETED" && !inspection.report?.url;
   const canBuildReport   = inspection.status === "COMPLETED";
 
@@ -564,17 +560,22 @@ const InspectionRow = memo(function InspectionRow({ insp, onAction }) {
   return (
     <tr className="hover:bg-gray-50/50 transition-colors">
       <td className="px-4 py-3">
-        <p className="font-medium text-brand-dark text-sm truncate max-w-45">{insp.listing?.title || "—"}</p>
-        {insp.listing?.status === "ACTIVE" && insp.listing?._id && (
-          <a href={`/browse-cars/${insp.listing._id}`} target="_blank" rel="noopener noreferrer"
-            className="text-[11px] font-medium hover:underline cursor-pointer" style={{ color: "#ea6d00" }}>
-            View listing
-          </a>
-        )}
-      </td>
-      <td className="px-4 py-3">
         <p className="text-sm text-brand-dark">{insp.requestedBy?.username || "—"}</p>
         <p className="text-[11px] text-brand-muted">{insp.requestedBy?.email}</p>
+      </td>
+      <td className="px-4 py-3">
+        <p className="font-medium text-brand-dark text-sm truncate max-w-45 mb-1.5">
+          {insp.listing?.brand?.name
+            ? `${insp.listing.brand.name} ${insp.listing.carModel?.name ?? ""} · ${insp.listing.year ?? ""}`
+            : "—"}
+        </p>
+        {insp.listing?._id && (
+          <a href={`/browse-cars/${insp.listing._id}`} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg transition"
+            style={{ background: "#f1f5f9", color: "#334155", border: "1px solid #e2e8f0" }}>
+            <ExternalLink size={12} /> View
+          </a>
+        )}
       </td>
       <td className="px-4 py-3"><TypeBadge type={insp.type} inspectionBy={insp.inspectionBy} /></td>
       <td className="px-4 py-3"><StatusBadge status={insp.status} /></td>
@@ -613,12 +614,17 @@ const InspectionCard = memo(function InspectionCard({ insp, onAction }) {
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="min-w-0">
-          <p className="font-medium text-brand-dark text-sm truncate">{insp.listing?.title || "—"}</p>
+          <p className="font-medium text-brand-dark text-sm truncate">
+            {insp.listing?.brand?.name
+              ? `${insp.listing.brand.name} ${insp.listing.carModel?.name ?? ""} · ${insp.listing.year ?? ""}`
+              : "—"}
+          </p>
           <p className="text-xs text-brand-muted mt-0.5">{insp.requestedBy?.username} · {insp.requestedBy?.email}</p>
-          {insp.listing?.status === "ACTIVE" && insp.listing?._id && (
+          {insp.listing?._id && (
             <a href={`/browse-cars/${insp.listing._id}`} target="_blank" rel="noopener noreferrer"
-              className="text-[11px] font-medium hover:underline cursor-pointer" style={{ color: "#ea6d00" }}>
-              View listing
+              className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg transition"
+              style={{ background: "#f1f5f9", color: "#334155", border: "1px solid #e2e8f0" }}>
+              <ExternalLink size={12} /> View
             </a>
           )}
         </div>
@@ -804,7 +810,7 @@ export default function ManageInspections() {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
-              {["Listing", "Requester", "Type", "Status", "Inspector", "Scheduled", "Report", ""].map((h, i) => (
+              {["Requester", "Listing", "Type", "Status", "Inspector", "Scheduled", "Report", ""].map((h, i) => (
                 <th key={i} className="text-left px-4 py-3 text-xs font-medium text-brand-muted uppercase tracking-wider">{h}</th>
               ))}
             </tr>

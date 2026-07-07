@@ -1,5 +1,5 @@
 import brandModel from "./models/brand.model.js";
-import { MANAGED_SALE_CITY_NAMES } from "../../config/constants.js";
+import { isManagedSaleCity } from "../../config/constants.js";
 import bodyTypeModel from "./models/bodyType.model.js";
 import provinceModel from "./models/province.model.js";
 import cityModel from "./models/city.model.js";
@@ -54,10 +54,10 @@ export async function getYears(modelId) {
 }
 
 export async function getManagedCities() {
-  const nameRegexes = MANAGED_SALE_CITY_NAMES.map(n => new RegExp(`^${n}$`, "i"));
-  return await cityModel
-    .find({ name: { $in: nameRegexes } })
-    .populate("province", "name");
+  // Match in JS via the normalizing helper so DB spelling variants
+  // ("Khan Pur", "Liaqatpur") are still recognised as managed cities.
+  const cities = await cityModel.find().populate("province", "name");
+  return cities.filter(c => isManagedSaleCity(c.name));
 }
 
 export async function getCitiesWithCount() {

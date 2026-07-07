@@ -12,7 +12,6 @@ function formatDate(d) {
 }
 
 const STATUS_BADGE = {
-  PENDING_COORDINATION: { bg: "#fef9c3", text: "#b45309", label: "Pending" },
   SCHEDULED:            { bg: "#dbeafe", text: "#1d4ed8", label: "Scheduled" },
   IN_PROGRESS:          { bg: "#fff7ed", text: "#c2410c", label: "In Progress" },
   COMPLETED:            { bg: "#dcfce7", text: "#16a34a", label: "Completed" },
@@ -58,9 +57,13 @@ const InspectionCard = memo(function InspectionCard({ insp }) {
         <div className="flex items-start justify-between gap-2 flex-wrap">
           <div>
             <p className="text-sm font-semibold text-brand-dark">{car || "Unknown car"}</p>
-            <p className="text-xs text-brand-muted mt-0.5">{insp.city ?? "—"} · {formatDate(insp.preferredDate)}</p>
-            {insp.preferredTimeSlot && (
-              <p className="text-xs text-brand-muted">{insp.preferredTimeSlot}</p>
+            <p className="text-xs text-brand-muted mt-0.5">
+              {insp.scheduledDate
+                ? `${formatDate(insp.scheduledDate)}${insp.timeSlot ? ` · ${insp.timeSlot}` : ""}`
+                : "Schedule to be coordinated"}
+            </p>
+            {insp.inspectionAddress && (
+              <p className="text-xs text-brand-muted">{insp.inspectionAddress}</p>
             )}
           </div>
           <span className="px-2 py-0.5 rounded text-xs font-semibold shrink-0"

@@ -74,7 +74,7 @@ export default function FeatureSection({
             <p className="text-brand-muted max-w-2xl">{description}</p>
           </div>
           <Link
-            to="/browse-cars?featured=true"
+            to="/browse-cars?typeFilter=featured"
             className="text-brand-dark font-semibold text-[0.92rem] border-[1.5px] border-black/20 px-4 py-1.5 rounded-lg hover:bg-black/5 hover:border-black/40 transition whitespace-nowrap"
           >
             View all →
@@ -115,7 +115,7 @@ export default function FeatureSection({
                       PKR {listing.price?.toLocaleString()}
                     </span>
                     <Link
-                      to={`/listings/${listing._id}`}
+                      to={`/browse-cars/${listing._id}`}
                       className="bg-brand-btn text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-brand-dark2 transition"
                     >
                       View Details

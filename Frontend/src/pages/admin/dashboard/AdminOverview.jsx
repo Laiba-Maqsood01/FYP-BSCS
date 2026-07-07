@@ -39,7 +39,6 @@ function toRevenueSourceData(byPurpose) {
 function toInspectionCounts(inspections = {}) {
   return {
     PENDING:              inspections.pending              ?? 0,
-    PENDING_COORDINATION: inspections.pending_coordination ?? 0,
     SCHEDULED:            inspections.scheduled            ?? 0,
     IN_PROGRESS:          inspections.inProgress           ?? 0,
     COMPLETED:            inspections.completed            ?? 0,

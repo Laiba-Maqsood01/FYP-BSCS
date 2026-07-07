@@ -11,6 +11,9 @@ import { getSettings } from "../../models/siteSettings.model.js";
 import { createStripeCheckoutSession } from "../payment/payment.service.js";
 import config from "../../config/config.js";
 
+import cityModel from "../master/models/city.model.js";
+import { MANAGED_SALE_CITY_NAMES, isManagedSaleCity } from "../../config/constants.js";
+
 import crypto from "crypto";
 import InspectionReport from "../inspection-report/inspectionReport.model.js";
 
@@ -39,16 +42,25 @@ export async function requestInspection(listingId, userId, payload = {}) {
         );
     }
 
-    // 3. Detect ownership (CRITICAL LOGIC)
+    // 3. Inspection services only operate in managed cities
+    const cityDoc = await cityModel.findById(listing.city).select("name");
+    if (!cityDoc || !isManagedSaleCity(cityDoc.name)) {
+        throw new ApiError(
+            400,
+            `Inspection services are only available in: ${MANAGED_SALE_CITY_NAMES.join(", ")}`
+        );
+    }
+
+    // 4. Detect ownership
     const isOwner = listing.seller.toString() === userId.toString();
 
     const inspectionBy = isOwner ? "OWNER" : "BUYER";
 
-    // 4. Prevent duplicate active inspections
+    // 5. Prevent duplicate active inspections
     const existingInspection = await inspectionModel.findOne({
         listing: listingId,
         status: {
-            $in: ["PENDING", "PENDING_COORDINATION", "SCHEDULED", "IN_PROGRESS"]
+            $in: ["PENDING", "SCHEDULED", "IN_PROGRESS"]
         }
     });
 
@@ -59,17 +71,18 @@ export async function requestInspection(listingId, userId, payload = {}) {
         );
     }
 
-    // 5. OWNER validation (must provide schedule)
-    if (isOwner) {
-        if (!inspectionAddress || !scheduledDate || !timeSlot) {
-            throw new ApiError(
-                400,
-                "Owner must provide address, date, and time slot for inspection"
-            );
-        }
+    // 6. Both owner and buyer book the inspection themselves — the buyer
+    // coordinates day/time/place with the seller directly, so address and
+    // date are always required. timeSlot may be null ("can't find my slot"
+    // → our team coordinates the exact time).
+    if (!inspectionAddress || !scheduledDate) {
+        throw new ApiError(
+            400,
+            "Inspection address and date are required"
+        );
     }
 
-    // 6. Date validation
+    // 7. Date validation
     const selectedDate = new Date(scheduledDate);
     selectedDate.setHours(0, 0, 0, 0);
 
@@ -83,8 +96,8 @@ export async function requestInspection(listingId, userId, payload = {}) {
         );
     }
 
-    // 7. Time slot checking (only when a slot is provided)
-    if (isOwner && timeSlot) {
+    // 8. Time slot checking (only when a slot is provided)
+    if (timeSlot) {
         const slotMap = {
             "10:00 AM": 10,
             "12:00 PM": 12,
@@ -104,8 +117,8 @@ export async function requestInspection(listingId, userId, payload = {}) {
         }
     }
 
-    // 8. Slot collision check (owner requests only)
-    if (isOwner && timeSlot) {
+    // 9. Slot collision check (only when a slot is provided)
+    if (timeSlot) {
         const slotStart = new Date(selectedDate); slotStart.setHours(0, 0, 0, 0);
         const slotEnd   = new Date(selectedDate); slotEnd.setHours(23, 59, 59, 999);
         const slotTaken = await inspectionModel.exists({
@@ -118,7 +131,7 @@ export async function requestInspection(listingId, userId, payload = {}) {
         }
     }
 
-    // 6. Create inspection
+    // 10. Create inspection
     const inspection = await inspectionModel.create({
         listing: listingId,
         requestedBy: userId,
@@ -127,18 +140,9 @@ export async function requestInspection(listingId, userId, payload = {}) {
         inspectionBy,
         status: "PENDING",
 
-        // Only store these for OWNER
-        inspectionAddress: isOwner
-            ? inspectionAddress
-            : undefined,
-
-        scheduledDate: isOwner
-            ? scheduledDate
-            : undefined,
-
-        timeSlot: isOwner
-            ? timeSlot
-            : undefined
+        inspectionAddress,
+        scheduledDate,
+        timeSlot: timeSlot || null
     });
 
     return inspection;
@@ -253,6 +257,25 @@ export async function createInspectionPayment(inspectionId, userId) {
         throw new ApiError(404, "Inspection not found");
     }
 
+    // A stale "pay now" (old tab, dashboard entry) must not fund a dead or
+    // finished inspection — book a new one instead.
+    if (["CANCELLED", "COMPLETED"].includes(inspection.status)) {
+        throw new ApiError(
+            400,
+            `This inspection is ${inspection.status.toLowerCase()} and can no longer be paid for. Please book a new inspection.`
+        );
+    }
+
+    // Nor an inspection whose listing is no longer sellable (e.g. rejected
+    // by admin while the user was checking out).
+    const listingStatus = inspection.listing?.status;
+    if (["REJECTED", "REMOVED", "SOLD"].includes(listingStatus)) {
+        throw new ApiError(
+            400,
+            `This listing has been ${listingStatus.toLowerCase()} — payment is no longer possible.`
+        );
+    }
+
     const purposeParam = inspection.type === "RE_INSPECTION" ? "RE_INSPECTION" : "INSPECTION";
     const successUrl = `${config.CLIENT_URL}/payment/success?purpose=${purposeParam}&session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl  = `${config.CLIENT_URL}/payment/failed?purpose=${purposeParam}`;
@@ -312,13 +335,23 @@ export async function createInspectionPayment(inspectionId, userId) {
 }
 
 export async function getListingInspectionStatus(listingId) {
-    const inspection = await inspectionModel
+    let inspection = await inspectionModel
         .findOne({
             listing: listingId,
             status: { $ne: "CANCELLED" },
         })
         .sort({ createdAt: -1 })
         .select("status type inspectionBy report _id");
+
+    // No live/completed inspection — fall back to the latest cancelled one so
+    // the UI can show that state (e.g. admin reviewing a managed listing whose
+    // onboarding inspection was cancelled).
+    if (!inspection) {
+        inspection = await inspectionModel
+            .findOne({ listing: listingId, status: "CANCELLED" })
+            .sort({ createdAt: -1 })
+            .select("status type inspectionBy cancelReason _id");
+    }
 
     if (!inspection) return null;
 

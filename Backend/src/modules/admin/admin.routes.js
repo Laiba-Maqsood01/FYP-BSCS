@@ -51,6 +51,11 @@ adminRouter.get(
     "/listings",
     adminController.getListings);
 
+// GET /api/admin/listings/:id (detail — any status)
+adminRouter.get(
+    "/listings/:id",
+    adminController.getListingDetail);
+
 
 // PATCH /api/admin/listings/:id/approve
 adminRouter.patch(

@@ -8,7 +8,8 @@ import userModel from "../../models/user.model.js";
 import contactRevealModel from "./contactReveal.model.js";
 import { ApiError } from "../../utils/apiError.js";
 import { deleteImages, deleteFiles } from "../upload/upload.service.js";
-import { MANAGED_SALE_CITY_NAMES } from "../../config/constants.js";
+import { voidPendingPayments } from "../payment/payment.service.js";
+import { MANAGED_SALE_CITY_NAMES, isManagedSaleCity } from "../../config/constants.js";
 import { sendOtp, verifyOtp } from "../../services/sms.service.js";
 
 // Mask a phone number for public display: keep first 4 + last 2, star the rest.
@@ -27,9 +28,7 @@ export async function createListing(data, userId) {
   if (data.saleMode === "MANAGED") {
     const cityDoc = await cityModel.findById(data.city).select("name");
     if (!cityDoc) throw new ApiError(404, "City not found");
-    const isAllowed = MANAGED_SALE_CITY_NAMES.some(
-      (n) => n.toLowerCase() === cityDoc.name.toLowerCase()
-    );
+    const isAllowed = isManagedSaleCity(cityDoc.name);
     if (!isAllowed) {
       throw new ApiError(
         400,
@@ -38,7 +37,7 @@ export async function createListing(data, userId) {
     }
   }
 
-  // Unregistered cars have no registeredIn city
+  // Unregistered cars have no registeredIn province
   if (data.isRegistered === false) {
     data.registeredIn = null;
   }
@@ -271,7 +270,6 @@ export async function deleteListing(listingId, userId) {
     status: {
       $in: [
         "PENDING",
-        "PENDING_COORDINATION",
         "SCHEDULED"
       ]
     }
@@ -281,12 +279,7 @@ export async function deleteListing(listingId, userId) {
 
     let refundRequired = false;
 
-    // BUYER PAID AND WAITING COORDINATION
-    if (Inspection.status === "PENDING_COORDINATION") {
-      refundRequired = true;
-    }
-
-    // SCHEDULED BUYER INSPECTION
+    // SCHEDULED BUYER INSPECTION (buyer already paid, service not delivered)
     if (Inspection.status === "SCHEDULED" && Inspection.inspectionBy === "BUYER") {
       refundRequired = true;
     }
@@ -300,6 +293,8 @@ export async function deleteListing(listingId, userId) {
     Inspection.refundStatus = refundRequired ? "PENDING" : "NOT_REQUIRED";
 
     await Inspection.save();
+
+    await voidPendingPayments(Inspection._id);
   }
 
   // FEATURED CLEANUP
@@ -538,14 +533,17 @@ export async function getMyListingDetail(listingId, userId) {
   return listing;
 }
 
-// Get details of single listing
-export async function getListingDetails(listingId) {
+// Get details of single listing.
+// Public callers only see ACTIVE listings. The admin panel reaches this with
+// anyStatus=true (via GET /api/admin/listings/:id, guarded by role middleware)
+// to review PENDING / REJECTED listings.
+export async function getListingDetails(listingId, anyStatus = false) {
+
+  const filter = { _id: listingId };
+  if (!anyStatus) filter.status = "ACTIVE";
 
   const listing = await listingModel
-    .findOne({
-      _id: listingId,
-      status: "ACTIVE"
-    })
+    .findOne(filter)
     .populate(
       "seller",
       "username createdAt"

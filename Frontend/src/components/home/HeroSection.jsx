@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, PlusCircle, ChevronDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import api from "../../services/api";
@@ -7,6 +7,7 @@ const fieldLabel = "text-[0.67rem] font-bold tracking-[0.07em] text-brand-muted 
 
 function CityDropdown({ cities, value, onChange }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const ref = useRef(null);
 
   useEffect(() => {
@@ -16,12 +17,18 @@ function CityDropdown({ cities, value, onChange }) {
   }, []);
 
   const selected = cities.find(c => c._id === value);
+  const filtered = cities.filter(c => c.name.toLowerCase().includes(query.trim().toLowerCase()));
+
+  const openDropdown = () => {
+    setQuery("");
+    setOpen(p => !p);
+  };
 
   return (
     <div ref={ref} className="relative">
       <button
         type="button"
-        onClick={() => setOpen(p => !p)}
+        onClick={openDropdown}
         className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border border-black/10 text-[0.9rem] text-left transition"
         style={{ background: "rgba(255,255,255,0.7)", backdropFilter: "blur(8px)" }}
       >
@@ -31,28 +38,47 @@ function CityDropdown({ cities, value, onChange }) {
         <ChevronDown size={15} className="text-gray-400 shrink-0" />
       </button>
       {open && (
-        <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white border border-black/10 rounded-xl shadow-[0_10px_30px_rgba(15,23,42,0.1)] overflow-y-auto max-h-56 z-500">
-          <button
-            type="button"
-            onClick={() => { onChange(""); setOpen(false); }}
-            className={`block w-full text-left px-4 py-2.5 text-[0.88rem] cursor-pointer transition ${
-              value === "" ? "bg-[#f1f5f9] font-semibold text-brand-dark" : "text-[#374151] hover:bg-brand-surface"
-            }`}
-          >
-            All Cities
-          </button>
-          {cities.map(c => (
+        <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white border border-black/10 rounded-xl shadow-[0_10px_30px_rgba(15,23,42,0.1)] max-h-56 flex flex-col overflow-hidden z-500">
+          {/* Search bar */}
+          <div className="p-2 border-b border-black/6 shrink-0">
+            <div className="relative flex items-center">
+              <Search size={13} className="absolute left-2.5 text-gray-400 pointer-events-none" />
+              <input
+                autoFocus
+                className="w-full bg-brand-surface border border-black/10 rounded-lg text-brand-dark2 text-[0.85rem] outline-none focus:border-[#374151] transition pl-8 pr-3 py-2"
+                placeholder="Search cities..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+          </div>
+          {/* List */}
+          <div className="overflow-y-auto">
             <button
-              key={c._id}
               type="button"
-              onClick={() => { onChange(c._id); setOpen(false); }}
+              onClick={() => { onChange(""); setOpen(false); }}
               className={`block w-full text-left px-4 py-2.5 text-[0.88rem] cursor-pointer transition ${
-                value === c._id ? "bg-[#f1f5f9] font-semibold text-brand-dark" : "text-[#374151] hover:bg-brand-surface"
+                value === "" ? "bg-[#f1f5f9] font-semibold text-brand-dark" : "text-[#374151] hover:bg-brand-surface"
               }`}
             >
-              {c.name}
+              All Cities
             </button>
-          ))}
+            {filtered.map(c => (
+              <button
+                key={c._id}
+                type="button"
+                onClick={() => { onChange(c._id); setOpen(false); }}
+                className={`block w-full text-left px-4 py-2.5 text-[0.88rem] cursor-pointer transition ${
+                  value === c._id ? "bg-[#f1f5f9] font-semibold text-brand-dark" : "text-[#374151] hover:bg-brand-surface"
+                }`}
+              >
+                {c.name}
+              </button>
+            ))}
+            {filtered.length === 0 && (
+              <p className="px-4 py-3 text-[0.85rem] text-brand-muted">No cities found.</p>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -61,11 +87,17 @@ function CityDropdown({ cities, value, onChange }) {
 const inputBase =
   "w-full bg-brand-surface border border-black/10 rounded-lg text-brand-dark2 text-[0.9rem] outline-none focus:border-[#374151] focus:ring-2 focus:ring-[#37415114] transition";
 
+const suggestionHeading = "px-4 pt-2.5 pb-1 text-[0.7rem] font-bold text-brand-muted uppercase tracking-[0.06em]";
+
 export default function HeroSection() {
   const navigate = useNavigate();
   const searchInputRef = useRef(null);
+  const searchBoxRef = useRef(null);
 
   const [searchText, setSearchText] = useState("");
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [brands, setBrands] = useState([]);
+  const [models, setModels] = useState([]);
   const [cities, setCities] = useState([]);
   const [selectedCity, setSelectedCity] = useState("");
   const [minPrice, setMinPrice] = useState("");
@@ -73,7 +105,40 @@ export default function HeroSection() {
 
   useEffect(() => {
     api.get("/master/cities").then((res) => setCities(res.data?.data || [])).catch(() => {});
+    api.get("/master/brands").then((res) => setBrands(res.data?.data || [])).catch(() => {});
+    api.get("/master/models").then((res) => setModels(res.data?.data || [])).catch(() => {});
   }, []);
+
+  // Close make/model suggestions on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target)) setSuggestionsOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // Makes and models whose name starts with what the user typed
+  const suggestions = useMemo(() => {
+    const q = searchText.trim().toLowerCase();
+    if (!q) return { makes: [], models: [] };
+
+    const makes = brands.filter(b => b.name.toLowerCase().startsWith(q));
+    const matchedModels = models.filter(m => {
+      const modelName = m.name.toLowerCase();
+      const fullName = `${m.brand?.name ?? ""} ${m.name}`.trim().toLowerCase();
+      return modelName.startsWith(q) || fullName.startsWith(q);
+    });
+
+    return { makes, models: matchedModels };
+  }, [searchText, brands, models]);
+
+  const hasSuggestions = suggestions.makes.length > 0 || suggestions.models.length > 0;
+
+  const pickSuggestion = (text) => {
+    setSearchText(text);
+    setSuggestionsOpen(false);
+  };
 
   const handleScrollToSearch = () => {
     searchInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -81,6 +146,7 @@ export default function HeroSection() {
   };
 
   const handleSearch = () => {
+    setSuggestionsOpen(false);
     const params = new URLSearchParams();
     if (searchText.trim()) params.set("search", searchText.trim());
     if (selectedCity) params.set("city", selectedCity);
@@ -141,7 +207,7 @@ export default function HeroSection() {
           }}
         >
           {/* Keyword */}
-          <div className="flex flex-col flex-2 min-w-0">
+          <div ref={searchBoxRef} className="flex flex-col flex-2 min-w-0 relative">
             <label className={fieldLabel}>CAR MAKE OR MODEL</label>
             <div className="relative flex items-center">
               <Search size={15} className="absolute left-2.5 text-gray-400 pointer-events-none" />
@@ -150,10 +216,48 @@ export default function HeroSection() {
                 className={inputBase + " pl-8 pr-3 py-2.5"}
                 placeholder="e.g. Toyota Corolla"
                 value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
+                onChange={(e) => { setSearchText(e.target.value); setSuggestionsOpen(true); }}
+                onFocus={() => setSuggestionsOpen(true)}
                 onKeyDown={handleKeyDown}
               />
             </div>
+            {suggestionsOpen && hasSuggestions && (
+              <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white border border-black/10 rounded-xl shadow-[0_10px_30px_rgba(15,23,42,0.1)] overflow-y-auto max-h-56 z-500">
+                {suggestions.makes.length > 0 && (
+                  <>
+                    <p className={suggestionHeading}>Makes</p>
+                    {suggestions.makes.map(b => (
+                      <button
+                        key={b._id}
+                        type="button"
+                        onClick={() => pickSuggestion(b.name)}
+                        className="block w-full text-left px-4 py-2.5 text-[0.88rem] text-[#374151] cursor-pointer hover:bg-brand-surface transition"
+                      >
+                        {b.name}
+                      </button>
+                    ))}
+                  </>
+                )}
+                {suggestions.models.length > 0 && (
+                  <>
+                    <p className={suggestionHeading}>Models</p>
+                    {suggestions.models.map(m => (
+                      <button
+                        key={m._id}
+                        type="button"
+                        onClick={() => pickSuggestion(m.name)}
+                        className="block w-full text-left px-4 py-2.5 text-[0.88rem] text-[#374151] cursor-pointer hover:bg-brand-surface transition"
+                      >
+                        {m.name}
+                        {m.brand?.name && (
+                          <span className="text-[0.78rem] text-brand-muted ml-1.5">{m.brand.name}</span>
+                        )}
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Divider — desktop only */}

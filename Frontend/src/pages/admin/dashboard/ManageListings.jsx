@@ -30,15 +30,21 @@ const ListingActions = memo(function ListingActions({ listing, onApprove, onReje
   // Once the inspector is on site or done, rejection is no longer allowed —
   // only Remove (backend enforces this too).
   const inspectionStarted = ["IN_PROGRESS", "COMPLETED"].includes(inspectionStatus);
+  // Statuses set only after the inspection fee is paid (webhook-driven).
+  const inspectionPaid = ["SCHEDULED", "IN_PROGRESS", "COMPLETED"].includes(inspectionStatus);
+  // Managed listings can't be rejected or removed before the seller pays the
+  // inspection fee — there'd be nothing to refund (backend enforces this too).
+  const canReject = status === "PENDING" && !inspectionStarted &&
+    (saleMode !== "MANAGED" || inspectionPaid);
+  const canRemove = status !== "REMOVED" &&
+    (saleMode !== "MANAGED" || status !== "PENDING" || inspectionPaid);
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      {status === "ACTIVE" && (
-        <a href={`/browse-cars/${listing._id}`} target="_blank" rel="noopener noreferrer"
-          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg transition"
-          style={{ background: "#f1f5f9", color: "#334155", border: "1px solid #e2e8f0" }}>
-          <ExternalLink size={12} /> View
-        </a>
-      )}
+      <a href={`/browse-cars/${listing._id}`} target="_blank" rel="noopener noreferrer"
+        className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg transition"
+        style={{ background: "#f1f5f9", color: "#334155", border: "1px solid #e2e8f0" }}>
+        <ExternalLink size={12} /> View
+      </a>
       {status === "PENDING" && saleMode !== "MANAGED" && (
         <button onClick={() => onApprove(listing)}
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg transition"
@@ -46,7 +52,7 @@ const ListingActions = memo(function ListingActions({ listing, onApprove, onReje
           <CheckCircle size={12} /> Approve
         </button>
       )}
-      {status === "PENDING" && !inspectionStarted && (
+      {canReject && (
         <button onClick={() => onReject(listing)}
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg transition"
           style={{ background: "#fff7ed", color: "#9a3412", border: "1px solid #fed7aa" }}>
@@ -60,7 +66,7 @@ const ListingActions = memo(function ListingActions({ listing, onApprove, onReje
           <BadgeDollarSign size={12} /> Mark Sold
         </button>
       )}
-      {status !== "REMOVED" && (
+      {canRemove && (
         <button onClick={() => onRemove(listing)}
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg transition"
           style={{ background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca" }}>

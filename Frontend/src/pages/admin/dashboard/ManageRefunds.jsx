@@ -17,7 +17,6 @@ const REFUND_STATUS_COLORS = {
 
 const INSP_STATUS_COLORS = {
   PENDING:              "bg-orange-50 text-orange-700 border-orange-200",
-  PENDING_COORDINATION: "bg-yellow-50 text-yellow-700 border-yellow-200",
   SCHEDULED:            "bg-blue-50 text-blue-700 border-blue-200",
   IN_PROGRESS:          "bg-purple-50 text-purple-700 border-purple-200",
   COMPLETED:            "bg-green-50 text-green-700 border-green-200",
