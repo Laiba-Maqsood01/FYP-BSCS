@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Edit2, Trash2, Star, Check, ExternalLink, Info, ShieldCheck, Clock, Calendar, CheckCircle2, Download, FileText,
 } from "lucide-react";
 import { getMyListings, updateListing, deleteListing, markMyListingSold } from "../../../services/listingService";
-import { getDeletionRequests, submitDeletionRequest, getCommissionDetails, initiateCommissionPayment } from "../../../services/managedSaleService";
+import { getDeletionRequests, submitDeletionRequest, getCommissionDetails } from "../../../services/managedSaleService";
 import { requestFeatured, createFeaturedPayment, getFeaturedByListing, getActiveFeaturedPlans } from "../../../services/featuredService";
 import { getListingInspectionStatus } from "../../../services/inspectionService";
 import Modal from "../../../components/ui/Modal";
@@ -30,10 +30,9 @@ const STATUS_BADGE = {
   REJECTED:           { bg: "#fee2e2", text: "#dc2626" },
   REMOVED:            { bg: "#f1f5f9", text: "#64748b" },
   SOLD:               { bg: "#dbeafe", text: "#1d4ed8" },
-  PENDING_COMMISSION: { bg: "#ede9fe", text: "#7c3aed" },
 };
 
-const TABS = ["All", "Active", "Pending", "Rejected", "Sold", "Managed"];
+const TABS = ["All", "Active", "Pending", "Rejected", "Sold", "Removed", "Managed"];
 
 // ── Edit modal ────────────────────────────────────────────────────────────────
 
@@ -416,32 +415,6 @@ function DeletionDetailModal({ request, onClose }) {
   );
 }
 
-// ── ExpiryCountdown — memo so each tick only re-renders this span ─────────────
-
-const ExpiryCountdown = memo(function ExpiryCountdown({ expiresAt }) {
-  const [timeLeft, setTimeLeft] = useState("");
-  const [urgent,   setUrgent]   = useState(false);
-
-  useEffect(() => {
-    function tick() {
-      const diff = new Date(expiresAt) - new Date();
-      if (diff <= 0) { setTimeLeft("Expired"); setUrgent(true); return; }
-      const m = Math.floor(diff / 60000);
-      const s = Math.floor((diff % 60000) / 1000);
-      setTimeLeft(`${m}m ${String(s).padStart(2, "0")}s`);
-      setUrgent(diff < 5 * 60 * 1000);
-    }
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [expiresAt]);
-
-  return (
-    <span className="text-xs font-semibold" style={{ color: urgent ? "#dc2626" : "#b45309" }}>
-      ⏱ {timeLeft}
-    </span>
-  );
-});
 
 // ── InspectionStrip — memo so fetch + render is isolated to each card ─────────
 
@@ -491,8 +464,8 @@ const InspectionStrip = memo(function InspectionStrip({ listingId, isActive }) {
       <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold" style={{ background: cfg.bg, color: cfg.text }}>
         <Icon size={11} /> {cfg.label}
       </span>
-      {insp.status === "COMPLETED" && insp.report?.pdfUrl && (
-        <a href={insp.report.pdfUrl} target="_blank" rel="noreferrer"
+      {insp.status === "COMPLETED" && insp.reportToken && (
+        <a href={`/reports/${insp.reportToken}`} target="_blank" rel="noreferrer"
           className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition"
           style={{ border: "1px solid rgba(0,0,0,0.1)", color: "#16a34a" }}>
           <Download size={11} /> Report
@@ -504,7 +477,7 @@ const InspectionStrip = memo(function InspectionStrip({ listingId, isActive }) {
 
 // ── ListingCard — memo so only the changed listing re-renders ─────────────────
 
-const ListingCard = memo(function ListingCard({ listing, onEdit, onDelete, onFeature, onFeaturedDetail, onMarkSold, isManaged }) {
+const ListingCard = memo(function ListingCard({ listing, onEdit, onDelete, onFeature, onFeaturedDetail, onMarkSold, onRejectionReason, isManaged }) {
   const navigate   = useNavigate();
   const image      = listing.images?.[0]?.url;
   const badge      = STATUS_BADGE[listing.status] ?? { bg: "#f1f5f9", text: "#64748b" };
@@ -534,7 +507,9 @@ const ListingCard = memo(function ListingCard({ listing, onEdit, onDelete, onFea
             <p className="text-xs text-brand-muted mt-0.5">{listing.city?.name ?? "—"} · {formatDate(listing.createdAt)}</p>
           </div>
           <span className="px-2 py-0.5 rounded text-xs font-semibold shrink-0" style={{ background: badge.bg, color: badge.text }}>
-            {listing.status?.replace("_", " ") ?? "—"}
+            {listing.status === "REMOVED"
+              ? (listing.removedBy === "ADMIN" ? "Removed by Admin" : listing.removedBy === "OWNER" ? "Removed by You" : "REMOVED")
+              : (listing.status?.replace("_", " ") ?? "—")}
           </span>
         </div>
 
@@ -551,21 +526,26 @@ const ListingCard = memo(function ListingCard({ listing, onEdit, onDelete, onFea
               <ExternalLink size={12} /> View
             </button>
           )}
-          {/* Managed listings are team-handled — owner can only edit one that
-              was rejected (to fix and resubmit). General listings edit as before. */}
-          {listing.status !== "SOLD" && listing.status !== "REMOVED" &&
-            (!isManaged || listing.status === "REJECTED") && (
+          {/* Editable in every state except SOLD/REMOVED — managed included */}
+          {listing.status !== "SOLD" && listing.status !== "REMOVED" && (
             <button onClick={() => navigate(`/edit-listing/${listing._id}`)}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition cursor-pointer"
               style={{ border: "1px solid rgba(0,0,0,0.1)", color: "#3b82f6" }}>
               <Edit2 size={12} /> Edit
             </button>
           )}
-          {isActive && !isFeatured && !isManaged && (
+          {isActive && !isFeatured && (
             <button onClick={() => onFeature(listing)}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition cursor-pointer"
               style={{ border: "1px solid rgba(0,0,0,0.1)", color: "#ea6d00" }}>
               <Star size={12} /> Feature
+            </button>
+          )}
+          {listing.status === "REJECTED" && listing.rejectionReason && (
+            <button onClick={() => onRejectionReason(listing)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition cursor-pointer"
+              style={{ border: "1px solid rgba(220,38,38,0.35)", color: "#dc2626", background: "#fef2f2" }}>
+              <Info size={12} /> Rejection Reason
             </button>
           )}
           {isFeatured && (
@@ -608,35 +588,29 @@ const DR_BADGE = {
 
 function ManagedSection({ listings }) {
   const managedListings = listings.filter(l => l.saleMode === "MANAGED");
+  // Deletion requests only make sense while the listing is still on the market —
+  // PENDING included, so the owner can back out before it goes ACTIVE.
+  const deletableListings = managedListings.filter(l => ["PENDING", "ACTIVE"].includes(l.status));
   const [subTab,       setSubTab]       = useState("deletion");
   const [deletionReqs, setDeletionReqs] = useState([]);
   const [commissions,  setCommissions]  = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [requestTarget, setRequestTarget] = useState(null);
   const [detailTarget,  setDetailTarget]  = useState(null);
-  const [commPaying,    setCommPaying]    = useState(false);
 
   useEffect(() => {
+    // Commission records exist for SOLD managed listings — the GearTrade team
+    // deducts the commission from the sale proceeds, so these are display-only.
     Promise.all([
       getDeletionRequests().catch(() => []),
       ...managedListings
-        .filter(l => l.status === "PENDING_COMMISSION")
+        .filter(l => l.status === "SOLD")
         .map(l => getCommissionDetails(l._id).catch(() => null)),
     ]).then(([reqs, ...comms]) => {
       setDeletionReqs(Array.isArray(reqs) ? reqs : []);
       setCommissions(comms.filter(Boolean));
     }).finally(() => setLoading(false));
   }, []);
-
-  async function payCommission(comm) {
-    setCommPaying(true);
-    try {
-      const { checkoutUrl } = await initiateCommissionPayment(comm._id);
-      window.location.href = checkoutUrl;
-    } catch {
-      alert("Failed to initiate payment.");
-    } finally { setCommPaying(false); }
-  }
 
   // After a deletion request is submitted, add it to local state — no page reload.
   function handleDeletionSubmitted(newRequest) {
@@ -650,7 +624,7 @@ function ManagedSection({ listings }) {
       <div className="flex gap-1 mb-4">
         {[
           { key: "deletion",    label: "Deletion Requests" },
-          { key: "commission",  label: "Commission Due" },
+          { key: "commission",  label: "Commission Details" },
         ].map(t => (
           <button key={t.key} onClick={() => setSubTab(t.key)}
             className="px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer"
@@ -677,12 +651,13 @@ function ManagedSection({ listings }) {
         </div>
       ) : subTab === "deletion" ? (
         <div className="space-y-3">
-          {managedListings.length === 0 ? (
-            <p className="text-sm text-brand-muted text-center py-8">No managed listings.</p>
-          ) : managedListings.map(l => {
+          {deletableListings.length === 0 ? (
+            <p className="text-sm text-brand-muted text-center py-8">No pending or active managed listings.</p>
+          ) : deletableListings.map(l => {
             const image = l.images?.[0]?.url;
             const existingReq = deletionReqs.find(r => (r.listing?._id ?? r.listing) === l._id);
             const drBadge = existingReq ? (DR_BADGE[existingReq.status] ?? DR_BADGE.PENDING) : null;
+            const statusBadge = STATUS_BADGE[l.status] ?? { bg: "#f1f5f9", text: "#64748b" };
             return (
               <div key={l._id} className="bg-white rounded-xl overflow-hidden flex flex-col sm:flex-row" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
                 <div className="w-full sm:w-44 h-32 sm:h-auto bg-gray-100 shrink-0">
@@ -696,22 +671,14 @@ function ManagedSection({ listings }) {
                       <p className="text-sm font-semibold text-brand-dark truncate">{carLabel(l)}</p>
                       <p className="text-xs text-brand-muted mt-0.5">{l.city?.name ?? "—"} · Updated {formatDate(l.updatedAt ?? l.createdAt)}</p>
                     </div>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold shrink-0 text-white" style={{ background: "#7c3aed" }}>MANAGED</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold" style={{ background: statusBadge.bg, color: statusBadge.text }}>{l.status}</span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold text-white" style={{ background: "#7c3aed" }}>MANAGED</span>
+                    </div>
                   </div>
                   <p className="text-base font-bold text-brand-dark mt-1.5">{formatPKR(l.price)}</p>
                   <div className="mt-3">
-                    {l.status === "SOLD" ? (
-                      <span className="text-xs font-semibold px-2.5 py-1.5 rounded-lg" style={{ background: "#dbeafe", color: "#1d4ed8" }}>
-                        Sold
-                      </span>
-                    ) : l.status === "REJECTED" ? (
-                      // Never approved by the team — no deletion request needed.
-                      // Edit / Delete are available on the listing card in the
-                      // All and Rejected tabs.
-                      <span className="text-xs font-semibold px-2.5 py-1.5 rounded-lg" style={{ background: "#fee2e2", color: "#dc2626" }}>
-                        Rejected — edit &amp; resubmit or delete from the All tab
-                      </span>
-                    ) : existingReq ? (
+                    {existingReq ? (
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-semibold px-2.5 py-1.5 rounded-lg" style={{ background: drBadge.bg, color: drBadge.text }}>
                           Deletion Request: {existingReq.status}
@@ -722,11 +689,6 @@ function ManagedSection({ listings }) {
                           <FileText size={11} /> View Details
                         </button>
                       </div>
-                    ) : l.status === "REMOVED" ? (
-                      // Removed listings (e.g. by admin) can't request deletion — nothing left to delete
-                      <span className="text-xs font-semibold px-2.5 py-1.5 rounded-lg" style={{ background: "#f1f5f9", color: "#64748b" }}>
-                        Removed
-                      </span>
                     ) : (
                       <button onClick={() => setRequestTarget(l)}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white hover:opacity-90 transition cursor-pointer"
@@ -743,30 +705,62 @@ function ManagedSection({ listings }) {
       ) : (
         <div className="space-y-3">
           {commissions.length === 0 ? (
-            <p className="text-sm text-brand-muted text-center py-8">No commission payments due.</p>
-          ) : commissions.map(comm => (
-            <div key={comm._id} className="bg-white rounded-xl p-4 flex items-center justify-between gap-3" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
-              <div>
-                <p className="text-sm font-semibold text-brand-dark">{carLabel(comm.listing)}</p>
-                <p className="text-xs text-brand-muted mt-0.5">Commission: <strong>{formatPKR(comm.commissionAmount)}</strong></p>
-                <p className="text-xs text-brand-muted mt-0.5">Time left: <ExpiryCountdown expiresAt={comm.expiresAt} /></p>
-              </div>
-              {comm.status === "PAID" ? (
-                <span className="px-2 py-0.5 rounded text-xs font-semibold shrink-0" style={{ background: "#dcfce7", color: "#16a34a" }}>PAID</span>
-              ) : comm.status === "EXPIRED" || new Date() > new Date(comm.expiresAt) ? (
-                <div className="text-right shrink-0">
-                  <button disabled className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white opacity-40 cursor-not-allowed" style={{ background: "#8b5cf6" }}>Pay Now</button>
-                  <p className="text-[10px] text-red-500 mt-1">Window expired</p>
+            <p className="text-sm text-brand-muted text-center py-8">No sold managed listings yet.</p>
+          ) : commissions.map(comm => {
+            const image   = comm.listing?.images?.[0]?.url;
+            const ratePct = comm.commissionRate ? `${+(comm.commissionRate * 100).toFixed(2)}%` : null;
+            const net     = (comm.salePrice ?? 0) - (comm.commissionAmount ?? 0);
+
+            return (
+              <div key={comm._id} className="bg-white rounded-xl p-4 flex items-center gap-4 flex-wrap"
+                style={{ border: "1px solid rgba(0,0,0,0.07)", borderLeft: "3px solid #16a34a" }}>
+
+                {/* Car thumbnail */}
+                <div className="w-22 h-16 rounded-lg overflow-hidden shrink-0 bg-gray-100 flex items-center justify-center">
+                  {image
+                    ? <img src={image} alt={carLabel(comm.listing)} className="w-full h-full object-cover" />
+                    : <ShieldCheck size={22} className="text-gray-300" />}
                 </div>
-              ) : (
-                <button onClick={() => payCommission(comm)} disabled={commPaying}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white hover:opacity-90 transition shrink-0 cursor-pointer disabled:opacity-50"
-                  style={{ background: "#8b5cf6" }}>
-                  {commPaying ? "…" : "Pay Now"}
-                </button>
-              )}
-            </div>
-          ))}
+
+                {/* Details */}
+                <div className="flex-1 min-w-[200px]">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <p className="text-sm font-semibold text-brand-dark">{carLabel(comm.listing)}</p>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#ede9fe", color: "#7c3aed" }}>Managed</span>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#dcfce7", color: "#16a34a" }}>
+                      <Check size={10} /> Sold by GearTrade
+                    </span>
+                  </div>
+                  <p className="text-xs text-brand-muted mb-2">
+                    GearTrade deducted its commission from the sale amount — our team will deliver your remaining proceeds.
+                  </p>
+                  <div className="flex gap-5 flex-wrap">
+                    {comm.salePrice != null && (
+                      <div>
+                        <p className="text-[11px] text-brand-muted leading-tight">Sale price</p>
+                        <p className="text-[13px] font-semibold text-brand-dark">{formatPKR(comm.salePrice)}</p>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-[11px] text-brand-muted leading-tight">Commission{ratePct ? ` (${ratePct})` : ""}</p>
+                      <p className="text-[13px] font-semibold text-brand-dark">− {formatPKR(comm.commissionAmount)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-brand-muted leading-tight">You receive</p>
+                      <p className="text-[13px] font-bold" style={{ color: "#15803d" }}>{formatPKR(net)}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status */}
+                <div className="shrink-0">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: "#dcfce7", color: "#16a34a" }}>
+                    <CheckCircle2 size={13} /> Commission settled
+                  </span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -818,6 +812,7 @@ export default function MyListings() {
   const [featureTarget,   setFeatureTarget]   = useState(null);
   const [featuredDetailId, setFeaturedDetailId] = useState(null);
   const [markSoldTarget,  setMarkSoldTarget]  = useState(null);
+  const [rejectionTarget, setRejectionTarget] = useState(null);
 
   function load() {
     setLoading(true);
@@ -836,9 +831,12 @@ export default function MyListings() {
     setListings(prev => prev.map(l => l._id === id ? { ...l, ...patch } : l));
   }, []);
 
+  // Deletion is a soft delete — the listing moves to the Removed tab
   const handleDeleted = useCallback((id) => {
     setDeleteTarget(null);
-    setListings(prev => prev.filter(l => l._id !== id));
+    setListings(prev => prev.map(l =>
+      l._id === id ? { ...l, status: "REMOVED", removedBy: "OWNER", isFeatured: false } : l
+    ));
   }, []);
 
   const handleMarkedSold = useCallback((id) => {
@@ -852,6 +850,7 @@ export default function MyListings() {
   const openFeature      = useCallback((l) => setFeatureTarget(l),      []);
   const openFeaturedDetail = useCallback((id) => setFeaturedDetailId(id), []);
   const openMarkSold     = useCallback((l) => setMarkSoldTarget(l),     []);
+  const openRejection    = useCallback((l) => setRejectionTarget(l),    []);
 
   // ── Tab filter ─────────────────────────────────────────────────────────────
 
@@ -861,6 +860,7 @@ export default function MyListings() {
     : tab === "Pending"  ? listings.filter(l => l.status === "PENDING")
     : tab === "Rejected" ? listings.filter(l => l.status === "REJECTED")
     : tab === "Sold"     ? listings.filter(l => l.status === "SOLD")
+    : tab === "Removed"  ? listings.filter(l => l.status === "REMOVED")
     : listings;
 
   const tabCount = (t) =>
@@ -869,6 +869,7 @@ export default function MyListings() {
     : t === "Pending"  ? listings.filter(l => l.status === "PENDING").length
     : t === "Rejected" ? listings.filter(l => l.status === "REJECTED").length
     : t === "Sold"     ? listings.filter(l => l.status === "SOLD").length
+    : t === "Removed"  ? listings.filter(l => l.status === "REMOVED").length
     : listings.filter(l => l.saleMode === "MANAGED").length;
 
   return (
@@ -913,6 +914,7 @@ export default function MyListings() {
               onFeature={openFeature}
               onFeaturedDetail={openFeaturedDetail}
               onMarkSold={openMarkSold}
+              onRejectionReason={openRejection}
               isManaged={l.saleMode === "MANAGED"}
             />
           ))}
@@ -934,6 +936,17 @@ export default function MyListings() {
       )}
       {markSoldTarget && (
         <MarkSoldModal listing={markSoldTarget} onClose={() => setMarkSoldTarget(null)} onDone={handleMarkedSold} />
+      )}
+      {rejectionTarget && (
+        <Modal title="Why was this listing rejected?" onClose={() => setRejectionTarget(null)}>
+          <div className="rounded-lg px-4 py-3 mb-4" style={{ background: "#fef2f2", border: "1px solid rgba(220,38,38,0.2)" }}>
+            <p className="text-sm text-red-700 whitespace-pre-wrap">{rejectionTarget.rejectionReason}</p>
+          </div>
+          <p className="text-xs text-brand-muted">
+            Fix the issue above and edit the listing to resubmit it for review.
+            {rejectionTarget.saleMode === "MANAGED" && " Your onboarding inspection fee carries over — no new payment is needed."}
+          </p>
+        </Modal>
       )}
     </div>
   );

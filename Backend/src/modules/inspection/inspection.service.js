@@ -251,7 +251,10 @@ export async function requestManagedInspection(listingId, userId, payload) {
 }
 
 export async function createInspectionPayment(inspectionId, userId) {
-    const inspection = await inspectionModel.findById(inspectionId).populate("listing");
+    const inspection = await inspectionModel.findById(inspectionId).populate({
+        path: "listing",
+        populate: { path: "bodyType", select: "name" },
+    });
 
     if (!inspection) {
         throw new ApiError(404, "Inspection not found");
@@ -296,10 +299,8 @@ export async function createInspectionPayment(inspectionId, userId) {
     if (!user) throw new ApiError(404, "User not found");
 
     const settings = await getSettings();
-    const isReinspection = inspection.type === "RE_INSPECTION";
-    const amount = isReinspection
-      ? settings.inspectionFees.reinspection
-      : calculateInspectionFee(inspection.listing, settings.inspectionFees);
+    // Re-inspections cost the same as first inspections — one CC/body-type based fee
+    const amount = calculateInspectionFee(inspection.listing, settings.inspectionFees);
 
     const transactionId = crypto.randomUUID();
 
@@ -364,6 +365,22 @@ export async function getListingInspectionStatus(listingId) {
     const result = inspection.toObject();
     result.reportToken = report?.verifyToken ?? null;
     return result;
+}
+
+// Fee quote for the booking form — same calculation the payment uses,
+// so what the user sees is exactly what Stripe charges.
+export async function getInspectionFeeQuote(listingId) {
+    const listing = await listingModel
+        .findById(listingId)
+        .populate("bodyType", "name")
+        .select("engineType engineCapacity bodyType");
+
+    if (!listing) throw new ApiError(404, "Listing not found");
+
+    const settings = await getSettings();
+    const amount = calculateInspectionFee(listing, settings.inspectionFees);
+
+    return { amount };
 }
 
 export async function getAvailableSlots(dateStr, excludeInspectionId) {
@@ -509,6 +526,7 @@ export async function getMyInspections(userId, filters = {}) {
                 type: 1,
                 inspectionBy: 1,
                 status: 1,
+                cancelReason: 1,
                 refundRequired: 1,
                 refundStatus: 1,
                 inspectionAddress: 1,

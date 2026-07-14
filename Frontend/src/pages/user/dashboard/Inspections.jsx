@@ -2,7 +2,8 @@ import { useEffect, useState, memo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
 import { getMyInspections } from "../../../services/inspectionService";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Info } from "lucide-react";
+import Modal from "../../../components/ui/Modal";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -18,26 +19,9 @@ const STATUS_BADGE = {
   CANCELLED:            { bg: "#f1f5f9", text: "#64748b", label: "Cancelled" },
 };
 
-// ── RefundBadge ───────────────────────────────────────────────────────────────
-
-function RefundBadge({ refundRequired, refundStatus }) {
-  if (!refundRequired) return null;
-  return refundStatus === "PROCESSED" ? (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold"
-      style={{ background: "#dcfce7", color: "#16a34a" }}>
-      ✓ Refund processed
-    </span>
-  ) : (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold"
-      style={{ background: "#fef9c3", color: "#b45309" }}>
-      Refund pending
-    </span>
-  );
-}
-
 // ── InspectionCard — memo so tab switch only re-renders newly visible cards ───
 
-const InspectionCard = memo(function InspectionCard({ insp }) {
+const InspectionCard = memo(function InspectionCard({ insp, onCancelReason }) {
   const navigate = useNavigate();
   const car   = `${insp.listing?.year ?? ""} ${insp.listing?.brand?.name ?? ""} ${insp.listing?.carModel?.name ?? ""}`.trim();
   const badge = STATUS_BADGE[insp.status] ?? { bg: "#f1f5f9", text: "#64748b", label: insp.status };
@@ -72,22 +56,24 @@ const InspectionCard = memo(function InspectionCard({ insp }) {
           </span>
         </div>
 
-        {insp.refundRequired && (
-          <div className="mt-2">
-            <RefundBadge refundRequired={insp.refundRequired} refundStatus={insp.refundStatus} />
-          </div>
-        )}
-
-        {canView && (
-          <div className="flex gap-2 mt-3 flex-wrap">
+        <div className="flex gap-2 mt-3 flex-wrap">
+          {canView && (
             <button
               onClick={() => navigate(`/browse-cars/${insp.listing?._id}`)}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-brand-muted hover:bg-gray-50 transition cursor-pointer"
               style={{ border: "1px solid rgba(0,0,0,0.1)" }}>
               <ExternalLink size={12} /> View Listing
             </button>
-          </div>
-        )}
+          )}
+          {insp.status === "CANCELLED" && insp.cancelReason && (
+            <button
+              onClick={() => onCancelReason(insp)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition cursor-pointer"
+              style={{ border: "1px solid rgba(220,38,38,0.35)", color: "#dc2626", background: "#fef2f2" }}>
+              <Info size={12} /> Cancellation Reason
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -119,6 +105,7 @@ export default function Inspections() {
   const [all,     setAll]     = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab,     setTab]     = useState("requested");
+  const [cancelReasonTarget, setCancelReasonTarget] = useState(null);
 
   useEffect(() => {
     getMyInspections()
@@ -173,8 +160,19 @@ export default function Inspections() {
         </div>
       ) : (
         <div className="space-y-3">
-          {displayed.map(insp => <InspectionCard key={insp._id} insp={insp} />)}
+          {displayed.map(insp => <InspectionCard key={insp._id} insp={insp} onCancelReason={setCancelReasonTarget} />)}
         </div>
+      )}
+
+      {cancelReasonTarget && (
+        <Modal title="Why was this inspection cancelled?" onClose={() => setCancelReasonTarget(null)}>
+          <div className="rounded-lg px-4 py-3 mb-4" style={{ background: "#fef2f2", border: "1px solid rgba(220,38,38,0.2)" }}>
+            <p className="text-sm text-red-700 whitespace-pre-wrap">{cancelReasonTarget.cancelReason}</p>
+          </div>
+          <p className="text-xs text-brand-muted">
+            If you have any questions about this cancellation, please contact our support team.
+          </p>
+        </Modal>
       )}
     </div>
   );

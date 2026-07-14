@@ -47,21 +47,6 @@ const CONTENT = {
     primary:   { label: "View My Listings", path: "/dashboard/listings" },
     secondary: { label: "My Payments",      path: "/dashboard/payments" },
   },
-  COMMISSION: {
-    title: "Payment Successful!",
-    subtitle: "Your commission payment was processed successfully. Thank you for using GearTrade.",
-    badge: "Commission Payment",
-    badgeColor: "#16a34a",
-    badgeBg: "#f0fdf4",
-    steps: [
-      "Commission payment received",
-      "Your transaction has been recorded",
-      "A receipt will be sent to your email",
-      "Your listing status will be updated shortly",
-    ],
-    primary: { label: "View My Listings", path: "/profile" },
-    secondary: { label: "Browse Cars", path: "/browse-cars" },
-  },
 };
 
 const DEFAULT_CONTENT = {

@@ -17,7 +17,6 @@ const PURPOSE_BADGE = {
   INSPECTION:    { bg: "#fff7ed", text: "#c2410c", label: "Inspection"    },
   RE_INSPECTION: { bg: "#fef9c3", text: "#b45309", label: "Re-Inspection" },
   FEATURED:      { bg: "#dbeafe", text: "#1d4ed8", label: "Featured"      },
-  COMMISSION:    { bg: "#ede9fe", text: "#7c3aed", label: "Commission"    },
 };
 
 const STATUS_BADGE = {
@@ -28,13 +27,12 @@ const STATUS_BADGE = {
 };
 
 const RETRYABLE = ["INSPECTION", "RE_INSPECTION", "FEATURED"];
-const TABS = ["All", "Inspection", "Re-Inspection", "Featured", "Commission"];
+const TABS = ["All", "Inspection", "Re-Inspection", "Featured"];
 
 const PURPOSE_KEY = {
   "Inspection":    "INSPECTION",
   "Re-Inspection": "RE_INSPECTION",
   "Featured":      "FEATURED",
-  "Commission":    "COMMISSION",
 };
 
 // ── Retry helper ──────────────────────────────────────────────────────────────
@@ -84,7 +82,6 @@ function PaymentDetailModal({ payment, onClose }) {
             INSPECTION:    "Inspection for",
             RE_INSPECTION: "Re-inspection for",
             FEATURED:      "Featured listing for",
-            COMMISSION:    "Commission for",
           }[payment.purpose] ?? "Payment for";
           return (
             <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: "#f8fafc", border: "1px solid rgba(0,0,0,0.07)" }}>

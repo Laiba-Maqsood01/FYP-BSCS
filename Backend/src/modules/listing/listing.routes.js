@@ -1,6 +1,7 @@
 import { Router } from "express";
 import * as controller from "./listing.controller.js";
 import { authMiddleware } from "../../middlewares/auth.middleware.js";
+import { authorizeRoles } from "../../middlewares/role.middleware.js";
 import { validate } from "../../middlewares/validate.middleware.js";
 import { contactOtpLimiter } from "../../middlewares/rateLimit.middleware.js";
 import { createListingSchema, updateListingSchema, verifyContactOtpSchema } from "./listing.validation.js";
@@ -8,10 +9,11 @@ import { createListingSchema, updateListingSchema, verifyContactOtpSchema } from
 
 const router = Router();
 
-// POST /api/listings/
+// POST /api/listings/  (admins manage the platform — they can't post ads)
 router.post(
   "/",
   authMiddleware,
+  authorizeRoles("user"),
   validate(createListingSchema),
   controller.createListing
 );

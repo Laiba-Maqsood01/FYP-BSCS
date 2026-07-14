@@ -316,7 +316,7 @@ export default function ManageUsers() {
     const target = deleteTarget;
     setDeleteTarget(null);
     // Patch isDeleted — UserRow/UserCard will hide action buttons automatically.
-    setUsers(patchUser(target._id, { isDeleted: true, accountStatus: target.accountStatus }));
+    setUsers(patchUser(target._id, { isDeleted: true, accountStatus: "DELETED" }));
     try {
       await deleteAdminUser(target._id);
       showSuccess(`${target.username} deleted`);

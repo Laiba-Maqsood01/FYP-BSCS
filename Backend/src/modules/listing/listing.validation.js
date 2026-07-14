@@ -88,7 +88,9 @@ export const createListingSchema = z.object({
     .max(10, "Maximum 10 images allowed")
     .optional(),
 
-  mobileNumber: z.string(),
+  // Optional — the server always overwrites it with the seller's verified
+  // account number, so clients don't need to send it.
+  mobileNumber: z.string().optional(),
 
   secondaryNumber: z.string().optional(),
 

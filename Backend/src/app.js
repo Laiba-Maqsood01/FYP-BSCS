@@ -21,6 +21,8 @@ import { ApiResponse } from "./utils/apiResponse.js";
 
 import { startExpiryJobs  } from "./jobs/featured.expiry.job.js";
 import { startInspectionReminderJob } from "./jobs/inspection.reminder.job.js";
+import { startPendingUserCleanupJob } from "./jobs/pendingUser.cleanup.job.js";
+import { startRemovedAssetCleanupJob } from "./jobs/removedAsset.cleanup.job.js";
 
 import managedSaleRouter from "./modules/managed-sale/managed-sale.routes.js";
 import reportRouter from "./modules/inspection-report/inspectionReport.routes.js";
@@ -51,11 +53,17 @@ app.use(apiLimiter);
 //It's Standard security headers
 app.use(helmet());
 
-// Start cron jobs to auto handle featured expiry every midnight, and commission expiry after every 5mins
+// Start cron job to auto handle featured expiry every midnight
 startExpiryJobs();
 
 // Daily day-before inspection reminder SMS (Twilio)
 startInspectionReminderJob();
+
+// Daily purge of registrations that never finished email/phone verification
+startPendingUserCleanupJob();
+
+// Daily purge of Cloudinary images (listing + report) 6 months after a listing is removed
+startRemovedAssetCleanupJob();
 
 // for stripe webhook  /api/payment
 app.use(

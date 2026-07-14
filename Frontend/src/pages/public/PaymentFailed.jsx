@@ -20,12 +20,6 @@ const CONTENT = {
     badge: "Featured Listing Payment",
     retryLabel: "Try Again",
   },
-  COMMISSION: {
-    title: "Payment Failed",
-    subtitle: "Your commission payment was not processed. Please try again.",
-    badge: "Commission Payment",
-    retryLabel: "Try Again",
-  },
 };
 
 const DEFAULT_CONTENT = {

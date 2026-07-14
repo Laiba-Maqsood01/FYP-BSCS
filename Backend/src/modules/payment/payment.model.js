@@ -20,8 +20,7 @@ const paymentSchema = new mongoose.Schema(
       enum: [
         "FEATURED",
         "INSPECTION",
-        "RE_INSPECTION",
-        "COMMISSION"
+        "RE_INSPECTION"
       ],
       required: true
     },
@@ -70,7 +69,9 @@ const paymentSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["PENDING", "SUCCESS", "FAILED"],
+      // REFUNDED: money landed but the purchase could no longer be honoured
+      // (e.g. commission window expired mid-checkout) and was auto-refunded.
+      enum: ["PENDING", "SUCCESS", "FAILED", "REFUNDED"],
       default: "PENDING"
     },
 

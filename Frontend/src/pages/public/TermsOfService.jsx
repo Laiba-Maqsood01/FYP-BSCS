@@ -35,7 +35,7 @@ const SECTIONS = [
     heading: "Right to terminate, suspend or discontinue any Service",
     body: [
       "GearTrade reserves the right to modify, suspend, cancel or discontinue any or all sections or Services at any time without notice, and to make modifications or alterations to information contained on the Website without notice. You agree that GearTrade shall not be liable to you or any third party for any such modification, suspension or discontinuance.",
-      "GearTrade reserves the right to terminate any service agreement without notice and without providing any reason. Where a service has been booked and paid for, any applicable refund will be handled in accordance with the specific policy for that service as described below.",
+      "GearTrade reserves the right to terminate any service agreement without notice and without providing any reason. Fees paid for Services are non-refundable except where expressly stated otherwise in these terms.",
     ],
   },
   {
@@ -72,7 +72,7 @@ const SECTIONS = [
       "GearTrade offers an optional 'Managed Sale' listing mode, under which our team assists in coordinating the inspection, listing and sale of your vehicle on your behalf, in addition to the standard self-managed ('General') listing mode.",
       "You must be able to establish clear and legitimate ownership of the vehicle before it can be accepted for a Managed Sale listing. GearTrade reserves the right to decline any vehicle for this service, including where ownership cannot be reasonably verified or the required documentation is incomplete.",
       "GearTrade acts only as a facilitator and coordinator between buyer and seller. The final sale transaction — including price, payment terms and delivery of the vehicle — is agreed directly between the buyer and seller. GearTrade is not responsible for completing ownership transfer, insurance, or any other legal documentation required to transfer ownership of the vehicle, nor for any dispute arising from such transfer.",
-      "Once a Managed Sale is finalised, GearTrade charges a commission on the agreed sale price. The applicable commission rate is set by GearTrade and may be updated from time to time; the rate in effect at the time of sale will be shown to you before payment. Commission payments are processed through our payment gateway and are non-refundable once completed. A commission request that is not paid within the stated time window will expire and may need to be reinitiated.",
+      "Once a Managed Sale is finalised, GearTrade charges a commission on the agreed sale price. The applicable commission rate is set by GearTrade and may be updated from time to time; the rate in effect at the time of sale applies. The buyer pays the full sale amount to GearTrade, and GearTrade deducts its commission before delivering the remaining proceeds to you (for example, by cheque). No separate commission payment is required from you, and the deducted commission is non-refundable once the sale is finalised.",
       "If you wish to remove a Managed Sale listing before it is sold, this is subject to review and approval by our team, since GearTrade may already have committed resources (such as an inspection or active buyer coordination) to the listing.",
     ],
   },
@@ -89,16 +89,34 @@ const SECTIONS = [
       "By booking a vehicle inspection through GearTrade, you agree to the following:",
     ],
     list: [
-      "You agree to pay the applicable inspection fee (which varies by inspection type — standard, Managed Sale onboarding, premium, or re-inspection) as displayed on the platform at the time of booking. GearTrade reserves the right to change these fees at any time without prior notice.",
+      "You agree to pay the applicable inspection fee (which varies by vehicle category — standard, Managed Sale onboarding, or premium) as displayed on the platform at the time of booking. Re-inspections are charged at the same rate as first inspections. GearTrade reserves the right to change these fees at any time without prior notice.",
+      "Where an inspection is requested by a prospective buyer, the buyer is responsible for contacting the seller and agreeing the inspection time and place with the seller before booking. GearTrade acts only as the inspection service provider at the agreed time and place; any failure of coordination, availability or conduct between buyer and seller is a matter between those parties, and GearTrade accepts no responsibility for it.",
       "Our inspectors use accepted methods for fault detection; these methods will not necessarily identify every fault with a vehicle, and any inspection report should be read in the context of the vehicle's age, model and condition at the time of inspection.",
       "Inspections are scheduled into time slots configured and made available by GearTrade. You are responsible for ensuring the vehicle is available at the confirmed location and time.",
-      "If an inspection is cancelled or rescheduled, this is handled at GearTrade's discretion; where a paid inspection is cancelled by GearTrade or is otherwise eligible for a refund, the amount will be refunded to your original payment method. Any cancellation fee, if introduced, will be clearly disclosed to you before you confirm the booking.",
+      "Inspection fees are strictly non-refundable once paid, in all circumstances, including where the inspection is subsequently cancelled. See the 'Inspection fees — no refund policy' section below.",
       "GearTrade may decline further inspection requests from users who have a pattern of repeated cancellations or unresolved dues.",
       "Our inspection process does not involve dismantling, assembling or otherwise disturbing any component of the vehicle. The vehicle should be presented on a safe, level surface with adequate space around it for inspection.",
       "The inspection report reflects only the condition of the vehicle at the time of inspection and does not cover latent defects that were not visually apparent. It is the buyer's responsibility to independently verify a vehicle's condition before purchase.",
       "A road test is not included by default and, where conducted with your consent, is undertaken at your own risk. Our inspector may decline to road test a vehicle that does not appear roadworthy.",
       "The inspection report is prepared for the person who requested it and remains the property of GearTrade. By requesting an inspection, you agree that GearTrade may attach and publish the report alongside the corresponding listing on the platform.",
       "GearTrade's inspection service does not constitute a warranty or guarantee regarding the accuracy, reliability or completeness of the vehicle or the report.",
+    ],
+  },
+  {
+    heading: "Inspection fees — no refund policy",
+    body: [
+      "All inspection fees paid to GearTrade are final and non-refundable. GearTrade's obligation is limited to providing the inspection service; circumstances arising between buyer and seller, or caused by a user's own act or omission, do not entitle any party to a refund. Without limiting the generality of this policy, no refund will be issued in any of the following situations:",
+    ],
+    list: [
+      "The seller deletes or removes their listing after a buyer has paid for an inspection (including a scheduled inspection). The booking and its consequences are a matter between the buyer and the seller.",
+      "A Managed Sale listing is not approved after the seller has paid the onboarding inspection fee. In such cases our team will contact the seller and allow 2–3 working days to correct or complete the listing information; the fee already paid carries over to the corrected listing and no additional payment is required. If the seller does not respond within this period, the listing may be removed and the fee remains non-refundable.",
+      "A listing is removed by GearTrade for violation of these terms or of our listing policy while a paid inspection is pending. Such removal results from the seller's conduct, and the matter rests between the buyer and the seller.",
+      "An inspection is cancelled by GearTrade due to the conduct, unavailability or fault of the buyer or the seller.",
+      "A user deletes their account while a paid inspection is pending; all associated inspections are cancelled without refund.",
+      "A user's account is terminated by GearTrade for violation of these terms; all associated listings are removed and inspections cancelled without refund.",
+    ],
+    after: [
+      "By completing payment for an inspection, you acknowledge that you have read, understood and accepted this no-refund policy.",
     ],
   },
   {

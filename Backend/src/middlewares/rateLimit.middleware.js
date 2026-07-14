@@ -21,6 +21,33 @@ export const authLimiter = rateLimit({
     }
 })
 
+// Registration phone-verification SMS — SMS costs money, so sends are strictly
+// limited. Keyed per target email + IP so one IP can't drain credits across
+// many accounts, and one account can't be spammed from many IPs.
+export const smsOtpLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 3,
+    keyGenerator: (req) =>
+        `${ipKeyGenerator(req.ip)}:${(req.body?.email || "").toLowerCase()}`,
+    message: {
+        message: "Too many verification codes requested. Please try again later."
+    }
+})
+
+// Profile number-change SMS — keyed per authenticated user (must run AFTER
+// authMiddleware so req.user is set).
+export const numberChangeSmsLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 3,
+    keyGenerator: (req) =>
+        req.user?._id
+            ? String(req.user._id)
+            : ipKeyGenerator(req.ip),
+    message: {
+        message: "Too many verification codes requested. Please try again later."
+    }
+})
+
 // Contact-reveal OTP — stop scraping of seller numbers.
 // Keyed per authenticated user (falls back to IP) so one account can't
 // mass-reveal every listing's number.

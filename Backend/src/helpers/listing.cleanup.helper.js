@@ -44,19 +44,37 @@ export async function cancelInspectionForListing(listingId, forceCancel = false,
     return { blocked: false, refundRequired: false };
   }
 
-  // Refund only when buyer paid and inspection not yet delivered
-  const refundRequired =
-    inspection.inspectionBy === "BUYER" &&
-    inspection.status === "SCHEDULED";
-
+  // Inspection fees are non-refundable (see Terms of Service) — a cancelled
+  // inspection never queues a refund, regardless of who paid.
   inspection.status = "CANCELLED";
   inspection.cancelReason = cancelReason;
-  inspection.refundRequired = refundRequired;
-  inspection.refundStatus = refundRequired ? "PENDING" : "NOT_REQUIRED";
+  inspection.refundRequired = false;
+  inspection.refundStatus = "NOT_REQUIRED";
   await inspection.save();
   await voidPendingPayments(inspection._id);
 
-  return { blocked: false, refundRequired };
+  return { blocked: false, refundRequired: false };
+}
+
+/**
+ * Closes any featured record for a listing that no longer needs promotion
+ * (sold or removed). ACTIVE features are ended, abandoned PENDING ones are
+ * closed and their unpaid payments voided so the seller can't pay to feature
+ * a dead listing.
+ */
+export async function closeFeaturedForListing(listingId) {
+  const features = await featuredModel.find({
+    listing: listingId,
+    status: { $in: ["ACTIVE", "PENDING"] },
+  });
+
+  for (const feature of features) {
+    feature.status = "REMOVED";
+    await feature.save();
+    await voidPendingPayments(feature._id);
+  }
+
+  await listingModel.findByIdAndUpdate(listingId, { isFeatured: false });
 }
 
 /**
@@ -73,13 +91,6 @@ export async function cleanupListingForDeletion(listingId, forceCancel = false, 
 
   // --- Managed listing guards ---
   if (listing.saleMode === "MANAGED") {
-
-    if (listing.status === "PENDING_COMMISSION") {
-      throw new ApiError(
-        400,
-        "This listing has a pending commission payment. Please pay the commission first or contact support."
-      );
-    }
 
     if (listing.status === "ACTIVE" && !forceCancel) {
       // Check if there's already a pending deletion request
@@ -115,19 +126,8 @@ export async function cleanupListingForDeletion(listingId, forceCancel = false, 
     return { blocked: true, refundRequired: false };
   }
 
-  // Step 2 — close active featured record if exists
-  const activeFeatured = await featuredModel.findOne({
-    listing: listingId,
-    status: "ACTIVE",
-  });
-
-  if (activeFeatured) {
-    activeFeatured.status = "REMOVED";
-    await activeFeatured.save();
-  }
-
-  // Step 3 — clear isFeatured flag on listing
-  await listingModel.findByIdAndUpdate(listingId, { isFeatured: false });
+  // Step 2 — close featured records + clear isFeatured flag
+  await closeFeaturedForListing(listingId);
 
   return { blocked: false, refundRequired };
 }

@@ -31,29 +31,15 @@ const commissionSchema = new mongoose.Schema(
             required: true,
         },
 
-        // Ref to payment record
-        payment: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "payments",
-            default: null,
-        },
-
+        // The buyer pays GearTrade in full; the team deducts the commission and
+        // hands the seller the remaining proceeds (e.g. by cheque). So every
+        // commission record is created already settled. The field exists (rather
+        // than being implicit) so the admin ledger can badge it and future
+        // states (e.g. REFUNDED) can be added without a migration.
         status: {
             type: String,
-            enum: ["PENDING", "PAID", "EXPIRED", "CANCELLED"],
-            default: "PENDING",
-        },
-
-        // 30 mins from creation
-        expiresAt: {
-            type: Date,
-            required: true,
-        },
-
-        // Admin fills when cancelling
-        cancelReason: {
-            type: String,
-            default: null,
+            enum: ["PAID"],
+            default: "PAID",
         },
 
         // Who initiated (always admin)

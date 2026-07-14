@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, memo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Mail, Phone, Calendar, ShieldOff, ShieldCheck,
-  Trash2, CheckCircle, XCircle, Star, ChevronLeft, ChevronRight,
+  Trash2, CheckCircle, XCircle, Star, ChevronLeft, ChevronRight, ExternalLink,
 } from "lucide-react";
 import {
   getAdminUser, blockToggleUser, deleteAdminUser,
@@ -35,7 +35,6 @@ const LISTING_STATUS_COLORS = {
   SOLD:               { bg: "#eff6ff", color: "#1e40af" },
   REJECTED:           { bg: "#fef2f2", color: "#991b1b" },
   REMOVED:            { bg: "#f1f5f9", color: "#475569" },
-  PENDING_COMMISSION: { bg: "#fdf4ff", color: "#6b21a8" },
 };
 
 function Badge({ label, bg, color }) {
@@ -46,9 +45,12 @@ function Badge({ label, bg, color }) {
   );
 }
 
-function ListingStatusBadge({ status }) {
+function ListingStatusBadge({ status, removedBy }) {
   const s = LISTING_STATUS_COLORS[status] ?? { bg: "#f1f5f9", color: "#475569" };
-  return <Badge label={status?.replace(/_/g, " ")} bg={s.bg} color={s.color} />;
+  const label = status === "REMOVED" && removedBy
+    ? `REMOVED BY ${removedBy}`
+    : status?.replace(/_/g, " ");
+  return <Badge label={label} bg={s.bg} color={s.color} />;
 }
 
 function SaleModeBadge({ mode }) {
@@ -135,12 +137,17 @@ const ListingRow = memo(function ListingRow({ l, onApprove, onReject, onRemove }
         PKR {l.price?.toLocaleString()}
       </td>
       <td className="px-4 py-3"><SaleModeBadge mode={l.saleMode} /></td>
-      <td className="px-4 py-3"><ListingStatusBadge status={l.status} /></td>
+      <td className="px-4 py-3"><ListingStatusBadge status={l.status} removedBy={l.removedBy} /></td>
       <td className="px-4 py-3 text-xs text-brand-muted">
         {new Date(l.createdAt).toLocaleDateString("en-PK", { year: "numeric", month: "short", day: "numeric" })}
       </td>
       <td className="px-4 py-3">
         <div className="flex items-center justify-end gap-1.5 flex-wrap">
+          <a href={`/browse-cars/${l._id}`} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-lg transition cursor-pointer"
+            style={{ background: "#f1f5f9", color: "#334155", border: "1px solid #e2e8f0" }}>
+            <ExternalLink size={11} /> View
+          </a>
           {canApprove && (
             <button onClick={() => onApprove(l)}
               className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-lg transition cursor-pointer"
@@ -185,7 +192,7 @@ const ListingCard = memo(function ListingCard({ l, onApprove, onReject, onRemove
           </div>
           <p className="text-xs text-brand-muted">{l.brand?.name} {l.carModel?.name} · {l.year}</p>
         </div>
-        <ListingStatusBadge status={l.status} />
+        <ListingStatusBadge status={l.status} removedBy={l.removedBy} />
       </div>
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <span className="text-xs font-medium text-brand-dark">PKR {l.price?.toLocaleString()}</span>
@@ -197,6 +204,11 @@ const ListingCard = memo(function ListingCard({ l, onApprove, onReject, onRemove
           {new Date(l.createdAt).toLocaleDateString("en-PK", { year: "numeric", month: "short", day: "numeric" })}
         </p>
         <div className="flex items-center gap-1.5 flex-wrap">
+          <a href={`/browse-cars/${l._id}`} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-lg transition cursor-pointer"
+            style={{ background: "#f1f5f9", color: "#334155", border: "1px solid #e2e8f0" }}>
+            <ExternalLink size={11} /> View
+          </a>
           {canApprove && (
             <button onClick={() => onApprove(l)}
               className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-lg transition cursor-pointer"
@@ -334,12 +346,12 @@ export default function UserDetail() {
   const handleRemove = useCallback(async () => {
     const target = removeTarget;
     setRemoveTarget(null);
-    setListings(patchListing(target._id, { status: "REMOVED" }));
+    setListings(patchListing(target._id, { status: "REMOVED", removedBy: "ADMIN" }));
     try {
       await removeListing(target._id);
       showSuccess("Listing removed");
     } catch (err) {
-      setListings(patchListing(target._id, { status: target.status }));
+      setListings(patchListing(target._id, { status: target.status, removedBy: target.removedBy ?? null }));
       showError(err?.response?.data?.message ?? "Failed to remove");
     }
   }, [removeTarget]);

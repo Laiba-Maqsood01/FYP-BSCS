@@ -116,6 +116,8 @@ export default function FeatureSection({
                     </span>
                     <Link
                       to={`/browse-cars/${listing._id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="bg-brand-btn text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-brand-dark2 transition"
                     >
                       View Details

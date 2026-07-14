@@ -90,6 +90,11 @@ export const createInspectionPayment = asyncHandler(async (req, res) => {
     );
 });
 
+export const getInspectionFeeQuote = asyncHandler(async (req, res) => {
+    const quote = await inspectionService.getInspectionFeeQuote(req.params.listingId);
+    res.status(200).json(new ApiResponse(200, "Inspection fee quote", quote));
+});
+
 export const getAvailableSlots = asyncHandler(async (req, res) => {
     const { date, excludeInspectionId } = req.query;
     if (!date) {

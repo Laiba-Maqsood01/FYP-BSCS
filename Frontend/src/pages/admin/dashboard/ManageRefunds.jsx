@@ -3,7 +3,6 @@ import { RefreshCw } from "lucide-react";
 import { getAdminRefunds, approveRefund } from "../../../services/adminService";
 import { showSuccess, showError } from "../../../utils/toast";
 import ConfirmModal from "../../../components/common/ConfirmModal";
-import FilterDropdown from "../../../components/admin/ui/FilterDropdown";
 import { Pagination } from "../../../components/admin/ui/Pagination";
 import { SkeletonRow, SkeletonCard } from "../../../components/admin/ui/Skeleton";
 
@@ -133,18 +132,6 @@ const RefundCard = memo(function RefundCard({ r, onApprove }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-const PARTY_OPTIONS = [
-  { label: "All Parties", value: "" },
-  { label: "Buyer",       value: "BUYER" },
-  { label: "Owner",       value: "OWNER" },
-];
-
-const TYPE_OPTIONS = [
-  { label: "All Types",     value: "" },
-  { label: "Inspection",    value: "INSPECTION" },
-  { label: "Re-inspection", value: "RE_INSPECTION" },
-];
-
 const REFUND_STATUS_TABS = [
   { label: "All",          value: "" },
   { label: "Pending",      value: "PENDING" },
@@ -158,15 +145,13 @@ export default function ManageRefunds() {
   const [loading,    setLoading]    = useState(true);
   const [approveTarget, setApproveTarget] = useState(null);
 
-  const [filters, setFilters] = useState({ refundStatus: "", inspectionBy: "", type: "", page: 1 });
+  const [filters, setFilters] = useState({ refundStatus: "", page: 1 });
 
   const fetchRefunds = useCallback(async () => {
     setLoading(true);
     try {
       const params = { page: filters.page };
       if (filters.refundStatus) params.refundStatus = filters.refundStatus;
-      if (filters.inspectionBy) params.inspectionBy = filters.inspectionBy;
-      if (filters.type)         params.type         = filters.type;
       const res = await getAdminRefunds(params);
       setRefunds(res.data.data.refunds ?? []);
       setPagination(res.data.data.pagination ?? { page: 1, totalPages: 1, total: 0 });
@@ -231,10 +216,6 @@ export default function ManageRefunds() {
               {t.label}
             </button>
           ))}
-        </div>
-        <div className="flex gap-2 shrink-0">
-          <FilterDropdown value={filters.inspectionBy} onChange={v => setFilter("inspectionBy", v)} options={PARTY_OPTIONS} />
-          <FilterDropdown value={filters.type}         onChange={v => setFilter("type", v)}         options={TYPE_OPTIONS} />
         </div>
       </div>
 

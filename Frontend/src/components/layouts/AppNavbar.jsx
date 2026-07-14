@@ -8,7 +8,7 @@ import ProfileDropdown from "../common/ProfileDropdown";
 const DEFAULT_MENU = [
   { title: "Home",        url: "/",            roles: ["guest", "user", "admin"] },
   { title: "Browse Cars", url: "/browse-cars", roles: ["guest", "user", "admin"] },
-  { title: "Post an Ad",  url: "/post-ad",     roles: ["guest", "user", "admin"] },
+  { title: "Post an Ad",  url: "/post-ad",     roles: ["guest", "user"] },
 ];
 
 // Match Bootstrap btn-sm outline-dark / btn-sm dark exactly

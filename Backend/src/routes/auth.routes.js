@@ -1,6 +1,6 @@
-import { registerSchema, loginSchema, verifyEmailSchema, forgotPasswordSchema,resetPasswordSchema, changePasswordSchema, requestEmailChangeSchema,confirmEmailChangeSchema } from "../validations/auth.validation.js";
+import { registerSchema, loginSchema, verifyEmailSchema, forgotPasswordSchema,resetPasswordSchema, changePasswordSchema, requestEmailChangeSchema,confirmEmailChangeSchema, sendPhoneOtpSchema, verifyPhoneSchema, changeVerificationNumberSchema, requestNumberChangeSchema, confirmNumberChangeSchema } from "../validations/auth.validation.js";
 import { validate } from "../middlewares/validate.middleware.js";
-import { authLimiter } from "../middlewares/rateLimit.middleware.js";
+import { authLimiter, smsOtpLimiter, numberChangeSmsLimiter } from "../middlewares/rateLimit.middleware.js";
 import { authMiddleware } from "../middlewares/auth.middleware.js";
 import { Router } from "express";
 import * as authController from "../controllers/auth.controller.js";
@@ -63,12 +63,39 @@ authRouter.post(
     authController.verifyEmail)
 
 /**
-POST  /api/auth/resend-otp 
+POST  /api/auth/resend-otp
  */
 authRouter.post(
     "/resend-otp",
     authLimiter,
     authController.resendOTP)
+
+/**
+POST /api/auth/send-phone-otp — SMS code for registration phone verification
+*/
+authRouter.post(
+    "/send-phone-otp",
+    smsOtpLimiter,
+    validate(sendPhoneOtpSchema),
+    authController.sendPhoneOtp)
+
+/**
+POST /api/auth/verify-phone
+*/
+authRouter.post(
+    "/verify-phone",
+    authLimiter,
+    validate(verifyPhoneSchema),
+    authController.verifyPhone)
+
+/**
+POST /api/auth/change-verification-number — fix a mistyped number (unverified only)
+*/
+authRouter.post(
+    "/change-verification-number",
+    smsOtpLimiter,
+    validate(changeVerificationNumberSchema),
+    authController.changeVerificationNumber)
 
 /** for it we have to give oldPassword, newPassword, and also authorization: access token
  * POST /api/auth/change-password
@@ -132,6 +159,33 @@ authRouter.post(
     "/cancel-email-change",
     authMiddleware,
     authController.cancelEmailChange)
+
+/**
+ * POST /api/auth/request-number-change — password confirm + SMS OTP to new number
+ */
+authRouter.post(
+    "/request-number-change",
+    authMiddleware,
+    numberChangeSmsLimiter,
+    validate(requestNumberChangeSchema),
+    authController.requestNumberChange)
+
+/**
+ * POST /api/auth/confirm-number-change
+ */
+authRouter.post(
+    "/confirm-number-change",
+    authMiddleware,
+    validate(confirmNumberChangeSchema),
+    authController.confirmNumberChange)
+
+/**
+ * POST /api/auth/cancel-number-change
+ */
+authRouter.post(
+    "/cancel-number-change",
+    authMiddleware,
+    authController.cancelNumberChange)
 
 /**
  * PATCH /api/auth/avatar

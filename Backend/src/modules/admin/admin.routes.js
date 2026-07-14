@@ -5,7 +5,7 @@ import { validate } from "../../middlewares/validate.middleware.js";
 import * as adminController from "./admin.controller.js";
 import * as reportController from "../inspection-report/inspectionReport.controller.js";
 
-import { blockUserSchema, assignInspectorSchema, updateInspectionStatusSchema, uploadReportSchema, rejectListingSchema, rejectDeletionRequestSchema, markSoldSchema, cancelCommissionSchema, createFeaturedPlanSchema, updateFeaturedPlanSchema, addSlotSchema, updateSlotSchema, updateSiteSettingsSchema } from "./admin.validation.js";
+import { blockUserSchema, assignInspectorSchema, updateInspectionStatusSchema, rejectListingSchema, rejectDeletionRequestSchema, markSoldSchema, createFeaturedPlanSchema, updateFeaturedPlanSchema, addSlotSchema, updateSlotSchema, updateSiteSettingsSchema } from "./admin.validation.js";
 
 const adminRouter = express.Router();
 
@@ -177,21 +177,6 @@ adminRouter.patch(
 adminRouter.get(
     "/commissions",
     adminController.getCommissions);
-
-
-// PATCH /api/admin/commissions/:id/reinitiate 
-adminRouter.patch(
-    "/commissions/:id/reinitiate",
-    adminController.reinitiateCommission
-);
-
-
-// PATCH /api/admin/commissions/:id/cancel 
-adminRouter.patch(
-    "/commissions/:id/cancel",
-    validate(cancelCommissionSchema),
-    adminController.cancelCommission
-);
 
 
 // PATCH /api/admin/inspections/:id/schedule

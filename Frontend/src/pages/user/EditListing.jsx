@@ -294,7 +294,6 @@ export default function EditListing() {
       e.mileage = "Valid mileage is required";
     if (!form.price || isNaN(Number(form.price)) || Number(form.price) <= 0)
       e.price = "Valid price is required";
-    if (!form.mobileNumber)  e.mobileNumber = "Mobile number is required";
     if (form.images.length === 0) e.images = "At least one photo is required";
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -321,16 +320,17 @@ export default function EditListing() {
         price:           Number(form.price),
         description:     form.description,
         images:          form.images,
-        mobileNumber:    form.mobileNumber,
+        // mobileNumber not sent — pinned to the seller's verified account number
         secondaryNumber: form.secondaryNumber || undefined,
         whatsappAllowed: form.whatsappAllowed,
       });
-      // A rejected MANAGED listing goes back to PENDING on edit, but its paid
-      // onboarding inspection was cancelled (and refunded) on rejection — the
-      // owner must book and pay a fresh inspection to resubmit.
+      // A rejected MANAGED listing goes back to PENDING on edit. Its paid
+      // onboarding inspection fee carries over (non-refundable, see Terms) —
+      // the backend revives the cancelled inspection, so no new booking or
+      // payment is needed. Rescheduling is handled by the team on request.
       if (listing?.saleMode === "MANAGED" && listing?.status === "REJECTED") {
-        showSuccess("Listing updated! Now book its onboarding inspection to resubmit.");
-        navigate(`/inspection/book/${id}?mode=managed`);
+        showSuccess("Listing resubmitted for review! Your previous inspection fee carries over — contact our team if you need to reschedule the inspection.");
+        navigate("/dashboard/listings");
       } else {
         showSuccess("Listing updated successfully!");
         navigate("/dashboard/listings");
@@ -532,10 +532,10 @@ export default function EditListing() {
 
         {/* ── Contact ── */}
         <Section title="Contact Information">
-          <FormField label="Mobile Number" required>
-            <input type="tel" className={inputCls} placeholder="+92 300 1234567"
-              value={form.mobileNumber} onChange={e => set("mobileNumber", e.target.value)} />
-            {errors.mobileNumber && <p className="mt-1 text-xs text-red-500">{errors.mobileNumber}</p>}
+          <FormField label="Mobile Number" hint="Your verified account number — not editable">
+            <div className={`${inputCls} bg-gray-50 cursor-default`} style={{ pointerEvents: "none" }}>
+              {form.mobileNumber || "—"}
+            </div>
           </FormField>
 
           <FormField label="Secondary Number" hint="Optional second contact number">

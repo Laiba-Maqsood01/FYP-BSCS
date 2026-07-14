@@ -1,10 +1,9 @@
 import { useEffect, useState, useCallback, useRef, memo } from "react";
 import { useNavigate } from "react-router-dom";
-import { getAdminInspections, assignInspector, updateInspectionStatus, scheduleInspection, uploadInspectionReport, initInspectionReport } from "../../../services/adminService";
+import { getAdminInspections, assignInspector, updateInspectionStatus, scheduleInspection, initInspectionReport } from "../../../services/adminService";
 import { getAvailableSlots } from "../../../services/inspectionService";
 import { showSuccess, showError } from "../../../utils/toast";
-import { CalendarDays, User, ChevronDown, FileUp, ClipboardList, X, Loader2, RefreshCw, ExternalLink } from "lucide-react";
-import { getPdfUploadSignature, uploadPdfToCloudinary,} from "../../../services/adminService";
+import { CalendarDays, User, ChevronDown, ClipboardList, X, RefreshCw, ExternalLink } from "lucide-react";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -326,69 +325,6 @@ function ScheduleModal({ inspection, onClose, onDone }) {
   );
 }
 
-function UploadReportModal({ inspection, onClose, onDone }) {
-  const [file, setFile] = useState(null);
-  const [notes, setNotes] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [uploadStep, setUploadStep] = useState("");
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    if (!file) return;
-    setLoading(true);
-    try {
-      setUploadStep("Getting upload signature…");
-      const signature = await getPdfUploadSignature();
-      setUploadStep("Uploading PDF…");
-      const { url, fileId } = await uploadPdfToCloudinary(file, signature);
-      setUploadStep("Saving report…");
-      const payload = { url, fileId };
-      if (notes.trim()) payload.inspectorNotes = notes.trim();
-      await uploadInspectionReport(inspection._id, payload);
-      showSuccess("Report uploaded" + (inspection.listing?.saleMode === "MANAGED" ? " — listing activated" : ""));
-      onDone(inspection._id, { url });
-    } catch (err) {
-      showError(err?.response?.data?.message ?? "Failed to upload report");
-    } finally {
-      setLoading(false);
-      setUploadStep("");
-    }
-  }
-
-  return (
-    <Modal title="Upload Inspection Report" onClose={onClose}>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        {inspection.listing?.saleMode === "MANAGED" && (
-          <div className="text-xs text-purple-700 bg-purple-50 border border-purple-200 rounded-lg px-3 py-2">
-            This is a managed listing — uploading the report will automatically activate it.
-          </div>
-        )}
-        <div>
-          <label className="text-xs text-brand-muted mb-1 block">PDF Report</label>
-          <input type="file" accept=".pdf" onChange={e => setFile(e.target.files[0])}
-            className="w-full text-sm text-brand-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:cursor-pointer file:bg-gray-100" />
-        </div>
-        <div>
-          <label className="text-xs text-brand-muted mb-1 block">Inspector notes (optional)</label>
-          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
-            placeholder="Any additional notes…"
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-brand-orange/30" />
-        </div>
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose}
-            className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">Cancel</button>
-          <button type="submit" disabled={loading || !file}
-            className="px-4 py-2 text-sm rounded-lg text-white cursor-pointer disabled:opacity-60 flex items-center gap-2"
-            style={{ background: "#ea6d00" }}>
-            {loading && <Loader2 size={13} className="animate-spin" />}
-            {loading ? (uploadStep || "Uploading…") : "Upload"}
-          </button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
 function StatusModal({ inspection, onClose, onDone }) {
   const transitions = VALID_TRANSITIONS[inspection.status] || [];
   const [selected, setSelected] = useState(transitions[0] || "");
@@ -464,12 +400,12 @@ function StatusModal({ inspection, onClose, onDone }) {
               value={cancelReason}
               onChange={e => setCancelReason(e.target.value)}
               rows={3}
-              placeholder="e.g. Listing is outside all serviceable cities and seller is unresponsive…"
+              placeholder="Cancellation Reason"
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-300"
             />
             {inspection.inspectionBy === "BUYER" && (
               <p className="text-[11px] text-amber-600 mt-1">
-                This is a buyer-paid inspection — cancelling will automatically queue a refund for admin approval.
+                Inspection fees are non-refundable — cancelling will not issue any refund to the payer.
               </p>
             )}
           </div>
@@ -497,8 +433,9 @@ const ActionsDropdown = memo(function ActionsDropdown({ inspection, onAction }) 
   const btnRef = useRef(null);
   const transitions = VALID_TRANSITIONS[inspection.status] || [];
   const canSchedule = inspection.status === "SCHEDULED";
-  const canUploadReport  = inspection.status === "COMPLETED" && !inspection.report?.url;
   const canBuildReport   = inspection.status === "COMPLETED";
+  // Inspector can't be changed once the inspection is finished
+  const canAssign = !["COMPLETED", "CANCELLED"].includes(inspection.status);
 
   function handleToggle() {
     if (btnRef.current) {
@@ -506,6 +443,11 @@ const ActionsDropdown = memo(function ActionsDropdown({ inspection, onAction }) 
       setPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
     }
     setOpen(p => !p);
+  }
+
+  // Nothing an admin can do (e.g. CANCELLED) — no menu at all
+  if (!canAssign && !canSchedule && !canBuildReport && transitions.length === 0) {
+    return <span className="text-xs text-brand-muted">—</span>;
   }
 
   return (
@@ -519,10 +461,12 @@ const ActionsDropdown = memo(function ActionsDropdown({ inspection, onAction }) 
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
           <div className="fixed z-40 bg-white border border-gray-100 rounded-xl shadow-lg w-48 py-1 text-sm"
             style={{ top: pos.top, right: pos.right }}>
-            <button onClick={() => { setOpen(false); onAction("assign"); }}
-              className="w-full text-left px-4 py-2 hover:bg-gray-50 cursor-pointer flex items-center gap-2 text-brand-dark">
-              <User size={13} /> Assign Inspector
-            </button>
+            {canAssign && (
+              <button onClick={() => { setOpen(false); onAction("assign"); }}
+                className="w-full text-left px-4 py-2 hover:bg-gray-50 cursor-pointer flex items-center gap-2 text-brand-dark">
+                <User size={13} /> Assign Inspector
+              </button>
+            )}
             {canSchedule && (
               <button onClick={() => { setOpen(false); onAction("schedule"); }}
                 className="w-full text-left px-4 py-2 hover:bg-gray-50 cursor-pointer flex items-center gap-2 text-brand-dark">
@@ -538,13 +482,7 @@ const ActionsDropdown = memo(function ActionsDropdown({ inspection, onAction }) 
             {canBuildReport && (
               <button onClick={() => { setOpen(false); onAction("buildReport"); }}
                 className="w-full text-left px-4 py-2 hover:bg-gray-50 cursor-pointer flex items-center gap-2 text-brand-dark">
-                <ClipboardList size={13} /> Build Report
-              </button>
-            )}
-            {canUploadReport && (
-              <button onClick={() => { setOpen(false); onAction("report"); }}
-                className="w-full text-left px-4 py-2 hover:bg-gray-50 cursor-pointer flex items-center gap-2 text-brand-muted">
-                <FileUp size={13} /> Upload PDF Report
+                <ClipboardList size={13} /> {inspection.reportToken ? "Edit Report" : "Build Report"}
               </button>
             )}
           </div>
@@ -578,7 +516,14 @@ const InspectionRow = memo(function InspectionRow({ insp, onAction }) {
         )}
       </td>
       <td className="px-4 py-3"><TypeBadge type={insp.type} inspectionBy={insp.inspectionBy} /></td>
-      <td className="px-4 py-3"><StatusBadge status={insp.status} /></td>
+      <td className="px-4 py-3">
+        <StatusBadge status={insp.status} />
+        {insp.status === "CANCELLED" && insp.cancelReason && (
+          <p className="text-[11px] text-brand-muted mt-1 max-w-40" title={insp.cancelReason}>
+            {insp.cancelReason}
+          </p>
+        )}
+      </td>
       <td className="px-4 py-3">
         {insp.assignedInspector
           ? <span className="text-sm text-brand-dark">{insp.assignedInspector}</span>
@@ -595,9 +540,9 @@ const InspectionRow = memo(function InspectionRow({ insp, onAction }) {
         ) : <span className="text-xs text-brand-muted italic">Not set</span>}
       </td>
       <td className="px-4 py-3">
-        {insp.report?.url
-          ? <a href={insp.report.url} target="_blank" rel="noopener noreferrer"
-              className="text-xs font-medium hover:underline cursor-pointer" style={{ color: "#ea6d00" }}>View PDF</a>
+        {insp.reportToken
+          ? <a href={`/reports/${insp.reportToken}`} target="_blank" rel="noopener noreferrer"
+              className="text-xs font-medium hover:underline cursor-pointer" style={{ color: "#ea6d00" }}>View Report</a>
           : <span className="text-xs text-brand-muted italic">—</span>}
       </td>
       <td className="px-4 py-3 text-right">
@@ -634,6 +579,9 @@ const InspectionCard = memo(function InspectionCard({ insp, onAction }) {
         <StatusBadge status={insp.status} />
         <TypeBadge type={insp.type} inspectionBy={insp.inspectionBy} />
       </div>
+      {insp.status === "CANCELLED" && insp.cancelReason && (
+        <p className="text-xs text-brand-muted -mt-1 mb-3">Reason: {insp.cancelReason}</p>
+      )}
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div>
           <p className="text-brand-muted uppercase tracking-wider text-[10px] mb-0.5">Inspector</p>
@@ -654,10 +602,10 @@ const InspectionCard = memo(function InspectionCard({ insp, onAction }) {
             <p className="text-brand-dark">{insp.inspectionAddress}</p>
           </div>
         )}
-        {insp.report?.url && (
+        {insp.reportToken && (
           <div className="col-span-2">
-            <a href={insp.report.url} target="_blank" rel="noopener noreferrer"
-              className="text-xs font-medium hover:underline" style={{ color: "#ea6d00" }}>View PDF Report</a>
+            <a href={`/reports/${insp.reportToken}`} target="_blank" rel="noopener noreferrer"
+              className="text-xs font-medium hover:underline" style={{ color: "#ea6d00" }}>View Report</a>
           </div>
         )}
       </div>
@@ -680,7 +628,6 @@ export default function ManageInspections() {
   const [assignTarget, setAssignTarget] = useState(null);
   const [scheduleTarget, setScheduleTarget] = useState(null);
   const [statusTarget, setStatusTarget] = useState(null);
-  const [reportTarget, setReportTarget] = useState(null);
 
   const fetchInspections = useCallback(async () => {
     setLoading(true);
@@ -721,22 +668,27 @@ export default function ManageInspections() {
     setInspections(patchInspection(id, { status: newStatus }));
   }, []);
 
-  const handleReportDone = useCallback((id, { url }) => {
-    setReportTarget(null);
-    setInspections(patchInspection(id, { report: { url } }));
-  }, []);
-
   // Stable open-handlers so memo'd rows are not invalidated.
   const openAssign   = useCallback((insp) => setAssignTarget(insp),   []);
   const openSchedule = useCallback((insp) => setScheduleTarget(insp), []);
   const openStatus   = useCallback((insp) => setStatusTarget(insp),   []);
-  const openReport   = useCallback((insp) => setReportTarget(insp),   []);
 
   const handleBuildReport = useCallback(async (insp) => {
+    // Open the tab synchronously (inside the click) so the popup blocker
+    // doesn't kill it — the report id is only known after the async init,
+    // so we point the already-open tab at the URL once we have it.
+    const tab = window.open("", "_blank");
     try {
       const report = await initInspectionReport(insp._id);
-      navigate(`/admin/inspection-reports/${report._id}/build`);
+      const url = `/admin/inspection-reports/${report._id}/build`;
+      if (tab) {
+        tab.location.href = url;
+      } else {
+        // Popup was blocked — fall back to same-tab navigation
+        navigate(url);
+      }
     } catch {
+      if (tab) tab.close();
       showError("Failed to open report builder.");
     }
   }, [navigate]);
@@ -745,9 +697,8 @@ export default function ManageInspections() {
     if (action === "assign")        openAssign(insp);
     else if (action === "schedule") openSchedule(insp);
     else if (action === "status")   openStatus(insp);
-    else if (action === "report")   openReport(insp);
     else if (action === "buildReport") handleBuildReport(insp);
-  }, [openAssign, openSchedule, openStatus, openReport, handleBuildReport]);
+  }, [openAssign, openSchedule, openStatus, handleBuildReport]);
 
   return (
     <div className="p-4 sm:p-6">
@@ -851,7 +802,6 @@ export default function ManageInspections() {
       {assignTarget   && <AssignModal   inspection={assignTarget}   onClose={() => setAssignTarget(null)}   onDone={handleAssignDone} />}
       {scheduleTarget && <ScheduleModal inspection={scheduleTarget} onClose={() => setScheduleTarget(null)} onDone={handleScheduleDone} />}
       {statusTarget   && <StatusModal   inspection={statusTarget}   onClose={() => setStatusTarget(null)}   onDone={handleStatusDone} />}
-      {reportTarget   && <UploadReportModal inspection={reportTarget} onClose={() => setReportTarget(null)} onDone={handleReportDone} />}
     </div>
   );
 }

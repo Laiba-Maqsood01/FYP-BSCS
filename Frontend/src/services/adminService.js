@@ -1,23 +1,4 @@
 import api from "./api";
-import axios from "axios";
-
-export const getPdfUploadSignature = () =>
-  api.post("/upload/sign", { folder: "inspection-reports", count: 1, resource_type: "raw" })
-     .then(r => r.data.data.signatures[0]);
-
-export const uploadPdfToCloudinary = async (file, signature) => {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("api_key", signature.api_key);
-  formData.append("timestamp", signature.timestamp);
-  formData.append("signature", signature.signature);
-  formData.append("folder", signature.folder);
-  const res = await axios.post(
-    `https://api.cloudinary.com/v1_1/${signature.cloud_name}/raw/upload`,
-    formData
-  );
-  return { url: res.data.secure_url, fileId: res.data.public_id };
-};
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export const getAdminDashboard = () => api.get("/admin/dashboard");
@@ -40,7 +21,6 @@ export const markListingSold      = (id, salePrice) => api.patch(`/admin/listing
 export const getAdminInspections  = (params)              => api.get("/admin/inspections", { params });
 export const assignInspector      = (id, assignedInspector) => api.patch(`/admin/inspections/${id}/assign`, { assignedInspector });
 export const updateInspectionStatus = (id, status, cancelReason) => api.patch(`/admin/inspections/${id}/status`, { status, ...(cancelReason ? { cancelReason } : {}) });
-export const uploadInspectionReport = (id, data)          => api.post(`/admin/inspections/${id}/report`, data);
 export const scheduleInspection   = (id, data)            => api.patch(`/admin/inspections/${id}/schedule`, data);
 
 // ── Featured ──────────────────────────────────────────────────────────────────
@@ -58,10 +38,8 @@ export const getAdminDeletions    = (params)          => api.get("/admin/deletio
 export const approveDeletion      = (id)              => api.patch(`/admin/deletion-requests/${id}/approve`);
 export const rejectDeletion       = (id, adminNote)   => api.patch(`/admin/deletion-requests/${id}/reject`, { adminNote });
 
-// ── Commissions ───────────────────────────────────────────────────────────────
+// ── Commissions (settlement ledger — records are created already PAID) ────────
 export const getAdminCommissions  = (params)     => api.get("/admin/commissions", { params });
-export const reinitiateCommission = (id)         => api.patch(`/admin/commissions/${id}/reinitiate`);
-export const cancelCommission     = (id, reason) => api.patch(`/admin/commissions/${id}/cancel`, { cancelReason: reason });
 
 // ── Site Settings ─────────────────────────────────────────────────────────────
 export const getSiteSettings    = ()       => api.get('/admin/settings').then(r => r.data.data);

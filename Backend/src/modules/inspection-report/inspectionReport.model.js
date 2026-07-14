@@ -536,6 +536,12 @@ const inspectionReportSchema = new mongoose.Schema({
 
   verifyToken: { type: String, unique: true, sparse: true },
 
+  // When the report was first published
+  publishedAt: { type: Date, default: null },
+  // Set only when a PUBLISHED report is edited afterwards — drives the
+  // "Last updated" line on the public report so post-publish edits are visible.
+  lastEditedAt: { type: Date, default: null },
+
 }, { timestamps: true });
 
 inspectionReportSchema.index({ verifyToken: 1 });

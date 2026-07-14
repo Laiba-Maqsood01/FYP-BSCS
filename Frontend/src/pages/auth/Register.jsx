@@ -1,8 +1,17 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Check, X } from "lucide-react";
 import { register } from "../../services/authService";
 import { showError, showSuccess } from "../../utils/toast";
+
+// Strong-password rules — must mirror the backend registerSchema.
+const PASSWORD_RULES = [
+  { key: "length",  label: "At least 8 characters",        test: (p) => p.length >= 8 },
+  { key: "upper",   label: "One uppercase letter (A–Z)",   test: (p) => /[A-Z]/.test(p) },
+  { key: "lower",   label: "One lowercase letter (a–z)",   test: (p) => /[a-z]/.test(p) },
+  { key: "number",  label: "One number (0–9)",             test: (p) => /[0-9]/.test(p) },
+  { key: "special", label: "One special character (!@#…)", test: (p) => /[^A-Za-z0-9]/.test(p) },
+];
 
 function validate(form) {
   const errors = {};
@@ -25,8 +34,8 @@ function validate(form) {
   }
   if (!form.password) {
     errors.password = "Password is required.";
-  } else if (form.password.length < 6) {
-    errors.password = "Password must be at least 6 characters.";
+  } else if (!PASSWORD_RULES.every((r) => r.test(form.password))) {
+    errors.password = "Password does not meet the requirements below.";
   }
   if (!form.confirmPassword) {
     errors.confirmPassword = "Please confirm your password.";
@@ -161,7 +170,7 @@ export default function Register() {
               <input
                 type={showPassword ? "text" : "password"}
                 name="password"
-                placeholder="Min. 6 characters"
+                placeholder="Create a strong password"
                 value={form.password}
                 onChange={handleChange}
                 onBlur={handleBlur}
@@ -175,8 +184,20 @@ export default function Register() {
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
-            {touched.password && errors.password && (
-              <p className="text-red-500 text-xs mt-1">{errors.password}</p>
+
+            {/* Live password requirements checklist */}
+            {(touched.password || form.password) && (
+              <ul className="mt-2 space-y-1">
+                {PASSWORD_RULES.map((rule) => {
+                  const ok = rule.test(form.password);
+                  return (
+                    <li key={rule.key} className={`flex items-center gap-1.5 text-xs ${ok ? "text-green-600" : "text-brand-muted"}`}>
+                      {ok ? <Check size={13} className="shrink-0" /> : <X size={13} className="shrink-0 text-gray-300" />}
+                      {rule.label}
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </div>
 

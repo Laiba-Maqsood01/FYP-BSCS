@@ -170,7 +170,7 @@ export default function SiteSettings() {
   const [modal,        setModal]        = useState(null);
 
   // ── inspection fees ──
-  const [fees,       setFees]       = useState({ standard: "", managed: "", premium: "", reinspection: "" });
+  const [fees,       setFees]       = useState({ standard: "", managed: "", premium: "" });
   const [feesSaving, setFeesSaving] = useState(false);
 
   // ── commission ──
@@ -185,7 +185,6 @@ export default function SiteSettings() {
           standard:     s.inspectionFees?.standard     ?? 2000,
           managed:      s.inspectionFees?.managed      ?? 5000,
           premium:      s.inspectionFees?.premium      ?? 7000,
-          reinspection: s.inspectionFees?.reinspection ?? 2000,
         });
         setCommission(s.commissionPercentage ?? 0.9);
       })
@@ -239,7 +238,6 @@ export default function SiteSettings() {
       standard:     Number(fees.standard),
       managed:      Number(fees.managed),
       premium:      Number(fees.premium),
-      reinspection: Number(fees.reinspection),
     };
     if (Object.values(parsed).some(v => !v || v <= 0)) {
       showError("All fees must be positive numbers."); return;
@@ -247,7 +245,7 @@ export default function SiteSettings() {
     setFeesSaving(true);
     try {
       const updated = await updateSiteSettings({ inspectionFees: parsed });
-      setFees({ standard: updated.inspectionFees.standard, managed: updated.inspectionFees.managed, premium: updated.inspectionFees.premium, reinspection: updated.inspectionFees.reinspection });
+      setFees({ standard: updated.inspectionFees.standard, managed: updated.inspectionFees.managed, premium: updated.inspectionFees.premium });
       showSuccess("Inspection fees saved.");
     } catch {
       showError("Failed to save inspection fees.");
@@ -361,7 +359,6 @@ export default function SiteSettings() {
               { key: "standard",     label: "Standard",     hint: "Cars ≤ 1000cc" },
               { key: "managed",      label: "Managed",      hint: "Cars ≤ 2000cc / default" },
               { key: "premium",      label: "Premium",      hint: "SUV / 4x4 / Jeep / Luxury" },
-              { key: "reinspection", label: "Re-inspection", hint: "All re-inspection requests" },
             ].map(({ key, label, hint }) => (
               <div key={key}>
                 <label className="block text-xs font-semibold text-brand-muted uppercase tracking-wide mb-1.5">

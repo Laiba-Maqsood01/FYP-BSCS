@@ -26,7 +26,6 @@ const siteSettingsSchema = new mongoose.Schema({
     standard:     { type: Number, default: 2000 },
     managed:      { type: Number, default: 5000 },
     premium:      { type: Number, default: 7000 },
-    reinspection: { type: Number, default: 2000 },
   },
   commissionPercentage: { type: Number, default: 0.9 },
 }, { timestamps: true });

@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Car, ShieldCheck, Heart, CreditCard, Plus, List, LayoutDashboard } from "lucide-react";
+import { Car, ShieldCheck, Heart, CreditCard, Plus, List, LayoutDashboard, Banknote } from "lucide-react";
 import { getMyListings } from "../../../services/listingService";
 import { getMyInspections } from "../../../services/inspectionService";
 import { getMyFavorites } from "../../../services/favoriteService";
 import { getMyPayments } from "../../../services/paymentService";
+import { getCommissionDetails } from "../../../services/managedSaleService";
 import { useAuth } from "../../../context/AuthContext";
 
 function formatPKR(n) {
@@ -24,14 +25,12 @@ const STATUS_COLORS = {
   REJECTED:           "#dc2626",
   REMOVED:            "#6b7280",
   SOLD:               "#3b82f6",
-  PENDING_COMMISSION: "#8b5cf6",
 };
 
 const PURPOSE_COLORS = {
   INSPECTION:    "#ea6d00",
   RE_INSPECTION: "#f59e0b",
   FEATURED:      "#3b82f6",
-  COMMISSION:    "#8b5cf6",
 };
 
 function StatCard({ label, value, sub, icon: Icon, color }) {
@@ -131,6 +130,7 @@ function buildActivity(listings, inspections) {
       ACTIVE:   { text: `Listing approved — ${car} is now active`, dot: "#16a34a" },
       PENDING:  { text: `Listing submitted — ${car} is under review`, dot: "#d97706" },
       REJECTED: { text: `Listing rejected — ${car}`, dot: "#dc2626" },
+      SOLD:     { text: `${car} sold${l.saleMode === "MANAGED" ? " by GearTrade" : ""}`, dot: "#3b82f6" },
     };
     const ev = map[l.status];
     if (ev) events.push({ ...ev, date: l.createdAt });
@@ -146,6 +146,7 @@ export default function Overview() {
   const [inspections, setInspections] = useState([]);
   const [favorites,   setFavorites]   = useState([]);
   const [payments,    setPayments]    = useState([]);
+  const [commissions, setCommissions] = useState([]);
   const [loading,     setLoading]     = useState(true);
 
   useEffect(() => {
@@ -154,11 +155,20 @@ export default function Overview() {
       getMyInspections().catch(() => []),
       getMyFavorites().catch(() => []),
       getMyPayments().catch(() => []),
-    ]).then(([l, i, f, p]) => {
-      setListings(Array.isArray(l) ? l : []);
+    ]).then(async ([l, i, f, p]) => {
+      const lists = Array.isArray(l) ? l : [];
+      setListings(lists);
       setInspections(Array.isArray(i) ? i : []);
       setFavorites(Array.isArray(f) ? f : []);
       setPayments(Array.isArray(p) ? p : []);
+
+      // Sale proceeds — commissions of SOLD managed listings. GearTrade
+      // deducts its commission from the sale amount and delivers the rest.
+      const soldManaged = lists.filter(x => x.saleMode === "MANAGED" && x.status === "SOLD");
+      const comms = await Promise.all(
+        soldManaged.map(x => getCommissionDetails(x._id).catch(() => null))
+      );
+      setCommissions(comms.filter(Boolean));
     }).finally(() => setLoading(false));
   }, []);
 
@@ -166,7 +176,11 @@ export default function Overview() {
   const successPayments = payments.filter(p => p.status === "SUCCESS");
   const totalSpent = successPayments.reduce((s, p) => s + (p.amount ?? 0), 0);
 
-  const statusOrder = ["ACTIVE", "PENDING", "SOLD", "REJECTED", "REMOVED", "PENDING_COMMISSION"];
+  // Money received from managed sales (sale price minus GearTrade's commission)
+  const saleProceeds    = commissions.reduce((s, c) => s + ((c.salePrice ?? 0) - (c.commissionAmount ?? 0)), 0);
+  const commissionTotal = commissions.reduce((s, c) => s + (c.commissionAmount ?? 0), 0);
+
+  const statusOrder = ["ACTIVE", "PENDING", "SOLD", "REJECTED", "REMOVED"];
   const barData = statusOrder.map(s => ({
     label: s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, " "),
     value: listings.filter(l => l.status === s).length,
@@ -289,6 +303,30 @@ export default function Overview() {
         <StatCard label="Total spent" value={formatPKR(totalSpent)} sub={`${successPayments.length} transaction${successPayments.length !== 1 ? "s" : ""}`}    icon={CreditCard} color="#8b5cf6" />
       </div>
 
+      {/* Sale proceeds banner — only when GearTrade has sold cars for this user */}
+      {commissions.length > 0 && (
+        <div className="flex items-center gap-4 rounded-xl p-4 mb-5 flex-wrap"
+          style={{ background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: "#dcfce7" }}>
+            <Banknote size={18} style={{ color: "#15803d" }} />
+          </div>
+          <div className="flex-1 min-w-[200px]">
+            <p className="text-sm font-semibold" style={{ color: "#166534" }}>
+              You've received {formatPKR(saleProceeds)} from {commissions.length} managed sale{commissions.length !== 1 ? "s" : ""}
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: "#15803d" }}>
+              After GearTrade's commission of {formatPKR(commissionTotal)} — delivered by our team.
+            </p>
+          </div>
+          <button
+            onClick={() => navigate("/dashboard/listings")}
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg hover:opacity-80 transition shrink-0 cursor-pointer"
+            style={{ background: "#dcfce7", color: "#166534" }}>
+            View details
+          </button>
+        </div>
+      )}
+
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
 
@@ -308,7 +346,7 @@ export default function Overview() {
 
         {/* Donut chart */}
         <div className="bg-white rounded-xl p-5" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
-          <p className="text-sm font-semibold text-brand-dark mb-4">Payment breakdown</p>
+          <p className="text-sm font-semibold text-brand-dark mb-4">Spending breakdown</p>
           <DonutChart data={pieData} />
         </div>
       </div>

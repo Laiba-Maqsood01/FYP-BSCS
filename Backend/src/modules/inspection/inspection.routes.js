@@ -20,6 +20,13 @@ router.get(
   controller.getAvailableSlots
 );
 
+// GET /api/inspection/:listingId/fee  — fee quote for the booking form
+router.get(
+  "/:listingId/fee",
+  authMiddleware,
+  controller.getInspectionFeeQuote
+);
+
 // GET /api/inspection/listing/:listingId  — latest non-cancelled inspection for a listing (public)
 router.get(
   "/listing/:listingId",

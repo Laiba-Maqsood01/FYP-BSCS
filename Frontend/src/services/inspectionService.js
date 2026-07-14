@@ -20,6 +20,10 @@ export const requestSellerReInspection = (listingId, body) =>
 export const requestBuyerInspection = (listingId, body) =>
   api.post(`/inspection/${listingId}/request`, body).then(r => r.data.data);
 
+// Fee quote for a listing — { amount }, same calculation the payment uses
+export const getInspectionFeeQuote = (listingId) =>
+  api.get(`/inspection/${listingId}/fee`).then(r => r.data.data);
+
 // Create payment session — returns { payment, checkoutUrl }
 export const createInspectionPayment = (inspectionId) =>
   api.post(`/inspection/${inspectionId}/payment`).then(r => r.data.data);

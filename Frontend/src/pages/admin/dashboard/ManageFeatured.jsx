@@ -406,24 +406,18 @@ function FeaturedListingsTab() {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
-              {["Listing", "Seller", "Plan", "Status", "Amount", "Start", "End", ""].map((h, i) => (
+              {["Seller", "Plan", "Status", "Amount", "Start", "End", "Listing"].map((h, i) => (
                 <th key={i} className="text-left px-4 py-3 text-xs font-medium text-brand-muted uppercase tracking-wider">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {loading
-              ? Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={8} />)
+              ? Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={7} />)
               : featured.length === 0
-              ? <tr><td colSpan={8} className="text-center py-12 text-sm text-brand-muted">No featured records found</td></tr>
+              ? <tr><td colSpan={7} className="text-center py-12 text-sm text-brand-muted">No featured records found</td></tr>
               : featured.map(f => (
                 <tr key={f._id} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-brand-dark text-sm truncate max-w-40">{f.listing?.title || "—"}</p>
-                    {f.listing?.saleMode === "MANAGED" && (
-                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded" style={{ background: "rgba(234,109,0,0.1)", color: "#ea6d00" }}>Managed</span>
-                    )}
-                  </td>
                   <td className="px-4 py-3">
                     <p className="text-sm text-brand-dark">{f.seller?.username || "—"}</p>
                     <p className="text-[11px] text-brand-muted">{f.seller?.email}</p>
@@ -437,13 +431,18 @@ function FeaturedListingsTab() {
                   <td className="px-4 py-3 text-xs text-brand-muted">
                     {f.endDate ? new Date(f.endDate).toLocaleDateString("en-PK", { day: "numeric", month: "short", year: "numeric" }) : "—"}
                   </td>
-                  <td className="px-4 py-3 text-right">
-                    {f.status === "ACTIVE" && (
-                      <a href={`/browse-cars/${f.listing?._id}`} target="_blank" rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors text-brand-dark">
-                        <ExternalLink size={11} /> View
-                      </a>
-                    )}
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      {f.listing?._id && (
+                        <a href={`/browse-cars/${f.listing._id}`} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors text-brand-dark">
+                          <ExternalLink size={11} /> View
+                        </a>
+                      )}
+                      {f.listing?.saleMode === "MANAGED" && (
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded" style={{ background: "rgba(234,109,0,0.1)", color: "#ea6d00" }}>Managed</span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -461,8 +460,11 @@ function FeaturedListingsTab() {
             <div key={f._id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
               <div className="flex items-start justify-between gap-2 mb-2">
                 <div className="min-w-0">
-                  <p className="font-medium text-brand-dark text-sm truncate">{f.listing?.title || "—"}</p>
-                  <p className="text-xs text-brand-muted mt-0.5">{f.seller?.username} · {f.seller?.email}</p>
+                  <p className="font-medium text-brand-dark text-sm truncate">{f.seller?.username || "—"}</p>
+                  <p className="text-xs text-brand-muted mt-0.5 truncate">{f.seller?.email}</p>
+                  {f.listing?.saleMode === "MANAGED" && (
+                    <span className="inline-block mt-1 text-[10px] font-medium px-1.5 py-0.5 rounded" style={{ background: "rgba(234,109,0,0.1)", color: "#ea6d00" }}>Managed</span>
+                  )}
                 </div>
                 <StatusBadge status={f.status} />
               </div>
@@ -480,8 +482,8 @@ function FeaturedListingsTab() {
                   <p className="text-brand-dark">{f.endDate ? new Date(f.endDate).toLocaleDateString("en-PK", { day: "numeric", month: "short" }) : "—"}</p>
                 </div>
               </div>
-              {f.status === "ACTIVE" && (
-                <a href={`/browse-cars/${f.listing?._id}`} target="_blank" rel="noopener noreferrer"
+              {f.listing?._id && (
+                <a href={`/browse-cars/${f.listing._id}`} target="_blank" rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors text-brand-dark">
                   <ExternalLink size={11} /> View Listing
                 </a>
