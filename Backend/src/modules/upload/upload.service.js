@@ -57,6 +57,9 @@ export async function deleteFiles(fileIds = [], resourceType = "image") {
 
   await cloudinary.api.delete_resources(fileIds, {
     resource_type: resourceType,
+    // Purge CDN edge caches too — without this the old URLs keep serving
+    // cached copies long after the asset is deleted from storage.
+    invalidate: true,
   });
 }
 

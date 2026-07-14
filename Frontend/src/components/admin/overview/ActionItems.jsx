@@ -6,7 +6,6 @@ const ITEMS = [
   { label: "Inspections unassigned",    key: "unassignedInspections", to: "/admin/inspections", urgent: true  },
   { label: "Refunds pending",           key: "pendingRefunds",    to: "/admin/refunds",     urgent: true  },
   { label: "Deletion requests",         key: "pendingDeletions",  to: "/admin/deletions",   urgent: false },
-  { label: "Commissions expiring",      key: "expiringCommissions", to: "/admin/commissions", urgent: true  },
 ];
 
 export default function ActionItems({ data }) {

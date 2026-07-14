@@ -162,18 +162,6 @@ export const updateInspectionStatus = asyncHandler(async (req, res) => {
     );
 });
 
-export const uploadInspectionReport = asyncHandler(async (req, res) => {
-    const data = await adminService.uploadInspectionReport(req.params.id, req.body);
-
-    res.status(200).json(
-        new ApiResponse(
-            200,
-            "Report uploaded",
-            data
-        )
-    );
-});
-
 // Featured
 export const getFeatured = asyncHandler(async (req, res) => {
     const data = await adminService.getFeatured(req.query);
@@ -249,18 +237,6 @@ export const getCommissions = asyncHandler(async (req, res) => {
     res.status(200).json(new ApiResponse(200, "Commissions fetched", data));
 });
 
-export const reinitiateCommission = asyncHandler(async (req, res) => {
-    const data = await adminService.reinitiateCommission(req.params.id);
-    res.status(200).json(new ApiResponse(200, "Commission reinitiated", data));
-});
-
-export const cancelCommission = asyncHandler(async (req, res) => {
-    const data = await adminService.cancelCommission(
-        req.params.id,
-        req.body.cancelReason
-    );
-    res.status(200).json(new ApiResponse(200, "Commission cancelled", data));
-});
 
 
 export const scheduleInspection = asyncHandler(async (req, res) => {

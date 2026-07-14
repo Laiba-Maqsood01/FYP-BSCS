@@ -2,9 +2,6 @@ import cron from "node-cron";
 import featuredModel from "../modules/featured/featured.model.js";
 import listingModel from "../modules/listing/listing.model.js";
 
-import commissionModel from "../modules/managed-sale/commission.model.js";
-import paymentModel from "../modules/payment/payment.model.js";
-
 export function startExpiryJobs() {
   // Runs every day at midnight — featured listings
   cron.schedule("0 0 * * *", async () => {
@@ -43,33 +40,4 @@ export function startExpiryJobs() {
   });
 
   console.log("[Cron] Featured expiry job scheduled.");
-
-  // Runs every 5 minutes — commission payments
-  cron.schedule("*/5 * * * *", async () => {
-    try {
-      const expiredCommissions = await commissionModel.find({
-        status: "PENDING",
-        expiresAt: { $lt: new Date() },
-      });
-
-      if (expiredCommissions.length === 0) return;
-
-      for (const commission of expiredCommissions) {
-        commission.status = "EXPIRED";
-        await commission.save();
-
-        if (commission.payment) {
-          await paymentModel.findByIdAndUpdate(commission.payment, {
-            status: "FAILED",
-          });
-        }
-
-        console.log(`[Cron] Commission ${commission._id} expired.`);
-      }
-    } catch (error) {
-      console.error("[Cron] Commission expiry job failed:", error.message);
-    }
-  });
-
-  console.log("[Cron] Commission expiry job scheduled.");
 }

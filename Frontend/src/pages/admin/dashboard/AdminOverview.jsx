@@ -52,7 +52,6 @@ function toActionItems(data = {}) {
     unassignedInspections: data.inspections?.pending          ?? 0,
     pendingRefunds:        data.inspections?.pendingRefunds   ?? 0,
     pendingDeletions:      0,
-    expiringCommissions:   0,
   };
 }
 

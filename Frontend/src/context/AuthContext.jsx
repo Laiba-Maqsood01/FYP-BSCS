@@ -39,6 +39,23 @@ export const AuthProvider = ({ children }) => {
 
     } catch (error) {
       const message = error.response?.data?.message || "Login failed";
+      const errData = error.response?.data?.data;
+
+      // Backend sends a structured payload for unverified accounts, telling
+      // us exactly which verification step to resume.
+      if (error.response?.status === 403 && errData?.code === "VERIFICATION_REQUIRED") {
+        const email = data.email;
+        if (!errData.emailVerified) {
+          try { await authService.resendOTP(email); } catch (_) {}
+          navigate("/verify-email", { state: { email } });
+        } else {
+          // Email done — resume at the phone step (the page sends the SMS itself)
+          navigate("/verify-phone", { state: { email } });
+        }
+        return { success: false, unverified: true };
+      }
+
+      // Fallback for older-style plain "verify" messages
       const isUnverified =
         error.response?.status === 403 &&
         message.toLowerCase().includes("verify");

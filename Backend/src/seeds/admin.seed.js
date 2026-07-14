@@ -24,6 +24,7 @@ async function seedAdmin() {
       password: hashedPassword,
       role: "admin",
       verified: true,
+      phoneVerified: true,
       accountStatus: "ACTIVE",
     });
 

@@ -6,8 +6,6 @@ export const getDeletionRequests = () =>
 export const submitDeletionRequest = (listingId, reason) =>
   api.post(`/managed-sale/deletion-request/${listingId}`, { reason }).then(r => r.data.data);
 
+// Settled commission record for a sold managed listing (display only)
 export const getCommissionDetails = (listingId) =>
   api.get(`/managed-sale/commission/${listingId}`).then(r => r.data.data);
-
-export const initiateCommissionPayment = (commissionId) =>
-  api.post(`/managed-sale/commission/${commissionId}/pay`).then(r => r.data.data);

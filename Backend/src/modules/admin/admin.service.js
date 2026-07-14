@@ -11,10 +11,9 @@ import sessionModel from "../../models/session.model.js"
 import { ApiError } from "../../utils/apiError.js";
 import { ACCOUNT_STATUS } from "../../utils/constants.js";
 
-import { cleanupListingForDeletion } from "../../helpers/listing.cleanup.helper.js"
+import { cleanupListingForDeletion, closeFeaturedForListing } from "../../helpers/listing.cleanup.helper.js"
 import { getListingDetails } from "../listing/listing.service.js";
 import { processStripeRefund, voidPendingPayments } from "../payment/payment.service.js";
-import { deleteImages, deleteFiles } from "../upload/upload.service.js";
 import { sendEmail } from "../../services/email.service.js";
 import { sendSms } from "../../services/sms.service.js";
 
@@ -436,35 +435,7 @@ export async function deleteUser(userId) {
     { _id: 1, status: 1, saleMode: 1 }
   );
 
-  // Step 2 — cancel any PENDING commissions first
-  for (const listing of listings) {
-    if (listing.status === "PENDING_COMMISSION") {
-      const commission = await commissionModel.findOne({
-        listing: listing._id,
-        status: { $in: ["PENDING", "EXPIRED"] },
-      });
-
-      if (commission) {
-        commission.status = "CANCELLED";
-        commission.cancelReason = "Account deleted by admin";
-        await commission.save();
-
-        // Cancel related pending payment if exists
-        if (commission.payment) {
-          await paymentModel.findByIdAndUpdate(commission.payment, {
-            status: "FAILED",
-          });
-        }
-      }
-      //  reset listing status so cleanup helper doesn't block it
-      await listingModel.findByIdAndUpdate(listing._id, {
-        status: "ACTIVE",
-      });
-    }
-  }
-
-
-  // Step 3 — force cleanup all listings (admin can override IN_PROGRESS)
+  // Step 2 — force cleanup all listings (admin can override IN_PROGRESS)
   for (const listing of listings) {
     await cleanupListingForDeletion(
       listing._id,
@@ -473,40 +444,18 @@ export async function deleteUser(userId) {
     );
   }
 
-  // Step 4 — delete all Cloudinary assets for each listing
-  for (const listing of listings) {
-    const fullListing = await listingModel.findById(listing._id, { images: 1 });
-
-    // Delete images
-    const imageFileIds = (fullListing.images || [])
-      .map((img) => img.fileId)
-      .filter(Boolean);
-
-    await deleteImages(imageFileIds);
-
-    // Delete inspection report PDFs if any
-    const inspections = await inspectionModel.find(
-      { listing: listing._id },
-      { report: 1 }
-    );
-
-    const reportFileIds = inspections
-      .map((insp) => insp.report?.fileId)
-      .filter(Boolean);
-
-    await deleteFiles(reportFileIds, "raw");
-  }
-
-  // Step 5 — mark all listings as REMOVED  ← renumber this and below
+  // Step 4 — mark all listings as REMOVED. Cloudinary images stay — the
+  // 6-month cleanup cron purges them later.
+  // (already-removed ones keep their original removedBy attribution)
   await listingModel.updateMany(
-    { seller: userId },
-    { status: "REMOVED" }
+    { seller: userId, status: { $ne: "REMOVED" } },
+    { status: "REMOVED", removedBy: "ADMIN", removedAt: new Date() }
   );
 
   // Step 6 — soft delete (keep credentials so they can't re-register with same email)
   user.isDeleted = true;
   user.deletedAt = new Date();
-  user.accountStatus = ACCOUNT_STATUS.BLOCKED;
+  user.accountStatus = ACCOUNT_STATUS.DELETED;
   user.blockedUntil = null;
   await user.save();
 
@@ -609,6 +558,7 @@ export async function getListings(query) {
           price: 1,
           year: 1,
           status: 1,
+          removedBy: 1,
           saleMode: 1,
           isFeatured: 1,
           createdAt: 1,
@@ -709,23 +659,15 @@ export async function rejectListing(listingId, reason) {
     }
   }
 
-  // Cancel the not-yet-started inspection. If the requester already paid,
-  // queue a refund in the ManageRefunds queue — the admin is rejecting the
-  // listing, so the paid service will never be delivered.
+  // Cancel the not-yet-started inspection. Inspection fees are
+  // non-refundable (see Terms of Service) — the GearTrade team contacts the
+  // seller to fix and resubmit the listing instead; the paid fee carries
+  // over, so no refund is queued.
   if (inspection) {
-    // inspection.payment is linked as soon as a checkout session is created,
-    // even if the user never paid — only a SUCCESS payment is refundable.
-    // (If payment completes after this rejection, the Stripe webhook detects
-    // the CANCELLED inspection and queues the refund itself.)
-    const refundRequired = !!(await paymentModel.exists({
-      referenceId: inspection._id,
-      status: "SUCCESS",
-    }));
-
     inspection.status = "CANCELLED";
     inspection.cancelReason = "Listing rejected by admin";
-    inspection.refundRequired = refundRequired;
-    inspection.refundStatus = refundRequired ? "PENDING" : "NOT_REQUIRED";
+    inspection.refundRequired = false;
+    inspection.refundStatus = "NOT_REQUIRED";
     await inspection.save();
 
     // Kill unpaid payment attempts so the user can't "Complete Payment"
@@ -781,23 +723,10 @@ export async function removeListing(listingId) {
     throw new ApiError(400, "Could not remove listing");
   }
 
-  // Delete images from 
-  const imageFileIds = (listing.images || [])
-    .map((img) => img.fileId)
-    .filter(Boolean);
-
-  await deleteImages(imageFileIds);
-
-  // Delete pdf inspection reports
-  const inspections = await inspectionModel.find({ listing: listingId });
-
-  const reportFileIds = inspections
-    .map((insp) => insp.report?.fileId)
-    .filter(Boolean);
-
-  await deleteFiles(reportFileIds, "raw");
-
+  // Images stay on Cloudinary — the 6-month cleanup cron purges them later
   listing.status = "REMOVED";
+  listing.removedBy = "ADMIN";
+  listing.removedAt = new Date();
   await listing.save();
 
   return { message: "Listing removed successfully", listing };
@@ -880,6 +809,19 @@ export async function getInspections(query) {
       },
       { $unwind: "$requestedBy" },
 
+      // Join the PUBLISHED inspection report (if any) for the Report column
+      {
+        $lookup: {
+          from: "inspection_reports",
+          let: { inspId: "$_id" },
+          pipeline: [
+            { $match: { $expr: { $eq: ["$inspection", "$$inspId"] }, status: "PUBLISHED" } },
+            { $project: { verifyToken: 1 } },
+          ],
+          as: "publishedReport",
+        },
+      },
+
       { $sort: { createdAt: -1 } },
       { $skip: skip },
       { $limit: Number(limit) },
@@ -890,13 +832,14 @@ export async function getInspections(query) {
           type: 1,
           inspectionBy: 1,
           status: 1,
+          cancelReason: 1,
           assignedInspector: 1,
           refundRequired: 1,
           refundStatus: 1,
           inspectionAddress: 1,
           scheduledDate: 1,
           timeSlot: 1,
-          report: 1,
+          reportToken: { $arrayElemAt: ["$publishedReport.verifyToken", 0] },
           createdAt: 1,
           "listing._id": 1,
           "listing.year": 1,
@@ -977,24 +920,12 @@ export async function updateInspectionStatus(inspectionId, status, cancelReason)
     );
   }
 
-  // Capture the previous status before mutating, needed for refund eligibility check.
-  const previousStatus = inspection.status;
   inspection.status = status;
 
-  // When admin cancels a buyer inspection that was already paid for,
-  // mark it for refund so it appears in the ManageRefunds queue.
-  if (status === "CANCELLED") {
-    if (cancelReason) inspection.cancelReason = cancelReason;
-
-    const refundableStatuses = ["PENDING", "SCHEDULED"];
-    if (
-      inspection.inspectionBy === "BUYER" &&
-      refundableStatuses.includes(previousStatus) &&
-      inspection.payment
-    ) {
-      inspection.refundRequired = true;
-      inspection.refundStatus = "PENDING";
-    }
+  // Inspection fees are non-refundable (see Terms of Service) — an admin
+  // cancellation is caused by a buyer/seller issue, so no refund is queued.
+  if (status === "CANCELLED" && cancelReason) {
+    inspection.cancelReason = cancelReason;
   }
 
   await inspection.save();
@@ -1002,39 +933,6 @@ export async function updateInspectionStatus(inspectionId, status, cancelReason)
   return { message: "Inspection status updated successfully", inspection };
 }
 
-
-export async function uploadInspectionReport(inspectionId, { url, fileId, inspectorNotes}) {
-  const inspection = await inspectionModel.findById(inspectionId).populate("listing");
-
-  if (!inspection) throw new ApiError(404, "Inspection not found");
-
-  if (inspection.status !== "COMPLETED") {
-    throw new ApiError(400, "Report can only be uploaded for completed inspections");
-  }
-
-  // Save report on inspection
-  inspection.report = { url, fileId };
-  await inspection.save();
-
-  if (inspectorNotes) {
-    inspection.inspectorNotes = inspectorNotes;
-  }
-
-  await inspection.save();
-
-
-  // If this is a managed listing — activate it now
-  const listing = inspection.listing;
-  if (listing && listing.saleMode === "MANAGED" && listing.status === "PENDING") {
-    listing.status = "ACTIVE";
-    await listing.save();
-  }
-
-  return {
-    message: "Report uploaded successfully",
-    inspection,
-  };
-}
 
 // Featured
 export async function getFeatured(query) {
@@ -1345,9 +1243,11 @@ export async function approveDeletionRequest(requestId) {
     "Listing deleted — deletion request approved by admin"
   );
 
-  // Mark listing as REMOVED
+  // Mark listing as REMOVED — the owner asked for this deletion
   await listingModel.findByIdAndUpdate(request.listing._id, {
     status: "REMOVED",
+    removedBy: "OWNER",
+    removedAt: new Date(),
   });
 
   // Approve the request
@@ -1395,19 +1295,24 @@ export async function markListingSold(listingId, salePrice, adminId) {
   const settings = await getSettings();
   const commissionRate = settings.commissionPercentage / 100;
   const commissionAmount = Math.round(salePrice * commissionRate * 100) / 100;
+  const netAmount = Math.round((salePrice - commissionAmount) * 100) / 100;
 
-  // Set listing to PENDING_COMMISSION
-  listing.status = "PENDING_COMMISSION";
+  // The buyer paid GearTrade in full — the sale is done. The commission is
+  // recorded as already settled (deducted from the proceeds) and the seller
+  // receives the remaining amount offline (e.g. cheque).
+  listing.status = "SOLD";
   await listing.save();
 
-  // Create commission record
+  // A sold listing no longer needs promotion — end its featured record
+  await closeFeaturedForListing(listingId);
+
   const commission = await commissionModel.create({
     listing: listingId,
     seller: listing.seller,
     salePrice,
     commissionRate,
     commissionAmount,
-    expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 mins (change back to 30 for production)
+    status: "PAID",
     initiatedBy: adminId,
   });
 
@@ -1427,14 +1332,18 @@ export async function markListingSold(listingId, salePrice, adminId) {
             </tr>
             <tr>
               <td style="color:#64748b;padding:4px 0">Commission (${settings.commissionPercentage}%)</td>
-              <td style="color:#0f172a;font-weight:600;text-align:right">PKR ${commissionAmount.toLocaleString()}</td>
+              <td style="color:#0f172a;font-weight:600;text-align:right">− PKR ${commissionAmount.toLocaleString()}</td>
+            </tr>
+            <tr>
+              <td style="color:#0f172a;padding:8px 0 4px;font-weight:700;border-top:1px solid #e2e8f0">You receive</td>
+              <td style="color:#15803d;font-weight:700;text-align:right;padding:8px 0 4px;border-top:1px solid #e2e8f0">PKR ${netAmount.toLocaleString()}</td>
             </tr>
           </table>
         </div>
 
-        <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:14px 20px;margin-bottom:24px">
-          <p style="font-size:13px;color:#c2410c;margin:0;font-weight:600">⏰ Action required within 30 minutes</p>
-          <p style="font-size:13px;color:#9a3412;margin:6px 0 0">Please log in to your GearTrade dashboard and complete the commission payment to finalise the sale.</p>
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 20px;margin-bottom:24px">
+          <p style="font-size:13px;color:#15803d;margin:0;font-weight:600">No action needed</p>
+          <p style="font-size:13px;color:#166534;margin:6px 0 0">GearTrade has deducted its commission from the sale amount. Our team will deliver your remaining proceeds shortly (e.g. by cheque).</p>
         </div>
 
         <p style="font-size:13px;color:#64748b;margin:0">If you have any questions, contact our support team.</p>
@@ -1445,14 +1354,14 @@ export async function markListingSold(listingId, salePrice, adminId) {
     `;
     await sendEmail(
       seller.email,
-      "Your Car Has Been Sold — Commission Payment Required",
-      `Congratulations! Your listing has been sold for PKR ${salePrice.toLocaleString()}. Commission due: PKR ${commissionAmount.toLocaleString()}. Please pay within 30 minutes.`,
+      "Your Car Has Been Sold — GearTrade",
+      `Congratulations! Your listing sold for PKR ${salePrice.toLocaleString()}. After the PKR ${commissionAmount.toLocaleString()} commission, you receive PKR ${netAmount.toLocaleString()}. Our team will deliver your proceeds shortly.`,
       html
     );
   }
 
   return {
-    message: "Listing marked as sold. Commission payment required from seller.",
+    message: "Listing marked as sold. Commission recorded as settled.",
     commission,
     commissionAmount,
     salePrice,
@@ -1470,9 +1379,15 @@ export async function getCommissions(query) {
   const [commissions, total] = await Promise.all([
     commissionModel
       .find(filter)
-      .populate("listing", "title saleMode status")
+      .populate({
+        path: "listing",
+        select: "year saleMode status",
+        populate: [
+          { path: "brand", select: "name" },
+          { path: "carModel", select: "name" },
+        ],
+      })
       .populate("seller", "username email")
-      .populate("payment", "amount status")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(Number(limit)),
@@ -1487,96 +1402,6 @@ export async function getCommissions(query) {
       limit: Number(limit),
       totalPages: Math.ceil(total / Number(limit)),
     },
-  };
-}
-
-export async function reinitiateCommission(commissionId) {
-  const commission = await commissionModel.findById(commissionId);
-
-  if (!commission) throw new ApiError(404, "Commission not found");
-
-  if (commission.status === "PAID") {
-    throw new ApiError(400, "Commission has already been paid");
-  }
-
-  if (commission.status === "CANCELLED") {
-    throw new ApiError(400, "Cannot reinitiate a cancelled commission");
-  }
-
-  // Reset expiry to 5 mins from now (change back to 30 for production)
-  commission.expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-  commission.status = "PENDING";
-  await commission.save();
-
-  // Fire email without awaiting — don't block the response on mail delivery.
-  userModel.findById(commission.seller).select("username email").then(seller => {
-    if (!seller?.email) return;
-    const html = `
-      <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0">
-        <h2 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px">Commission Payment Reminder</h2>
-        <p style="font-size:14px;color:#64748b;margin:0 0 24px">Hi ${seller.username}, your commission payment window has been reset by an admin.</p>
-
-        <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:14px 20px;margin-bottom:20px">
-          <p style="font-size:13px;color:#c2410c;margin:0;font-weight:600">⏰ New 30-minute window started</p>
-          <p style="font-size:13px;color:#9a3412;margin:6px 0 0">Please log in to your GearTrade dashboard and complete the commission payment of <strong>PKR ${commission.commissionAmount.toLocaleString()}</strong> immediately.</p>
-        </div>
-
-        <p style="font-size:13px;color:#64748b;margin:0">If you have any questions, contact our support team.</p>
-
-        <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0" />
-        <p style="font-size:12px;color:#94a3b8;margin:0">GearTrade.app — Pakistan's trusted car marketplace</p>
-      </div>
-    `;
-    sendEmail(
-      seller.email,
-      "Commission Payment Reminder — GearTrade",
-      `Your commission payment of PKR ${commission.commissionAmount.toLocaleString()} is due. You have 30 minutes to pay.`,
-      html
-    ).catch(() => {});
-  }).catch(() => {});
-
-  return {
-    message: "Commission reinitiated. Seller has 30 minutes to pay.",
-    // Only return what the frontend needs to patch the row — not the full unpopulated doc.
-    commission: { _id: commission._id, status: commission.status, expiresAt: commission.expiresAt },
-  };
-}
-
-export async function cancelCommission(commissionId, cancelReason) {
-  const commission = await commissionModel
-    .findById(commissionId)
-    .populate("listing");
-
-  if (!commission) throw new ApiError(404, "Commission not found");
-
-  if (commission.status === "PAID") {
-    throw new ApiError(400, "Cannot cancel a paid commission");
-  }
-
-  if (commission.status === "CANCELLED") {
-    throw new ApiError(400, "Commission is already cancelled");
-  }
-
-  // Cancel commission
-  commission.status = "CANCELLED";
-  commission.cancelReason = cancelReason;
-  await commission.save();
-
-  // Cancel related pending payment if exists
-  if (commission.payment) {
-    await paymentModel.findByIdAndUpdate(commission.payment, {
-      status: "FAILED",
-    });
-  }
-
-  // Put listing back to ACTIVE — deal fell through
-  await listingModel.findByIdAndUpdate(commission.listing._id, {
-    status: "ACTIVE",
-  });
-
-  return {
-    message: "Commission cancelled. Listing restored to ACTIVE.",
-    commission,
   };
 }
 
@@ -1668,7 +1493,6 @@ export async function updateSiteSettings(fields) {
     if (f.standard     !== undefined) allowed["inspectionFees.standard"]     = f.standard;
     if (f.managed      !== undefined) allowed["inspectionFees.managed"]      = f.managed;
     if (f.premium      !== undefined) allowed["inspectionFees.premium"]      = f.premium;
-    if (f.reinspection !== undefined) allowed["inspectionFees.reinspection"] = f.reinspection;
   }
   return updateSettings(allowed);
 }

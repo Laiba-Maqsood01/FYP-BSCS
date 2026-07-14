@@ -35,7 +35,13 @@ const userSchema = new mongoose.Schema({
         enum: Object.values(ROLES),
         default: ROLES.USER
     },
+    // email verified
     verified: {
+        type: Boolean,
+        default: false
+    },
+    // mobile number verified (via SMS OTP)
+    phoneVerified: {
         type: Boolean,
         default: false
     },
@@ -45,6 +51,11 @@ const userSchema = new mongoose.Schema({
         default: ACCOUNT_STATUS.PENDING
     },
     pendingEmail: {
+        type: String,
+        default: null
+    },
+    // new mobile number awaiting SMS verification (profile number change)
+    pendingMobileNumber: {
         type: String,
         default: null
     },

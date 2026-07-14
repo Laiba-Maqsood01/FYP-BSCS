@@ -103,6 +103,29 @@ const PANELS = {
   },
 };
 
+// Convert a mouse event to SVG viewBox coordinates and return the panel whose
+// label anchor is closest — lets clicks land anywhere on the diagram (seams,
+// wheels, mirrors) instead of only inside the exact panel shapes.
+function nearestPanel(e) {
+  const svg = e.currentTarget.ownerSVGElement;
+  if (!svg) return null;
+  const pt = svg.createSVGPoint();
+  pt.x = e.clientX;
+  pt.y = e.clientY;
+  const { x, y } = pt.matrixTransform(svg.getScreenCTM().inverse());
+
+  let best = null;
+  let bestDist = Infinity;
+  for (const [key, p] of Object.entries(PANELS)) {
+    const dist = (p.lx - x) ** 2 + (p.ly - y) ** 2;
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = key;
+    }
+  }
+  return best;
+}
+
 export default function CarDiagram({ markers = [], onPanelClick, onImageClick, readonly = false }) {
   const [hovered, setHovered] = useState(null);
 
@@ -194,6 +217,22 @@ export default function CarDiagram({ markers = [], onPanelClick, onImageClick, r
           <path d="M45.42 405.16c41.44 31.09 58 33 64.94 31.7 1-.19 2-.41 3-.64 7.14-1.69 36.24-8.44 36.24-8.44-4.14 13.33-12 31.48-12.22 32.28a98.3 98.3 0 0 0-14.61 15.83c-1.26 1.72-8 10.94-12.55 15.82a44.6 44.6 0 0 1-7.86 6.46l-.84.51a40.8 40.8 0 0 1-10.13 4.18c-3.64.13-12.44 1-19.78 7.09a26 26 0 0 0-3.3 3.27 8.7 8.7 0 0 1-4.83 2.84 40 40 0 0 1-6.55 1 34.6 34.6 0 0 1-6.76.17 14.4 14.4 0 0 1-7.69-3.4c-1.71-1.73-3.83-3.76-6.35-5.91-3.25-2.78-4.68-3.64-6-4.81-2.86-2.62-5.95-4.34-5.15-17.35 20.61 1.06 36.28-10.94 39.6-28.36a31.2 31.2 0 0 0-.32-13.25c-3.78-15.49-20.13-28.23-39.64-26.36v-29.11s13.58 11.06 20.8 16.48Z" fill="none" stroke="#000" strokeMiterlimit="10" strokeWidth="1.09"/>
           <ellipse cx="29.02" cy="117.78" rx="27.88" ry="26.7" fill="none" stroke="#000" strokeMiterlimit="10" strokeWidth="1.09"/>
           <path d="M.68 178.7h15.11v194.08H.68zM450.16 178.7h15.11v194.08h-15.11z" fill="none" stroke="#231f20" strokeMiterlimit="10" strokeWidth="1.36"/>
+
+          {/* ── Catch-all hit layer: any click maps to the nearest panel ──── */}
+          <rect
+            x="0" y="0" width="465.95" height="574.6"
+            fill="transparent"
+            stroke="none"
+            pointerEvents={interactive ? "all" : "none"}
+            style={{ cursor: interactive ? "crosshair" : "default" }}
+            onClick={(e) => {
+              if (!interactive) return;
+              const key = nearestPanel(e);
+              if (key) onPanelClick(key);
+            }}
+            onMouseMove={(e) => interactive && setHovered(nearestPanel(e))}
+            onMouseLeave={() => interactive && setHovered(null)}
+          />
 
           {/* ── Invisible hit areas (exact panel shapes, transparent) ──────── */}
           {Object.entries(PANELS).map(([key, panel]) => (

@@ -28,10 +28,21 @@ export async function sendOtp(mobileNumber) {
 
 export async function verifyOtp(mobileNumber, code) {
   const to = toE164(mobileNumber);
-  const check = await client.verify.v2
-    .services(config.TWILIO_VERIFY_SERVICE_SID)
-    .verificationChecks.create({ to, code });
-  return check.status === "approved";
+  try {
+    const check = await client.verify.v2
+      .services(config.TWILIO_VERIFY_SERVICE_SID)
+      .verificationChecks.create({ to, code });
+    return check.status === "approved";
+  } catch (err) {
+    // Twilio deletes a verification once it's approved, expired (10 min) or
+    // after 5 wrong attempts — checking again then returns a raw 404
+    // ("VerificationCheck was not found"). Treat that as an invalid/expired
+    // code instead of leaking the Twilio error to the user.
+    if (err.status === 404 || err.code === 20404) {
+      return false;
+    }
+    throw err;
+  }
 }
 
 // ── Plain SMS (reminders) ───────────────────────────────────────────────────

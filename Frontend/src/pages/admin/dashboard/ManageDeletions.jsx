@@ -28,7 +28,6 @@ const LISTING_STATUS_COLORS = {
   PENDING:            "bg-yellow-50 text-yellow-700 border-yellow-200",
   REMOVED:            "bg-gray-100 text-gray-500 border-gray-200",
   SOLD:               "bg-blue-50 text-blue-700 border-blue-200",
-  PENDING_COMMISSION: "bg-purple-50 text-purple-700 border-purple-200",
 };
 
 const TABS = ["All", "Pending", "Approved", "Rejected"];

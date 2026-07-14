@@ -25,11 +25,3 @@ export const getCommissionDetails = asyncHandler(async (req, res) => {
     );
     res.status(200).json(new ApiResponse(200, "Commission details fetched", data));
 });
-
-export const initiateCommissionPayment = asyncHandler(async (req, res) => {
-    const data = await managedSaleService.initiateCommissionPayment(
-        req.params.commissionId,
-        req.user._id
-    );
-    res.status(200).json(new ApiResponse(200, "Commission payment initiated", data));
-});

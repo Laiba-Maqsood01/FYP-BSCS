@@ -238,10 +238,10 @@ export default function InspectionForm() {
   const [address, setAddress]     = useState("");
   const [slot, setSlot]           = useState(null);  // { date: {iso, label}, slot: "10AM-12PM"|null }
   const [fullName, setFullName]   = useState("");
-  const [phone, setPhone]         = useState("");
   const [showPicker, setShowPicker] = useState(false);
   const [errors, setErrors]       = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [fee, setFee]             = useState(null); // real fee from settings (CC / body type / EV kWh)
 
   // Fetch listing details on mount
   useEffect(() => {
@@ -257,12 +257,17 @@ export default function InspectionForm() {
         setCity(l.city?.name || "");
         // Prefill name from auth user
         if (user?.username) setFullName(user.username);
-        // Prefill phone — owner: listing contact, buyer: own registered number
-        if (isOwner && l.mobileNumber) setPhone(l.mobileNumber);
-        if (isBuyer && user?.mobileNumber) setPhone(user.mobileNumber);
       })
       .catch(() => setFetchErr(true));
+
+    inspectionService.getInspectionFeeQuote(listingId)
+      .then(q => setFee(q.amount))
+      .catch(() => setFee(null));
   }, [listingId]);
+
+  // Coordination always happens on the requester's verified account number —
+  // it's also where the backend sends schedule/reminder SMS (requestedBy).
+  const phone = user?.mobileNumber || "";
 
   const carLabel = listing
     ? `${listing.year} ${listing.brand?.name || ""} ${listing.carModel?.name || ""}`.trim()
@@ -275,8 +280,6 @@ export default function InspectionForm() {
     if (!address) e.address = "Address is required";
     if (!slot)    e.slot    = "Please select an inspection slot";
     if (!fullName.trim()) e.fullName = "Full name is required";
-    if (!phone || !/^03\d{9}$/.test(phone))
-      e.phone = "Enter a valid 11-digit number starting with 03";
     return e;
   };
 
@@ -414,19 +417,14 @@ export default function InspectionForm() {
               />
             </Field>
 
-            {/* ── PHONE ── */}
-            <Field label="Phone Number" required error={errors.phone}
-              hint="All coordination will happen on this number">
+            {/* ── PHONE (requester's verified account number, read-only) ── */}
+            <Field label="Phone Number"
+              hint="All coordination will happen on your registered account number">
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted">📞</span>
-                <input
-                  type="tel"
-                  className={`${inputCls} pl-9`}
-                  placeholder="03XXXXXXXXX"
-                  value={phone}
-                  onChange={e => setPhone(e.target.value)}
-                  maxLength={11}
-                />
+                <div className={`${inputCls} pl-9 bg-gray-50 cursor-default`} style={{ pointerEvents: "none" }}>
+                  {phone || "—"}
+                </div>
               </div>
             </Field>
 
@@ -434,7 +432,11 @@ export default function InspectionForm() {
             <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 flex items-start gap-2">
               <AlertCircle size={15} className="text-blue-500 mt-0.5 shrink-0" />
               <p className="text-xs text-blue-700 leading-relaxed">
-                A one-time inspection fee of <span className="font-bold">PKR 5,000</span> will be charged.
+                A one-time inspection fee of{" "}
+                <span className="font-bold">
+                  {fee != null ? `PKR ${fee.toLocaleString()}` : "PKR —"}
+                </span>{" "}
+                will be charged.
                 You'll be redirected to Stripe to complete payment securely.
               </p>
             </div>

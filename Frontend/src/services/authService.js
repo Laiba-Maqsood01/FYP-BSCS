@@ -25,6 +25,17 @@ export const resendOTP = (email) => {
   return api.post("/auth/resend-otp", { email });
 };
 
+// ── Phone verification (step 2 of registration) ──────────────────────────────
+
+export const sendPhoneOtp = (email) =>
+  api.post("/auth/send-phone-otp", { email }).then(r => r.data.data);
+
+export const verifyPhone = (email, code) =>
+  api.post("/auth/verify-phone", { email, code }).then(r => r.data.data);
+
+export const changeVerificationNumber = (email, newNumber) =>
+  api.post("/auth/change-verification-number", { email, newNumber }).then(r => r.data.data);
+
 export const logout = async () => {
   await api.post("/auth/logout");
   setAccessToken(null);

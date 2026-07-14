@@ -176,14 +176,15 @@ function RangeFilter({ label, minKey, maxKey, filters, onApply }) {
 
 // ─── Listing Card ───────────────────────────────────
 function ListingCard({ listing }) {
-  const navigate = useNavigate();
   const isInspected = listing?.isInspected === true;
   const cityName = listing?.city?.name;
 
   return (
-    <div
-      className="bg-white border border-black/8 rounded-2xl overflow-hidden shadow-[0_4px_16px_rgba(15,23,42,0.06)] cursor-pointer transition-all duration-200 hover:-translate-y-0.75 hover:shadow-[0_10px_28px_rgba(15,23,42,0.1)]"
-      onClick={() => navigate(`/browse-cars/${listing._id}`)}
+    <a
+      href={`/browse-cars/${listing._id}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="block no-underline bg-white border border-black/8 rounded-2xl overflow-hidden shadow-[0_4px_16px_rgba(15,23,42,0.06)] cursor-pointer transition-all duration-200 hover:-translate-y-0.75 hover:shadow-[0_10px_28px_rgba(15,23,42,0.1)]"
     >
       <div className="relative h-45">
         <img
@@ -219,7 +220,7 @@ function ListingCard({ listing }) {
           </span>
         </div>
       </div>
-    </div>
+    </a>
   );
 }
 

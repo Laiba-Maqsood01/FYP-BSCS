@@ -4,6 +4,7 @@ import { Check, ChevronRight, ChevronDown, Upload, X, User, Crown, AlertCircle }
 import { showError, showSuccess } from "../../utils/toast";
 import * as masterService from "../../services/masterService";
 import * as listingService from "../../services/listingService";
+import { useAuth } from "../../context/AuthContext";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -49,8 +50,9 @@ const inputCls =
 const selectCls =
   "w-full bg-brand-surface border border-black/10 rounded-lg px-3 py-2.5 text-brand-dark2 text-sm outline-none focus:border-[#374151] focus:ring-2 focus:ring-[#37415114] transition appearance-none cursor-pointer";
 
-function CustomSelect({ value, onChange, options, placeholder, disabled }) {
+function CustomSelect({ value, onChange, options, placeholder, disabled, searchable, searchPlaceholder = "Search..." }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const ref = useRef(null);
 
   useEffect(() => {
@@ -61,11 +63,15 @@ function CustomSelect({ value, onChange, options, placeholder, disabled }) {
 
   const selected = options.find(o => o.value === value);
 
+  const visibleOptions = searchable && query.trim()
+    ? options.filter(o => o.label.toLowerCase().includes(query.trim().toLowerCase()))
+    : options;
+
   return (
     <div ref={ref} className="relative">
       <button
         type="button"
-        onClick={() => { if (!disabled) setOpen(p => !p); }}
+        onClick={() => { if (!disabled) { setQuery(""); setOpen(p => !p); } }}
         className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border border-black/10 text-sm text-left transition"
         style={{
           background: disabled ? "#f1f5f9" : "rgba(255,255,255,0.8)",
@@ -80,21 +86,37 @@ function CustomSelect({ value, onChange, options, placeholder, disabled }) {
         <ChevronDown size={15} className="text-gray-400 shrink-0" />
       </button>
       {open && !disabled && (
-        <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white border border-black/10 rounded-xl shadow-[0_10px_30px_rgba(15,23,42,0.1)] overflow-y-auto max-h-56 z-500">
-          {options.map(opt => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => { onChange(opt.value); setOpen(false); }}
-              className={`block w-full text-left px-4 py-2.5 text-[0.88rem] cursor-pointer transition ${
-                value === opt.value
-                  ? "bg-[#f1f5f9] font-semibold text-brand-dark"
-                  : "text-[#374151] hover:bg-brand-surface"
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
+        <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white border border-black/10 rounded-xl shadow-[0_10px_30px_rgba(15,23,42,0.1)] max-h-56 flex flex-col overflow-hidden z-500">
+          {searchable && (
+            <div className="p-2 border-b border-black/6 shrink-0">
+              <input
+                autoFocus
+                className="w-full bg-brand-surface border border-black/10 rounded-lg text-brand-dark2 text-[0.85rem] outline-none focus:border-[#374151] transition px-3 py-2"
+                placeholder={searchPlaceholder}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+          )}
+          <div className="overflow-y-auto">
+            {visibleOptions.map(opt => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => { onChange(opt.value); setOpen(false); }}
+                className={`block w-full text-left px-4 py-2.5 text-[0.88rem] cursor-pointer transition ${
+                  value === opt.value
+                    ? "bg-[#f1f5f9] font-semibold text-brand-dark"
+                    : "text-[#374151] hover:bg-brand-surface"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+            {visibleOptions.length === 0 && (
+              <p className="px-4 py-3 text-[0.85rem] text-brand-muted">No results found.</p>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -197,6 +219,11 @@ function YMMModal({ brands, onDone, onClose, initialYear, initialBrand, initialM
   const [models, setModels] = useState([]);
   const [loadingModels, setLoadingModels] = useState(false);
 
+  // Per-column search
+  const [yearQuery,  setYearQuery]  = useState("");
+  const [makeQuery,  setMakeQuery]  = useState("");
+  const [modelQuery, setModelQuery] = useState("");
+
   const yearRef  = useRef(null);
 
   useEffect(() => {
@@ -217,6 +244,19 @@ function YMMModal({ brands, onDone, onClose, initialYear, initialBrand, initialM
   }, [brand?._id]);
 
   const canDone = year && brand && model;
+
+  const visibleYears  = yearQuery.trim()
+    ? YEARS.filter(y => String(y).includes(yearQuery.trim()))
+    : YEARS;
+  const visibleBrands = makeQuery.trim()
+    ? brands.filter(b => b.name.toLowerCase().includes(makeQuery.trim().toLowerCase()))
+    : brands;
+  const visibleModels = modelQuery.trim()
+    ? models.filter(m => m.name.toLowerCase().includes(modelQuery.trim().toLowerCase()))
+    : models;
+
+  const searchInputCls =
+    "w-full bg-white border border-black/10 rounded-lg px-2.5 py-1.5 text-[13px] text-brand-dark2 outline-none focus:border-[#374151] transition placeholder:text-gray-400";
 
   return (
     <div className="fixed inset-0 z-2000 flex items-center justify-center p-4">
@@ -269,8 +309,19 @@ function YMMModal({ brands, onDone, onClose, initialYear, initialBrand, initialM
             <div className="px-4 py-2.5 bg-gray-50 border-b border-black/8">
               <span className="text-[11px] font-bold uppercase tracking-wider text-brand-muted">Model Year</span>
             </div>
+            <div className="px-3 py-2 border-b border-black/6 shrink-0">
+              <input
+                className={searchInputCls}
+                placeholder="Search year..."
+                value={yearQuery}
+                onChange={e => setYearQuery(e.target.value)}
+              />
+            </div>
             <div ref={yearRef} className="flex-1 overflow-y-auto">
-              {YEARS.map(y => (
+              {visibleYears.length === 0 && (
+                <p className="px-4 py-6 text-sm text-brand-muted text-center">No years found</p>
+              )}
+              {visibleYears.map(y => (
                 <button
                   key={y}
                   data-year={y}
@@ -296,11 +347,22 @@ function YMMModal({ brands, onDone, onClose, initialYear, initialBrand, initialM
             <div className="px-4 py-2.5 bg-gray-50 border-b border-black/8">
               <span className="text-[11px] font-bold uppercase tracking-wider text-brand-muted">Make</span>
             </div>
+            <div className="px-3 py-2 border-b border-black/6 shrink-0">
+              <input
+                className={searchInputCls}
+                placeholder="Search make..."
+                value={makeQuery}
+                onChange={e => setMakeQuery(e.target.value)}
+              />
+            </div>
             <div className="flex-1 overflow-y-auto">
-              {brands.map(b => (
+              {visibleBrands.length === 0 && (
+                <p className="px-4 py-6 text-sm text-brand-muted text-center">No makes found</p>
+              )}
+              {visibleBrands.map(b => (
                 <button
                   key={b._id}
-                  onClick={() => { setBrand(b); setModel(null); }}
+                  onClick={() => { setBrand(b); setModel(null); setModelQuery(""); }}
                   className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-left transition"
                   style={{
                     background: brand?._id === b._id ? "#fff7ed" : undefined,
@@ -322,14 +384,23 @@ function YMMModal({ brands, onDone, onClose, initialYear, initialBrand, initialM
             <div className="px-4 py-2.5 bg-gray-50 border-b border-black/8">
               <span className="text-[11px] font-bold uppercase tracking-wider text-brand-muted">Model</span>
             </div>
+            <div className="px-3 py-2 border-b border-black/6 shrink-0">
+              <input
+                className={searchInputCls}
+                placeholder="Search model..."
+                value={modelQuery}
+                onChange={e => setModelQuery(e.target.value)}
+                disabled={!brand}
+              />
+            </div>
             <div className="flex-1 overflow-y-auto">
               {!brand ? (
                 <p className="px-4 py-6 text-sm text-brand-muted text-center">Select a make first</p>
               ) : loadingModels ? (
                 <p className="px-4 py-6 text-sm text-brand-muted text-center">Loading…</p>
-              ) : models.length === 0 ? (
+              ) : visibleModels.length === 0 ? (
                 <p className="px-4 py-6 text-sm text-brand-muted text-center">No models found</p>
-              ) : models.map(m => (
+              ) : visibleModels.map(m => (
                 <button
                   key={m._id}
                   onClick={() => setModel(m)}
@@ -391,7 +462,7 @@ function SaleModeStep({ selected, onChange, onContinue }) {
           {/* GENERAL card */}
           <button
             onClick={() => onChange("GENERAL")}
-            className="relative text-left rounded-xl border-2 p-6 transition-all"
+            className="relative text-left rounded-xl border-2 p-6 transition-all flex flex-col items-stretch justify-start"
             style={{
               borderColor: selected === "GENERAL" ? "#ea6d00" : "rgba(0,0,0,0.1)",
               background: selected === "GENERAL" ? "#fff7ed" : "#fff",
@@ -405,7 +476,7 @@ function SaleModeStep({ selected, onChange, onContinue }) {
             <User size={26} style={{ color: "#ea6d00", marginBottom: "0.75rem" }} />
             <p className="text-[11px] font-bold uppercase tracking-widest text-brand-muted mb-1">General Sale</p>
             <h2 className="text-xl font-bold text-brand-dark mb-2">Sell It Myself!</h2>
-            <p className="text-sm text-brand-muted mb-4 leading-relaxed">
+            <p className="text-sm text-brand-muted mb-4 leading-relaxed min-h-[68px]">
               Post an ad in 2 minutes and connect directly with buyers. Simple, free, and you're in control.
             </p>
             <ul className="space-y-1.5">
@@ -421,7 +492,7 @@ function SaleModeStep({ selected, onChange, onContinue }) {
           {/* MANAGED card */}
           <button
             onClick={() => onChange("MANAGED")}
-            className="relative text-left rounded-xl border-2 p-6 transition-all"
+            className="relative text-left rounded-xl border-2 p-6 transition-all flex flex-col items-stretch justify-start"
             style={{
               borderColor: selected === "MANAGED" ? "#ea6d00" : "rgba(0,0,0,0.1)",
               background: selected === "MANAGED" ? "#fff7ed" : "#fff",
@@ -435,7 +506,7 @@ function SaleModeStep({ selected, onChange, onContinue }) {
             <Crown size={26} style={{ color: "#ea6d00", marginBottom: "0.75rem" }} />
             <p className="text-[11px] font-bold uppercase tracking-widest text-brand-muted mb-1">Managed Sale</p>
             <h2 className="text-xl font-bold text-brand-dark mb-2">Sell It For Me</h2>
-            <p className="text-sm text-brand-muted mb-4 leading-relaxed">
+            <p className="text-sm text-brand-muted mb-4 leading-relaxed min-h-[68px]">
               Let our experts handle everything. Free inspection, featured ad, and a dedicated sales agent to get you the best deal.
             </p>
             <ul className="space-y-1.5">
@@ -556,6 +627,8 @@ function CarInfoStep({ saleMode, cities, provinces, brands, bodyTypes, onBack, o
               value={form.city}
               onChange={v => set("city", v)}
               placeholder="Select City"
+              searchable
+              searchPlaceholder="Search cities..."
               options={[{ value: "", label: "Select City" }, ...displayCities.map(c => ({ value: c._id, label: c.name }))]}
             />
             {errors.city && <p className="mt-1 text-xs text-red-500">{errors.city}</p>}
@@ -898,10 +971,10 @@ function UploadStep({ onBack, onContinue }) {
 // ── Step 3 – Set Price & Submit ───────────────────────────────────────────────
 
 function PriceStep({ onBack, onSubmit, submitting, saleMode }) {
+  const { user } = useAuth();
   const [form, setForm] = useState({
     price: "",
     description: "",
-    mobileNumber: "",
     secondaryNumber: "",
     whatsappAllowed: true,
   });
@@ -910,14 +983,15 @@ function PriceStep({ onBack, onSubmit, submitting, saleMode }) {
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
 
+  // Primary contact is always the seller's verified account number
+  const accountNumber = user?.mobileNumber || "";
+
   const validate = () => {
     const e = {};
     if (!form.price || isNaN(Number(form.price)) || Number(form.price) < 1000)
       e.price = "Enter a valid price (min PKR 1,000)";
     if (!form.description || form.description.trim().length < 10)
       e.description = "Description must be at least 10 characters";
-    if (!form.mobileNumber || !/^03\d{9}$/.test(form.mobileNumber))
-      e.mobileNumber = "Enter a valid 11-digit mobile number starting with 03";
     if (form.secondaryNumber && !/^03\d{9}$/.test(form.secondaryNumber))
       e.secondaryNumber = "Enter a valid 11-digit mobile number";
     return e;
@@ -930,7 +1004,8 @@ function PriceStep({ onBack, onSubmit, submitting, saleMode }) {
     onSubmit({
       price: Number(form.price),
       description: form.description.trim(),
-      mobileNumber: form.mobileNumber,
+      // Sent for completeness — the backend pins it to the account number anyway
+      mobileNumber: accountNumber,
       secondaryNumber: form.secondaryNumber || undefined,
       whatsappAllowed: form.whatsappAllowed,
     });
@@ -978,20 +1053,14 @@ function PriceStep({ onBack, onSubmit, submitting, saleMode }) {
             {errors.description && <p className="mt-1 text-xs text-red-500">{errors.description}</p>}
           </FormField>
 
-          {/* Mobile */}
-          <FormField label="Mobile Number" required hint="Enter a genuine 11 digit mobile no. All inquiries will come on this number.">
+          {/* Mobile — verified account number, read-only */}
+          <FormField label="Mobile Number" hint="Your verified account number. All inquiries will come on this number.">
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted">📞</span>
-              <input
-                type="tel"
-                className={`${inputCls} pl-9`}
-                placeholder="03XXXXXXXXX"
-                value={form.mobileNumber}
-                onChange={e => set("mobileNumber", e.target.value)}
-                maxLength={11}
-              />
+              <div className={`${inputCls} pl-9 bg-gray-50 cursor-default`} style={{ pointerEvents: "none" }}>
+                {accountNumber || "—"}
+              </div>
             </div>
-            {errors.mobileNumber && <p className="mt-1 text-xs text-red-500">{errors.mobileNumber}</p>}
           </FormField>
 
           {/* Secondary Number */}

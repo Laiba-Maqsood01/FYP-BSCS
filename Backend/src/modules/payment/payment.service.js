@@ -7,8 +7,6 @@ import listingModel from "../listing/listing.model.js";
 
 import inspectionModel from "../inspection/inspection.model.js";
 
-import commissionModel from "../managed-sale/commission.model.js";
-
 import { ApiError } from "../../utils/apiError.js"
 
 import config from "../../config/config.js"
@@ -19,7 +17,8 @@ const stripe = new Stripe(config.STRIPE_SECRET_KEY);
 // Void any still-PENDING payment attempts for a reference (e.g. when its
 // inspection is cancelled) so the user's payments page stops offering retry.
 // Money that still lands through an already-open Stripe session is caught by
-// the webhook, which sees the cancelled inspection and queues a refund.
+// the webhook, which sees the cancelled inspection and simply records the
+// payment (inspection fees are non-refundable per the Terms of Service).
 export async function voidPendingPayments(referenceId) {
   await paymentModel.updateMany(
     { referenceId, status: "PENDING" },
@@ -29,7 +28,31 @@ export async function voidPendingPayments(referenceId) {
 
 export async function createStripeCheckoutSession(payment, options = {}) {
 
-  const stripe = new Stripe(config.STRIPE_SECRET_KEY);
+  const amountInPaisa = Math.round(payment.amount * 100);
+
+  // ── Reuse-if-open: at most ONE live checkout per payment record ────────────
+  // Retrying from the Payments page or the listing page must land the user on
+  // the SAME Stripe page instead of minting parallel sessions that could each
+  // charge the card once.
+  if (payment.stripeSessionId) {
+    try {
+      const existing = await stripe.checkout.sessions.retrieve(payment.stripeSessionId);
+
+      if (existing.status === "open") {
+        // Same amount → hand back the live session
+        if (existing.amount_total === amountInPaisa) {
+          return existing;
+        }
+        // Amount changed since the session was created (e.g. the user picked a
+        // different featured plan) — kill the stale-price session before
+        // creating a fresh one so the old tab can't charge the old amount.
+        await stripe.checkout.sessions.expire(payment.stripeSessionId);
+      }
+      // expired / complete → fall through and create a new session
+    } catch {
+      // Session not retrievable (deleted, wrong env keys, …) — create fresh
+    }
+  }
 
   const sessionParams = {
     payment_method_types: ["card"],
@@ -45,7 +68,7 @@ export async function createStripeCheckoutSession(payment, options = {}) {
             name: payment.purpose
           },
 
-          unit_amount: Math.round(payment.amount * 100)
+          unit_amount: amountInPaisa
         },
 
         quantity: 1
@@ -55,6 +78,11 @@ export async function createStripeCheckoutSession(payment, options = {}) {
     metadata: {
       paymentId: payment._id.toString()
     },
+
+    // Checkout links shouldn't live for Stripe's default 24h — 30 minutes
+    // (Stripe's minimum) is plenty and shrinks the stale-tab window.
+    // Stripe fires checkout.session.expired when it lapses.
+    expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
 
     success_url:
       options.successUrl || `${config.CLIENT_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
@@ -99,9 +127,31 @@ export async function handleStripeWebhook(event) {
 
       break;
 
+    case "checkout.session.expired":
+
+      await handleCheckoutSessionExpired(
+        event.data.object
+      );
+
+      break;
+
     default:
       console.log(`Ignoring event type: ${event.type}`);
   }
+}
+
+// A checkout attempt lapsed (30-min expires_at). The payment record stays
+// PENDING — the user still owes and can retry, which will mint a fresh
+// session. We only detach the dead session id.
+async function handleCheckoutSessionExpired(session) {
+  const payment = await paymentModel.findOne({
+    stripeSessionId: session.id
+  });
+
+  if (!payment || payment.status !== "PENDING") return;
+
+  payment.stripeSessionId = null;
+  await payment.save();
 }
 
 async function handleCheckoutSessionCompleted(session) {
@@ -114,8 +164,23 @@ async function handleCheckoutSessionCompleted(session) {
     return;
   }
 
-  // prevent duplicate processing
-  if (payment.status === "SUCCESS") return;
+  // Already paid — if this completion came through a DIFFERENT session (two
+  // checkout tabs open in a race), the card was charged twice. Refund the
+  // duplicate charge automatically instead of silently keeping it.
+  if (payment.status === "SUCCESS" || payment.status === "REFUNDED") {
+    if (
+      session.payment_intent &&
+      session.payment_intent !== payment.stripePaymentIntentId
+    ) {
+      try {
+        await stripe.refunds.create({ payment_intent: session.payment_intent });
+        console.log(`[Stripe] Refunded duplicate charge for payment ${payment._id}`);
+      } catch (err) {
+        console.error(`[Stripe] Failed to refund duplicate charge for payment ${payment._id}:`, err.message);
+      }
+    }
+    return;
+  }
 
   payment.status = "SUCCESS";
   payment.stripePaymentIntentId = session.payment_intent;
@@ -134,6 +199,27 @@ async function handleCheckoutSessionCompleted(session) {
   if (payment.purpose === "FEATURED") {
     const feature = await featuredModel.findById(payment.referenceId);
     if (!feature) return;
+
+    // The listing may have been sold/removed while the user was on the
+    // Stripe page (e.g. admin marked a managed listing sold). Never feature
+    // a dead listing — refund the charge instead.
+    const featureListing = await listingModel.findById(payment.listing).select("status");
+    if (
+      feature.status === "REMOVED" ||
+      ["SOLD", "REMOVED"].includes(featureListing?.status)
+    ) {
+      feature.status = "REMOVED";
+      await feature.save();
+      try {
+        await stripe.refunds.create({ payment_intent: session.payment_intent });
+        payment.status = "REFUNDED";
+        await payment.save();
+        console.log(`[Stripe] Refunded featured payment ${payment._id} — listing no longer active`);
+      } catch (err) {
+        console.error(`[Stripe] Failed to refund featured payment ${payment._id}:`, err.message);
+      }
+      return;
+    }
 
     feature.status = "ACTIVE";
     feature.startDate = new Date();
@@ -159,12 +245,10 @@ async function handleCheckoutSessionCompleted(session) {
     if (!inspection) return;
 
     // The inspection may have been cancelled while the user was on the
-    // Stripe page (e.g. admin rejected the listing). Never resurrect it —
-    // the money landed for a dead inspection, so queue a refund instead.
+    // Stripe page (e.g. admin rejected the listing). Never resurrect it.
+    // Inspection fees are non-refundable (see Terms of Service), so the
+    // payment stays recorded and no refund is queued.
     if (inspection.status === "CANCELLED") {
-      inspection.refundRequired = true;
-      inspection.refundStatus = "PENDING";
-      await inspection.save();
       return;
     }
 
@@ -175,23 +259,6 @@ async function handleCheckoutSessionCompleted(session) {
     await inspection.save();
   }
 
-  // COMMISSION FLOW
-  if (payment.purpose === "COMMISSION") {
-    const commission = await commissionModel.findById(payment.referenceId);
-    if (!commission) return;
-
-    // Mark commission as paid
-    commission.status = "PAID";
-    commission.payment = payment._id;
-    await commission.save();
-
-    // Mark listing as SOLD
-    const listing = await listingModel.findById(payment.listing);
-    if (listing) {
-      listing.status = "SOLD";
-      await listing.save();
-    }
-  }
 }
 
 

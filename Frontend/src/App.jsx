@@ -13,7 +13,12 @@ function App() {
   const noMainPaths     = ["/dashboard", "/admin"];
   const hideFooterPaths = ["/admin", "/dashboard"];
 
-  const hideLayout  = noLayoutPaths.includes(location.pathname);
+  // Standalone / self-chromed areas: no public navbar or footer. The admin
+  // panel has its own sidebar chrome; the report builder manages its own layout.
+  const bareLayoutPrefixes = ["/admin"];
+
+  const hideLayout  = noLayoutPaths.includes(location.pathname)
+    || bareLayoutPrefixes.some(p => location.pathname.startsWith(p));
   const skipMain    = noMainPaths.some(r => location.pathname.startsWith(r));
   const hideFooter  = hideLayout || hideFooterPaths.some(r => location.pathname.startsWith(r));
 

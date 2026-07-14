@@ -5,6 +5,7 @@ import Home          from "../pages/public/Home";
 import Login           from "../pages/auth/Login";
 import Register        from "../pages/auth/Register";
 import VerifyEmail     from "../pages/auth/VerifyEmail";
+import VerifyPhone     from "../pages/auth/VerifyPhone";
 import ForgotPassword  from "../pages/auth/ForgotPassword";
 import ResetPassword   from "../pages/auth/ResetPassword";
 import BrowseCars    from "../pages/public/BrowseCars";
@@ -55,6 +56,7 @@ const AppRoutes = () => {
       <Route path="/login"       element={<Login />}        />
       <Route path="/register"    element={<Register />}     />
       <Route path="/verify-email"    element={<VerifyEmail />}    />
+      <Route path="/verify-phone"    element={<VerifyPhone />}    />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password"  element={<ResetPassword />}  />
       <Route path="/browse-cars"     element={<BrowseCars />}       />
@@ -70,7 +72,7 @@ const AppRoutes = () => {
         <ProtectedRoute allowedRoles={["user", "admin"]}><Profile /></ProtectedRoute>
       } />
       <Route path="/post-ad" element={
-        <ProtectedRoute allowedRoles={["user", "admin"]}><PostAd /></ProtectedRoute>
+        <ProtectedRoute allowedRoles={["user"]}><PostAd /></ProtectedRoute>
       } />
       <Route path="/edit-listing/:id" element={
         <ProtectedRoute allowedRoles={["user", "admin"]}><EditListing /></ProtectedRoute>
@@ -108,8 +110,13 @@ const AppRoutes = () => {
         <Route path="deletions"   element={<ManageDeletions />}   />
         <Route path="settings"    element={<SiteSettings />}      />
         <Route path="profile"     element={<Profile />}           />
-        <Route path="inspection-reports/:reportId/build" element={<ReportBuilder />} />
       </Route>
+
+      {/* Report builder — standalone full-screen page (no navbar / admin sidebar),
+          opened in a new tab from the admin Inspections page */}
+      <Route path="/admin/inspection-reports/:reportId/build" element={
+        <ProtectedRoute allowedRoles={["admin"]}><ReportBuilder /></ProtectedRoute>
+      } />
 
       {/* ── NOT FOUND ── */}
       <Route path="/not-found" element={<NotFound />} />

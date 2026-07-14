@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { Eye, EyeOff, Mail, Lock, AlertTriangle, Check, X, Trash2, Camera } from "lucide-react";
+import { Eye, EyeOff, Mail, Phone, Lock, AlertTriangle, Check, X, Trash2, Camera } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { showError, showSuccess } from "../../utils/toast";
@@ -64,6 +64,7 @@ export default function Profile() {
   const { setUser: setAuthUser } = useAuth();
   const [user, setUser] = useState(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [showAvatar, setShowAvatar] = useState(false);
   const avatarInputRef = useRef(null);
 
   const [newEmail, setNewEmail] = useState("");
@@ -71,6 +72,13 @@ export default function Profile() {
   const [otp, setOtp] = useState("");
   const [requesting, setRequesting] = useState(false);
   const [showEmailPassword, setShowEmailPassword] = useState(false);
+
+  // Mobile number change
+  const [newNumber, setNewNumber] = useState("");
+  const [numberPassword, setNumberPassword] = useState("");
+  const [numberCode, setNumberCode] = useState("");
+  const [numberRequesting, setNumberRequesting] = useState(false);
+  const [showNumberPassword, setShowNumberPassword] = useState(false);
 
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -201,6 +209,47 @@ export default function Profile() {
     }
   };
 
+  // ── Mobile number change (mirrors the email flow) ──────────────────────────
+  const handleRequestNumberChange = async () => {
+    if (!/^03\d{9}$/.test(newNumber)) {
+      showError("Enter a valid 11-digit number starting with 03");
+      return;
+    }
+    try {
+      setNumberRequesting(true);
+      await api.post("/auth/request-number-change", { newNumber, password: numberPassword });
+      showSuccess("Verification code sent to the new number");
+      setUser((prev) => ({ ...prev, pendingMobileNumber: newNumber }));
+    } catch (e) {
+      showError(e?.response?.data?.message ?? "Failed to send code. Check your password and try again.");
+    } finally {
+      setNumberRequesting(false);
+    }
+  };
+
+  const handleConfirmNumber = async () => {
+    try {
+      const res = await api.post("/auth/confirm-number-change", { code: numberCode });
+      const mobileNumber = res.data.data.mobileNumber;
+      setUser((prev) => ({ ...prev, mobileNumber, pendingMobileNumber: null }));
+      setAuthUser((prev) => prev ? { ...prev, mobileNumber } : prev);
+      showSuccess("Mobile number updated");
+      setNewNumber(""); setNumberPassword(""); setNumberCode("");
+    } catch (e) {
+      showError(e?.response?.data?.message ?? "Invalid or expired code.");
+    }
+  };
+
+  const handleCancelNumber = async () => {
+    try {
+      await api.post("/auth/cancel-number-change");
+      setUser((prev) => ({ ...prev, pendingMobileNumber: null }));
+      showSuccess("Number change cancelled");
+    } catch {
+      showError("Failed to cancel. Try again.");
+    }
+  };
+
   const handleChangePassword = async () => {
     try {
       await api.post("/auth/change-password", { oldPassword, newPassword });
@@ -243,7 +292,9 @@ export default function Profile() {
               <img
                 src={user.avatar}
                 alt={user.username}
-                className="w-14 h-14 rounded-full object-cover"
+                onClick={() => setShowAvatar(true)}
+                title="View photo"
+                className="w-14 h-14 rounded-full object-cover cursor-pointer hover:opacity-90 transition"
                 style={{ border: "2px solid rgba(234,109,0,0.15)" }}
               />
             ) : (
@@ -363,6 +414,74 @@ export default function Profile() {
         )}
       </SectionCard>
 
+      {/* Change Mobile Number */}
+      <SectionCard
+        icon={Phone}
+        iconBg="#f0fdf4"
+        iconColor="#16a34a"
+        title="Mobile number"
+        subtitle="Change the verified number linked to your account and listings"
+      >
+        {user.pendingMobileNumber ? (
+          <div className="space-y-3">
+            {/* Pending banner */}
+            <div className="flex items-start gap-2.5 rounded-lg px-3.5 py-3" style={{ background: "#fefce8", border: "1px solid #fde68a" }}>
+              <span className="text-[11px] mt-0.5" style={{ color: "#d97706" }}>⏳</span>
+              <p className="text-xs leading-relaxed" style={{ color: "#92400e" }}>
+                A verification code was sent via SMS to <strong>{user.pendingMobileNumber}</strong>. Enter it below to confirm, or cancel to keep your current number.
+              </p>
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-brand-muted uppercase tracking-wide mb-1.5">Verification code</label>
+              <input className={inputCls} placeholder="Enter code" value={numberCode}
+                onChange={(e) => setNumberCode(e.target.value.replace(/\D/g, ""))} maxLength={8} />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={handleConfirmNumber}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white hover:opacity-90 transition"
+                style={{ background: "#111827" }}>
+                <Check size={13} /> Verify
+              </button>
+              <button
+                onClick={handleCancelNumber}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-red-50 transition"
+                style={{ border: "1px solid rgba(220,38,38,0.25)", color: "#dc2626" }}>
+                <X size={13} /> Cancel change
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-[11px] font-semibold text-brand-muted uppercase tracking-wide mb-1.5">New mobile number</label>
+              <input className={inputCls} placeholder="03XXXXXXXXX" type="tel" maxLength={11}
+                value={newNumber} onChange={(e) => setNewNumber(e.target.value)} />
+            </div>
+            <PasswordField
+              label="Confirm password"
+              value={numberPassword}
+              onChange={(e) => setNumberPassword(e.target.value)}
+              placeholder="Your current password"
+              show={showNumberPassword}
+              onToggle={() => setShowNumberPassword(!showNumberPassword)}
+            />
+            <p className="text-[11px] text-brand-muted leading-relaxed">
+              Your active listings will automatically switch to the new number once it's verified.
+            </p>
+            <div className="pt-1">
+              <button
+                onClick={handleRequestNumberChange}
+                disabled={numberRequesting}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white hover:opacity-90 transition disabled:opacity-60"
+                style={{ background: "#111827" }}>
+                <Phone size={13} /> {numberRequesting ? "Sending…" : "Request change"}
+              </button>
+            </div>
+          </div>
+        )}
+      </SectionCard>
+
       {/* Change Password */}
       <SectionCard
         icon={Lock}
@@ -424,6 +543,32 @@ export default function Profile() {
             </button>
           </div>
         </SectionCard>
+      )}
+
+      {/* Avatar full view — WhatsApp-style */}
+      {showAvatar && user.avatar && (
+        <div
+          className="fixed inset-0 flex items-center justify-center p-4"
+          style={{ zIndex: 9999, background: "rgba(0,0,0,0.85)" }}
+          onClick={() => setShowAvatar(false)}
+        >
+          <button
+            onClick={() => setShowAvatar(false)}
+            title="Close"
+            className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center rounded-lg text-white bg-white/10 hover:bg-white/20 transition cursor-pointer"
+          >
+            <X size={18} />
+          </button>
+          <div className="flex flex-col items-center gap-4" onClick={e => e.stopPropagation()}>
+            <img
+              src={user.avatar}
+              alt={user.username}
+              className="rounded-2xl object-contain shadow-2xl"
+              style={{ maxWidth: "min(90vw, 460px)", maxHeight: "80vh" }}
+            />
+            <p className="text-white text-sm font-medium">{user.username}</p>
+          </div>
+        </div>
       )}
 
       {/* Delete Confirm Modal */}

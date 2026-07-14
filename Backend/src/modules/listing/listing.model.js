@@ -143,14 +143,32 @@ const listingSchema = new mongoose.Schema(
         "ACTIVE",
         "REJECTED",
         "SOLD",
-        "REMOVED",
-        "PENDING_COMMISSION"
+        "REMOVED"
       ],
       default: "PENDING"
     },
 
     rejectionReason: {
       type: String,
+      default: null
+    },
+
+    // Who removed the listing (only set when status is REMOVED)
+    removedBy: {
+      type: String,
+      enum: ["ADMIN", "OWNER", null],
+      default: null
+    },
+
+    // When the listing was removed — drives the 6-month Cloudinary cleanup cron
+    removedAt: {
+      type: Date,
+      default: null
+    },
+
+    // Set by the cleanup cron once listing + report images are purged from Cloudinary
+    imagesPurgedAt: {
+      type: Date,
       default: null
     },
     

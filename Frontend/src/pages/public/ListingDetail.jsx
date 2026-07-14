@@ -7,6 +7,7 @@ import { getListingDetail, requestContactOtp, verifyContactOtp } from "../../ser
 import { getAdminListingDetail } from "../../services/adminService";
 import { getListingInspectionStatus } from "../../services/inspectionService";
 import { isManagedCity } from "../../utils/managedCities";
+import { Lightbox } from "../../components/common/ImageLightbox";
 import { checkFavoriteStatus, addFavorite, removeFavorite } from "../../services/favoriteService";
 import api from "../../services/api";
 import { toast } from "react-toastify";
@@ -33,6 +34,7 @@ function cap(s) {
 
 function ImageGallery({ images, isFeatured, isManaged, isInspected, isFavorited, favLoading, copied, onFavorite, onShare }) {
   const [active, setActive] = useState(0);
+  const [zoomOpen, setZoomOpen] = useState(false);
   const count = images.length;
   const prev = () => setActive(i => (i - 1 + count) % count);
   const next = () => setActive(i => (i + 1) % count);
@@ -46,7 +48,13 @@ function ImageGallery({ images, isFeatured, isManaged, isInspected, isFavorited,
         style={{ aspectRatio: "16/9" }}
       >
         {mainImg ? (
-          <img src={mainImg} alt="Car" className="w-full h-full object-cover" />
+          <img
+            src={mainImg}
+            alt="Car"
+            onClick={() => setZoomOpen(true)}
+            title="Click to zoom"
+            className="w-full h-full object-cover cursor-zoom-in"
+          />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <span className="text-gray-300 text-sm">No images available</span>
@@ -152,6 +160,17 @@ function ImageGallery({ images, isFeatured, isManaged, isInspected, isFavorited,
           ))}
         </div>
       )}
+
+      {zoomOpen && mainImg && (
+        <Lightbox
+          src={mainImg}
+          alt="Car"
+          onClose={() => setZoomOpen(false)}
+          onPrev={count > 1 ? prev : undefined}
+          onNext={count > 1 ? next : undefined}
+          counter={count > 1 ? `${active + 1} / ${count}` : undefined}
+        />
+      )}
     </div>
   );
 }
@@ -188,7 +207,7 @@ function StatsRow({ year, mileage, engineType, transmission }) {
 
 // ─── InspectionSection ────────────────────────────────────────────────────────
 
-function InspectionSection({ listingId, inspection, isAuthenticated, isOwner, navigate, isManaged, listingStatus, serviceAvailable }) {
+function InspectionSection({ listingId, inspection, isAuthenticated, isOwner, isAdmin, navigate, isManaged, listingStatus, serviceAvailable }) {
   const handleRequest = () => {
     if (!isAuthenticated) { navigate("/login"); return; }
     const mode = isOwner ? "seller" : "buyer";
@@ -257,8 +276,10 @@ function InspectionSection({ listingId, inspection, isAuthenticated, isOwner, na
                 <ExternalLink size={12} />
               </a>
               <button
-                onClick={handleRequest}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition hover:opacity-90"
+                onClick={isAdmin ? undefined : handleRequest}
+                disabled={isAdmin}
+                title={isAdmin ? "Admins cannot request re-inspections" : undefined}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: "#fff", border: "1px solid #bbf7d0", color: "#16a34a" }}
               >
                 {!isAuthenticated ? "Login to Re-inspect" : "Request Re-inspection"}
@@ -340,22 +361,28 @@ function InspectionSection({ listingId, inspection, isAuthenticated, isOwner, na
     );
   }
 
-  // Default: show CTA (disabled when the listing's city is outside our
-  // inspection service area)
+  // Default: show CTA. Disabled for admins (they moderate, they don't buy)
+  // and when the listing's city is outside our inspection service area.
+  const disabledReason = isAdmin
+    ? "Admins are not allowed to request inspection"
+    : !serviceAvailable
+      ? "Our services are not available in this city"
+      : null;
+
   return (
     <div className="relative rounded-xl p-5 mt-5" style={{ background: "#f8fafc", border: "1px solid rgba(0,0,0,0.08)" }}>
-      {!serviceAvailable && (
+      {disabledReason && (
         <span
           className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold"
           style={{ background: "#fef2f2", color: "#b91c1c", border: "1px solid #fecaca" }}
         >
-          <AlertCircle size={11} /> Our services are not available in this city
+          <AlertCircle size={11} /> {disabledReason}
         </span>
       )}
       <div className="flex items-start gap-3 mb-4">
         <div
           className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
-          style={{ background: serviceAvailable ? "#ea6d00" : "#94a3b8" }}
+          style={{ background: disabledReason ? "#94a3b8" : "#ea6d00" }}
         >
           <ShieldCheck size={20} color="#fff" />
         </div>
@@ -376,15 +403,15 @@ function InspectionSection({ listingId, inspection, isAuthenticated, isOwner, na
       </div>
       <button
         onClick={handleRequest}
-        disabled={!serviceAvailable}
+        disabled={!!disabledReason}
         className="px-5 py-2 text-sm font-semibold text-white rounded-lg transition hover:opacity-90"
         style={{
-          background: serviceAvailable ? "#ea6d00" : "#cbd5e1",
+          background: disabledReason ? "#cbd5e1" : "#ea6d00",
           borderRadius: "0.5rem",
-          cursor: serviceAvailable ? "pointer" : "not-allowed",
+          cursor: disabledReason ? "not-allowed" : "pointer",
         }}
       >
-        {!serviceAvailable
+        {disabledReason
           ? "Inspection Unavailable"
           : !isAuthenticated
             ? "Login to Request Inspection"
@@ -709,6 +736,17 @@ export default function ListingDetail() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
+      {/* Sold banner */}
+      {listing.status === "SOLD" && (
+        <div className="flex items-center gap-2 mb-4 px-4 py-3 rounded-lg"
+          style={{ background: "#eff6ff", border: "1px solid #bfdbfe" }}>
+          <CheckCircle2 size={16} style={{ color: "#1d4ed8", flexShrink: 0 }} />
+          <p className="text-sm font-semibold" style={{ color: "#1e40af" }}>
+            This car has been sold{listing.saleMode === "MANAGED" ? " through GearTrade" : ""}. It is no longer available for purchase.
+          </p>
+        </div>
+      )}
+
       {/* Page title + location */}
       <h1 className="text-2xl font-bold text-brand-dark mb-1">{title}</h1>
       <div className="flex items-center gap-2 mb-6 text-sm text-brand-muted flex-wrap">
@@ -751,6 +789,7 @@ export default function ListingDetail() {
             inspection={inspection}
             isAuthenticated={isAuthenticated}
             isOwner={isOwner}
+            isAdmin={user?.role === "admin"}
             navigate={navigate}
             isManaged={listing.saleMode === "MANAGED"}
             listingStatus={listing.status}
@@ -854,7 +893,10 @@ export default function ListingDetail() {
                     style={{ background: "#16a34a", borderRadius: "0.75rem" }}
                   >
                     <Phone size={16} />
-                    {contactLoading ? "Sending code…" : "Show Phone Number"}
+                    {/* Owner/admin skip the OTP entirely — never claim a code is being sent */}
+                    {contactLoading
+                      ? (isOwner || user?.role === "admin" ? "Revealing…" : "Sending code…")
+                      : "Show Phone Number"}
                   </button>
                 )
               )}

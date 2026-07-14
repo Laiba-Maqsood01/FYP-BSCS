@@ -33,15 +33,6 @@ export const updateInspectionStatusSchema = z.object({
     { message: "Cancel reason is required when cancelling an inspection", path: ["cancelReason"] }
 );
 
-export const uploadReportSchema = z.object({
-
-    url: z.string()
-        .url("Invalid report URL"),
-
-    fileId: z.string()
-        .min(1, "File ID is required"),
-});
-
 export const rejectDeletionRequestSchema = z.object({
     adminNote: z.string().min(5, "Admin note must be at least 5 characters"),
 });
@@ -50,12 +41,6 @@ export const markSoldSchema = z.object({
     salePrice: z
         .number({ invalid_type_error: "Sale price must be a number" })
         .positive("Sale price must be greater than 0"),
-});
-
-export const cancelCommissionSchema = z.object({
-    cancelReason: z
-        .string()
-        .min(10, "Cancel reason must be at least 10 characters"),
 });
 
 export const createFeaturedPlanSchema = z.object({
@@ -79,7 +64,6 @@ export const updateSiteSettingsSchema = z.object({
     standard:     z.coerce.number().positive().optional(),
     managed:      z.coerce.number().positive().optional(),
     premium:      z.coerce.number().positive().optional(),
-    reinspection: z.coerce.number().positive().optional(),
   }).optional(),
 });
 

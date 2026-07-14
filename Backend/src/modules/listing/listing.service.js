@@ -1,5 +1,6 @@
 import listingModel from "./listing.model.js";
 import inspectionModel from "../inspection/inspection.model.js";
+import InspectionReport from "../inspection-report/inspectionReport.model.js";
 import featuredModel from "../featured/featured.model.js"
 import brandModel from "../master/models/brand.model.js"
 import car_Model from "../master/models/carModel.model.js"
@@ -7,9 +8,10 @@ import cityModel from "../master/models/city.model.js"
 import userModel from "../../models/user.model.js";
 import contactRevealModel from "./contactReveal.model.js";
 import { ApiError } from "../../utils/apiError.js";
-import { deleteImages, deleteFiles } from "../upload/upload.service.js";
 import { voidPendingPayments } from "../payment/payment.service.js";
+import paymentModel from "../payment/payment.model.js";
 import { MANAGED_SALE_CITY_NAMES, isManagedSaleCity } from "../../config/constants.js";
+import { closeFeaturedForListing } from "../../helpers/listing.cleanup.helper.js";
 import { sendOtp, verifyOtp } from "../../services/sms.service.js";
 
 // Mask a phone number for public display: keep first 4 + last 2, star the rest.
@@ -23,6 +25,13 @@ export function maskPhone(num) {
 
 // For creating listing
 export async function createListing(data, userId) {
+
+  // The listing's primary contact is ALWAYS the seller's verified account
+  // number — a client-supplied value could bypass phone verification.
+  // (secondaryNumber stays optional and unverified by design.)
+  const owner = await userModel.findById(userId).select("mobileNumber");
+  if (!owner) throw new ApiError(404, "User not found");
+  data.mobileNumber = owner.mobileNumber;
 
   // MANAGED sale is only available in specific cities
   if (data.saleMode === "MANAGED") {
@@ -133,7 +142,8 @@ export async function updateListing(listingId, userId, data) {
 
     "images",
 
-    "mobileNumber",
+    // mobileNumber intentionally NOT updatable — it's pinned to the seller's
+    // verified account number at creation.
     "secondaryNumber",
     "whatsappAllowed",
 
@@ -212,12 +222,45 @@ export async function updateListing(listingId, userId, data) {
   Object.assign(listing, sanitizedData);
 
   // re-edited after rejection → send back for admin review
-  if (listing.status === "REJECTED") {
+  const wasRejected = listing.status === "REJECTED";
+  if (wasRejected) {
     listing.status = "PENDING";
     listing.rejectionReason = undefined;
   }
 
   await listing.save();
+
+  // Managed listing pending review with no live inspection (e.g. resubmitted
+  // after rejection): the onboarding inspection fee is non-refundable and
+  // carries over (see Terms of Service), so revive the paid inspection that
+  // was cancelled instead of requiring a new booking + payment. The old
+  // schedule is kept — if the seller needs a new date, they contact the team
+  // and the admin reschedules it.
+  if (listing.saleMode === "MANAGED" && listing.status === "PENDING") {
+    const hasLiveInspection = await inspectionModel.exists({
+      listing: listingId,
+      status: { $ne: "CANCELLED" },
+    });
+
+    if (!hasLiveInspection) {
+      const cancelledInspection = await inspectionModel
+        .findOne({ listing: listingId, status: "CANCELLED" })
+        .sort({ createdAt: -1 });
+
+      if (cancelledInspection) {
+        const wasPaid = await paymentModel.exists({
+          referenceId: cancelledInspection._id,
+          status: "SUCCESS",
+        });
+
+        if (wasPaid) {
+          cancelledInspection.status = "SCHEDULED";
+          cancelledInspection.cancelReason = null;
+          await cancelledInspection.save();
+        }
+      }
+    }
+  }
   // to tell user that unallowed fields are not updated!
   return {
     listing,
@@ -277,20 +320,15 @@ export async function deleteListing(listingId, userId) {
 
   for (const Inspection of inspections) {
 
-    let refundRequired = false;
-
-    // SCHEDULED BUYER INSPECTION (buyer already paid, service not delivered)
-    if (Inspection.status === "SCHEDULED" && Inspection.inspectionBy === "BUYER") {
-      refundRequired = true;
-    }
-
+    // Inspection fees are non-refundable (see Terms of Service) — the seller
+    // removing the listing is a buyer/seller matter, no refund is queued.
     Inspection.status = "CANCELLED";
 
     Inspection.cancelReason = "Listing removed by seller";
 
-    Inspection.refundRequired = refundRequired;
+    Inspection.refundRequired = false;
 
-    Inspection.refundStatus = refundRequired ? "PENDING" : "NOT_REQUIRED";
+    Inspection.refundStatus = "NOT_REQUIRED";
 
     await Inspection.save();
 
@@ -312,24 +350,11 @@ export async function deleteListing(listingId, userId) {
     }
   );
 
-  // Delete listing images from Cloudinary
-  const imageFileIds = (listing.images || [])
-    .map((img) => img.fileId)
-    .filter(Boolean);
-
-  await deleteImages(imageFileIds);
-
-  // Delete inspection report PDFs from Cloudinary (if any exist for this listing)
-  const Inspections = await inspectionModel.find({ listing: listingId });
-
-  const reportFileIds = Inspections
-    .map((insp) => insp.report?.fileId)
-    .filter(Boolean);
-
-  await deleteFiles(reportFileIds, "raw");
-
+  // Images stay on Cloudinary — the 6-month cleanup cron purges them later
   listing.isFeatured = false;
   listing.status = "REMOVED";
+  listing.removedBy = "OWNER";
+  listing.removedAt = new Date();
   await listing.save();
 
   return true;
@@ -389,11 +414,11 @@ export async function getPublicListings(query) {
 
   if (assembly) filters.assembly = assembly;
 
-  // INSPECTED CARS FILTER
+  // INSPECTED CARS FILTER — a car is "inspected" once its report is PUBLISHED
   if (inspectionStatus === "INSPECTED") {
 
-    const inspectedIds = await inspectionModel.distinct("listing", {
-      status: "COMPLETED"
+    const inspectedIds = await InspectionReport.distinct("listing", {
+      status: "PUBLISHED"
     });
 
     filters._id = { $in: inspectedIds };
@@ -474,8 +499,13 @@ export async function getPublicListings(query) {
   // the rest — the buyer's intent wins.
   const isDefaultView = sortBy === "createdAt" && sortOrder === "desc";
   const sort = {};
-  if (isDefaultView) sort.isFeatured = -1;
-  sort[sortBy] = sortOrder === "asc" ? 1 : -1;
+  if (isDefaultView) {
+    // Featured first, freshest activity first within them (and the rest)
+    sort.isFeatured = -1;
+    sort.updatedAt = -1;
+  } else {
+    sort[sortBy] = sortOrder === "asc" ? 1 : -1;
+  }
 
   const listings = await listingModel
     .find(filters)
@@ -491,12 +521,11 @@ export async function getPublicListings(query) {
 
   const total = await listingModel.countDocuments(filters);
 
-  // Find which of these listings have a completed inspection with a report uploaded
+  // Find which of these listings have a PUBLISHED inspection report
   const listingIds = listings.map(l => l._id);
-  const inspectedIds = await inspectionModel.distinct("listing", {
+  const inspectedIds = await InspectionReport.distinct("listing", {
     listing: { $in: listingIds },
-    status: "COMPLETED",
-    "report.url": { $exists: true, $ne: null },
+    status: "PUBLISHED",
   });
   const inspectedSet = new Set(inspectedIds.map(id => id.toString()));
 
@@ -540,6 +569,9 @@ export async function getMyListingDetail(listingId, userId) {
 export async function getListingDetails(listingId, anyStatus = false) {
 
   const filter = { _id: listingId };
+  // Only ACTIVE listings are publicly viewable. Sold cars are off the market —
+  // their inspection reports stay reachable via the public report link, but
+  // the listing page itself is hidden.
   if (!anyStatus) filter.status = "ACTIVE";
 
   const listing = await listingModel
@@ -572,13 +604,18 @@ export async function getListingDetails(listingId, anyStatus = false) {
 // Step 1: send an OTP to the requesting buyer's own registered number.
 // Owner (viewing own listing) and admins skip OTP entirely.
 export async function requestContactOtp(listingId, user) {
-  const listing = await listingModel.findOne({ _id: listingId, status: "ACTIVE" });
+  const listing = await listingModel.findById(listingId);
   if (!listing) throw new ApiError(404, "Listing not found");
 
   const isOwner = listing.seller.toString() === user._id.toString();
+
+  // Owner and admin can reveal on any status (e.g. admin reviewing a PENDING
+  // listing). Regular buyers only ever see ACTIVE listings.
   if (isOwner || user.role === "admin") {
     return { otpRequired: false };
   }
+
+  if (listing.status !== "ACTIVE") throw new ApiError(404, "Listing not found");
 
   if (!user.mobileNumber) {
     throw new ApiError(400, "Your account has no mobile number to send the code to");
@@ -591,10 +628,15 @@ export async function requestContactOtp(listingId, user) {
 // Step 2: verify the OTP, log the reveal, and return the real seller number(s).
 export async function verifyContactOtp(listingId, user, code, ip) {
   const listing = await listingModel.findById(listingId);
-  if (!listing || listing.status !== "ACTIVE") throw new ApiError(404, "Listing not found");
+  if (!listing) throw new ApiError(404, "Listing not found");
 
   const isOwner = listing.seller.toString() === user._id.toString();
   const privileged = isOwner || user.role === "admin";
+
+  // Non-privileged buyers can only reveal contacts on ACTIVE listings
+  if (!privileged && listing.status !== "ACTIVE") {
+    throw new ApiError(404, "Listing not found");
+  }
 
   if (!privileged) {
     if (!code) throw new ApiError(400, "Verification code is required");
@@ -629,5 +671,9 @@ export async function markListingSoldByUser(listingId, userId) {
 
   listing.status = "SOLD";
   await listing.save();
+
+  // A sold listing no longer needs promotion — end its featured record
+  await closeFeaturedForListing(listingId);
+
   return listing;
 }

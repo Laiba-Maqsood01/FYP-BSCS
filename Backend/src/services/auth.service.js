@@ -16,24 +16,10 @@ import { cleanupListingForDeletion } from "../helpers/listing.cleanup.helper.js"
 import listingDeletionRequestModel from "../modules/managed-sale/listing-deletion-request.model.js"
 
 import { checkAndAutoUnblock } from "../helpers/user.helper.js";
-import { deleteImages, deleteFiles } from "../modules/upload/upload.service.js";
-import inspectionModel from "../modules/inspection/inspection.model.js";
+import { sendOtp, verifyOtp } from "./sms.service.js";
+import { maskPhone } from "../modules/listing/listing.service.js";
 
 export async function registerUser({ username, email, mobileNumber, password }) {
-    // const isAlreadyExist = await userModel.findOne({
-    //     $or: [
-    //         { username },
-    //         { email },
-    //         { mobileNumber }
-    //     ]
-    // })
-
-    // if (isAlreadyExist) {
-    //     if (!isAlreadyExist.verified) {
-    //         throw new ApiError(400, "User exists but not verified. Please verify your email");
-    //     }
-    //     throw new ApiError(409, "Username or email already exists");
-    // }
 
     // Check each field individually to give a specific error message
     
@@ -108,8 +94,17 @@ export async function loginUser({ email, password, rememberMe, ip, userAgent }) 
         throw new ApiError(403, "Account deleted");
     }
 
+    // Account stays PENDING until BOTH email and phone are verified.
+    // Structured data tells the frontend which verification step to resume.
     if (user.accountStatus === ACCOUNT_STATUS.PENDING) {
-        throw new ApiError(403, "Please verify your email first.");
+        const message = !user.verified
+            ? "Please verify your email first."
+            : "Please verify your mobile number first.";
+        throw new ApiError(403, message, {
+            code: "VERIFICATION_REQUIRED",
+            emailVerified: !!user.verified,
+            phoneVerified: !!user.phoneVerified,
+        });
     }
 
     if (user.accountStatus === ACCOUNT_STATUS.SUSPENDED) {
@@ -268,20 +263,82 @@ export async function verifyUserEmail(otp, email) {
         throw new ApiError(400, "OTP expired")
     }
 
-    const user = await userModel.findByIdAndUpdate(otpDoc.user,
-        {
-            verified: true,
-            accountStatus: ACCOUNT_STATUS.ACTIVE
-        },
-        {
-            new: true
-        })
+    // Email verified — but the account only becomes ACTIVE once the mobile
+    // number is verified too (next step in the registration flow).
+    const existing = await userModel.findById(otpDoc.user);
+    if (!existing) throw new ApiError(404, "User not found");
+
+    const update = { verified: true };
+    if (existing.phoneVerified) {
+        update.accountStatus = ACCOUNT_STATUS.ACTIVE;
+    }
+
+    const user = await userModel.findByIdAndUpdate(otpDoc.user, update, { new: true });
 
     await otpModel.deleteMany({
         user: otpDoc.user
     })
 
     return user;
+}
+
+// ── Phone (mobile number) verification ────────────────────────────────────────
+// Step 2 of registration: after the email is verified, an SMS OTP (Twilio
+// Verify) is sent to the registered mobile number. The account becomes ACTIVE
+// only when both email and phone are verified.
+
+async function getPendingPhoneVerificationUser(email) {
+    const user = await userModel.findOne({ email });
+    if (!user) throw new ApiError(404, "User not found");
+    if (user.isDeleted) throw new ApiError(403, "Account deleted");
+    if (user.accountStatus !== ACCOUNT_STATUS.PENDING) {
+        throw new ApiError(400, "Account is already active");
+    }
+    if (user.phoneVerified) throw new ApiError(400, "Mobile number already verified");
+    if (!user.verified) throw new ApiError(400, "Please verify your email first");
+    return user;
+}
+
+export async function sendPhoneOtp(email) {
+    const user = await getPendingPhoneVerificationUser(email);
+
+    await sendOtp(user.mobileNumber);
+
+    return { sentTo: maskPhone(user.mobileNumber) };
+}
+
+export async function verifyPhone(email, code) {
+    const user = await getPendingPhoneVerificationUser(email);
+
+    const ok = await verifyOtp(user.mobileNumber, code);
+    if (!ok) throw new ApiError(400, "Invalid or expired code");
+
+    user.phoneVerified = true;
+    // Email is already verified (guard above), so the account activates now
+    user.accountStatus = ACCOUNT_STATUS.ACTIVE;
+    await user.save();
+
+    return user;
+}
+
+// Fix a mistyped number before it's verified — otherwise the account is stuck
+// forever. Only possible while the phone is still unverified.
+export async function changeVerificationNumber(email, newNumber) {
+    const user = await getPendingPhoneVerificationUser(email);
+
+    const existingMobile = await userModel.findOne({
+        mobileNumber: newNumber,
+        _id: { $ne: user._id },
+    });
+    if (existingMobile) throw new ApiError(409, "Mobile number already in use");
+
+    user.mobileNumber = newNumber;
+    await user.save();
+
+    // Send the code to the new number right away
+    await sendOtp(newNumber);
+
+    return { sentTo: maskPhone(newNumber) };
 }
 
 export async function resendOTP(email) {
@@ -442,13 +499,6 @@ export async function deleteAccount(userId) {
     for (const listing of listings) {
         if (listing.saleMode === "MANAGED") {
 
-            if (listing.status === "PENDING_COMMISSION") {
-                throw new ApiError(
-                    400,
-                    "Cannot delete account. You have a pending commission payment. Please pay the commission first."
-                );
-            }
-
             if (listing.status === "ACTIVE") {
                 throw new ApiError(
                     400,
@@ -487,38 +537,17 @@ export async function deleteAccount(userId) {
         }
     }
 
-    // Delete all Cloudinary assets for each listing
-    for (const listing of listings) {
-        const fullListing = await listingModel.findById(listing._id, { images: 1 });
-
-        // Delete images
-        const imageFileIds = (fullListing.images || [])
-            .map((img) => img.fileId)
-            .filter(Boolean);
-
-        await deleteImages(imageFileIds);
-
-        // Delete inspection report PDFs if any
-        const inspections = await inspectionModel.find(
-            { listing: listing._id },
-            { report: 1 }
-        );
-
-        const reportFileIds = inspections
-            .map((insp) => insp.report?.fileId)
-            .filter(Boolean);
-
-        await deleteFiles(reportFileIds, "raw");
-    }
-
-    // Mark all listings REMOVED
-    await listingModel.updateMany({ seller: userId }, { status: "REMOVED" });
+    // Mark all listings REMOVED (already-removed ones keep their attribution).
+    // Cloudinary images stay — the 6-month cleanup cron purges them later.
+    await listingModel.updateMany(
+        { seller: userId, status: { $ne: "REMOVED" } },
+        { status: "REMOVED", removedBy: "OWNER", removedAt: new Date() }
+    );
 
     // Anonymize and soft delete
     user.isDeleted = true;
     user.deletedAt = new Date();
-    user.email = `deleted_${user._id}@deleted.com`;
-    user.username = `deleted_${user._id}`;
+    user.accountStatus = ACCOUNT_STATUS.DELETED;
     await user.save();
 
     // Revoke all sessions
@@ -627,5 +656,93 @@ export async function cancelEmailChange(userId) {
 
     // delete all otps, so the hacker's otp will not be found also not the pendingEmail
     await otpModel.deleteMany({ user: userId })
+}
+
+// ── Profile mobile number change ──────────────────────────────────────────────
+// Mirrors the email-change pattern: password confirm → SMS OTP to the NEW
+// number (Twilio Verify) → on success the account number is swapped and the
+// user's open listings are re-pinned to it.
+
+export async function requestNumberChange(userId, newNumber, password) {
+    const user = await userModel.findById(userId).select("+password");
+    if (!user) throw new ApiError(404, "User not found");
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) throw new ApiError(401, "Invalid credentials");
+
+    if (newNumber === user.mobileNumber) {
+        throw new ApiError(400, "This is already your current number");
+    }
+
+    const existing = await userModel.findOne({
+        mobileNumber: newNumber,
+        _id: { $ne: userId },
+    });
+    if (existing) throw new ApiError(409, "Mobile number already in use");
+
+    user.pendingMobileNumber = newNumber;
+    await user.save();
+
+    await sendOtp(newNumber);
+
+    // Alert the account email — if this wasn't the owner, they can cancel
+    await sendEmail(
+        user.email,
+        "Mobile number change requested",
+        "A request was made to change the mobile number on your GearTrade account. If this was not you, cancel the request from your account settings and change your password."
+    );
+
+    return { sentTo: maskPhone(newNumber) };
+}
+
+export async function confirmNumberChange(userId, code) {
+    const user = await userModel.findById(userId);
+
+    if (!user || !user.pendingMobileNumber) {
+        throw new ApiError(400, "No number change request found");
+    }
+
+    const ok = await verifyOtp(user.pendingMobileNumber, code);
+    if (!ok) throw new ApiError(400, "Invalid or expired code");
+
+    // Re-check uniqueness — another account may have claimed it meanwhile
+    const taken = await userModel.findOne({
+        mobileNumber: user.pendingMobileNumber,
+        _id: { $ne: userId },
+    });
+    if (taken) {
+        user.pendingMobileNumber = null;
+        await user.save();
+        throw new ApiError(409, "Mobile number already in use");
+    }
+
+    const newNumber = user.pendingMobileNumber;
+    user.mobileNumber = newNumber;
+    user.pendingMobileNumber = null;
+    user.phoneVerified = true; // verified via the SMS code above
+    await user.save();
+
+    // Listings publish the account number — keep open ones in sync so buyers
+    // don't keep calling the old number.
+    await listingModel.updateMany(
+        {
+            seller: userId,
+            status: { $in: ["PENDING", "ACTIVE", "REJECTED"] },
+        },
+        { $set: { mobileNumber: newNumber } }
+    );
+
+    return user;
+}
+
+export async function cancelNumberChange(userId) {
+    const user = await userModel.findById(userId);
+
+    if (!user || !user.pendingMobileNumber) {
+        throw new ApiError(400, "No number change request found");
+    }
+
+    user.pendingMobileNumber = null;
+    await user.save();
 }
 

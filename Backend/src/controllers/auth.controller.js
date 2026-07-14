@@ -50,8 +50,12 @@ export const login = asyncHandler(async (req, res) => {
                 _id: result.user._id,
                 username: result.user.username,
                 email: result.user.email,
+                mobileNumber: result.user.mobileNumber,
                 role: result.user.role,
-                verified: result.user.verified
+                verified: result.user.verified,
+                phoneVerified: result.user.phoneVerified,
+                accountStatus: result.user.accountStatus,
+                avatar: result.user.avatar ?? null
             },
             accessToken: result.accessToken
         })
@@ -67,8 +71,10 @@ export const getMe = asyncHandler(async (req, res) => {
             mobileNumber: req.user.mobileNumber,
             role: req.user.role,
             verified: req.user.verified,
+            phoneVerified: req.user.phoneVerified,
             accountStatus: req.user.accountStatus,
             pendingEmail: req.user.pendingEmail,
+            pendingMobileNumber: req.user.pendingMobileNumber,
             avatar: req.user.avatar ?? null,
             createdAt: req.user.createdAt,
         })
@@ -128,10 +134,47 @@ export const verifyEmail = asyncHandler(async (req, res) => {
         new ApiResponse(200, "Email verified successfully!", {
             username: user.username,
             email: user.email,
-            verified: user.verified
+            verified: user.verified,
+            phoneVerified: user.phoneVerified,
+            accountStatus: user.accountStatus
         })
     )
 
+})
+
+// ── Phone verification (step 2 of registration) ──────────────────────────────
+
+export const sendPhoneOtp = asyncHandler(async (req, res) => {
+    const { email } = req.body;
+    const result = await authService.sendPhoneOtp(email);
+
+    res.status(200).json(
+        new ApiResponse(200, "Verification code sent", result)
+    )
+})
+
+export const verifyPhone = asyncHandler(async (req, res) => {
+    const { email, code } = req.body;
+    const user = await authService.verifyPhone(email, code);
+
+    res.status(200).json(
+        new ApiResponse(200, "Mobile number verified successfully!", {
+            username: user.username,
+            email: user.email,
+            verified: user.verified,
+            phoneVerified: user.phoneVerified,
+            accountStatus: user.accountStatus
+        })
+    )
+})
+
+export const changeVerificationNumber = asyncHandler(async (req, res) => {
+    const { email, newNumber } = req.body;
+    const result = await authService.changeVerificationNumber(email, newNumber);
+
+    res.status(200).json(
+        new ApiResponse(200, "Number updated — verification code sent", result)
+    )
 })
 
 export const resendOTP = asyncHandler(async (req, res) => {
@@ -221,6 +264,41 @@ export const confirmEmailChange = asyncHandler(async (req, res) => {
         new ApiResponse(200, "Email updated successfully!", {
             email: user.email
         })
+    )
+})
+
+// ── Profile mobile number change ──────────────────────────────────────────────
+
+export const requestNumberChange = asyncHandler(async (req, res) => {
+    const { newNumber, password } = req.body;
+
+    const result = await authService.requestNumberChange(
+        req.user._id,
+        newNumber,
+        password
+    );
+
+    res.status(200).json(
+        new ApiResponse(200, "Verification code sent to new number", result)
+    )
+})
+
+export const confirmNumberChange = asyncHandler(async (req, res) => {
+    const { code } = req.body;
+
+    const user = await authService.confirmNumberChange(req.user._id, code);
+
+    res.status(200).json(
+        new ApiResponse(200, "Mobile number updated successfully!", {
+            mobileNumber: user.mobileNumber
+        })
+    )
+})
+
+export const cancelNumberChange = asyncHandler(async (req, res) => {
+    await authService.cancelNumberChange(req.user._id);
+    res.status(200).json(
+        new ApiResponse(200, "Number change request cancelled")
     )
 })
 

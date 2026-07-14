@@ -140,6 +140,7 @@ export async function createFeaturedPayment(featureId, userId) {
 export async function getFeaturedByListing(listingId, sellerId) {
     const feature = await featuredModel
         .findOne({ listing: listingId, seller: sellerId })
+        .sort({ createdAt: -1 })
         .populate("payment", "amount status createdAt");
 
     if (!feature) {

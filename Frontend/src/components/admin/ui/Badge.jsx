@@ -9,7 +9,6 @@ export const STATUS_COLORS = {
   PAID:               "bg-green-50 text-green-700 border-green-200",
   CANCELLED:          "bg-gray-50 text-gray-500 border-gray-200",
   SOLD:               "bg-blue-50 text-blue-700 border-blue-200",
-  PENDING_COMMISSION: "bg-purple-50 text-purple-700 border-purple-200",
 };
 
 export const PLAN_COLORS = {
@@ -18,11 +17,14 @@ export const PLAN_COLORS = {
   TOP:     "bg-orange-50 text-orange-700 border-orange-200",
 };
 
-export function StatusBadge({ status }) {
+export function StatusBadge({ status, removedBy }) {
   const cls = STATUS_COLORS[status] ?? "bg-gray-50 text-gray-500 border-gray-200";
+  const label = status === "REMOVED" && removedBy
+    ? `REMOVED BY ${removedBy}`
+    : status?.replace("_", " ");
   return (
     <span className={`text-[11px] font-medium px-2 py-0.5 rounded border ${cls}`}>
-      {status?.replace("_", " ")}
+      {label}
     </span>
   );
 }

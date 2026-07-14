@@ -65,8 +65,13 @@ export default function VerifyEmail() {
       const res = await api.post("/auth/verify-email", { email, otp: code });
       const user = res.data.data;
       setUser(user);
-      showSuccess("You are Verified now!");
-      navigate("/login", { state: { message: "Email verified. Please login." } });
+      showSuccess("Email verified!");
+      // Step 2: the mobile number must be verified before the account activates
+      if (!user.phoneVerified) {
+        navigate("/verify-phone", { state: { email } });
+      } else {
+        navigate("/login", { state: { message: "Account verified. Please login." } });
+      }
     } catch (err) {
       setError(err.response?.data?.message || "Invalid OTP");
       showError("Something went wrong!");

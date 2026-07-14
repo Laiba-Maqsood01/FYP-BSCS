@@ -1,10 +1,48 @@
 import { useState } from "react";
 import { Outlet, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { LayoutDashboard, Users, Car, ShieldCheck, Star, ReceiptText, Banknote, Trash2, Settings, User, PanelLeftClose, PanelLeftOpen,
+import { LayoutDashboard, Users, Car, ShieldCheck, Star, ReceiptText, Banknote, Trash2, Settings, User, PanelLeftClose, PanelLeftOpen, ExternalLink, LogOut,
 } from "lucide-react";
 import AdminSideNavLink from "../../components/admin/AdminSideNavLink";
 import UserAvatar from "../../components/common/UserAvatar";
+
+// Sidebar footer actions — a low-key "View Site" link and a distinct Logout.
+// Different action weights, so different styling (not two twin buttons).
+function FooterActions({ collapsed, onNavigate }) {
+  const navigate = useNavigate();
+  const { logout } = useAuth();
+
+  const handleLogout = async () => {
+    onNavigate?.();
+    await logout();
+    navigate("/login");
+  };
+
+  const base = "flex items-center gap-2.5 rounded-lg py-2 text-sm font-medium transition cursor-pointer";
+  const pad  = collapsed ? "justify-center px-0" : "px-3";
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <Link
+        to="/"
+        onClick={onNavigate}
+        title="View Site"
+        className={`${base} ${pad} text-brand-muted hover:bg-gray-100 hover:text-brand-dark no-underline`}
+      >
+        <ExternalLink size={16} className="shrink-0" />
+        {!collapsed && <span>View Site</span>}
+      </Link>
+      <button
+        onClick={handleLogout}
+        title="Logout"
+        className={`${base} ${pad} text-red-500 hover:bg-red-50`}
+      >
+        <LogOut size={16} className="shrink-0" />
+        {!collapsed && <span>Logout</span>}
+      </button>
+    </div>
+  );
+}
 
 const NAV_SECTIONS = [
   {
@@ -64,7 +102,7 @@ export default function AdminLayout() {
   return (
     <div
       className="flex overflow-hidden"
-      style={{ height: "calc(100vh - 70px)" }}
+      style={{ height: "100vh" }}
     >
       {/* ── DESKTOP SIDEBAR (lg+) ── */}
       <aside
@@ -129,11 +167,9 @@ export default function AdminLayout() {
           ))}
         </nav>
 
-        {!collapsed && (
-          <div className="px-4 py-3" style={{ borderTop: "1px solid rgba(0,0,0,0.07)" }}>
-            <p className="text-[11px] text-brand-muted">GearTrade Admin</p>
-          </div>
-        )}
+        <div className="p-2" style={{ borderTop: "1px solid rgba(0,0,0,0.07)" }}>
+          <FooterActions collapsed={collapsed} />
+        </div>
       </aside>
 
       {/* ── MOBILE / TABLET ICON RAIL (<lg) ── */}
@@ -154,6 +190,9 @@ export default function AdminLayout() {
             <AdminSideNavLink key={item.to} {...item} collapsed={true} />
           ))}
         </nav>
+        <div className="p-1.5" style={{ borderTop: "1px solid rgba(0,0,0,0.07)" }}>
+          <FooterActions collapsed={true} />
+        </div>
       </aside>
 
       {/* Mobile full-width overlay drawer */}
@@ -223,8 +262,8 @@ export default function AdminLayout() {
               ))}
             </nav>
 
-            <div className="px-4 py-3" style={{ borderTop: "1px solid rgba(0,0,0,0.07)" }}>
-              <p className="text-[11px] text-brand-muted">GearTrade Admin</p>
+            <div className="p-2" style={{ borderTop: "1px solid rgba(0,0,0,0.07)" }}>
+              <FooterActions collapsed={false} onNavigate={closeDrawer} />
             </div>
           </div>
         </div>

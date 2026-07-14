@@ -97,7 +97,7 @@ const ListingRow = memo(function ListingRow({ listing, onApprove, onReject, onRe
       </td>
       <td className="px-4 py-3 text-xs font-medium text-brand-dark">PKR {listing.price?.toLocaleString()}</td>
       <td className="px-4 py-3"><SaleModeBadge mode={listing.saleMode} /></td>
-      <td className="px-4 py-3"><StatusBadge status={listing.status} /></td>
+      <td className="px-4 py-3"><StatusBadge status={listing.status} removedBy={listing.removedBy} /></td>
       <td className="px-4 py-3 text-xs text-brand-muted">
         {new Date(listing.createdAt).toLocaleDateString("en-PK", { year: "numeric", month: "short", day: "numeric" })}
       </td>
@@ -123,7 +123,7 @@ const ListingCard = memo(function ListingCard({ listing, onApprove, onReject, on
           </div>
           <p className="text-xs text-brand-muted mt-0.5">{listing.brand?.name} {listing.carModel?.name} · {listing.year}</p>
         </div>
-        <StatusBadge status={listing.status} />
+        <StatusBadge status={listing.status} removedBy={listing.removedBy} />
       </div>
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <span className="text-xs font-medium text-brand-dark">PKR {listing.price?.toLocaleString()}</span>
@@ -189,7 +189,7 @@ function MarkSoldModal({ listing, onClose, onDone }) {
     setLoading(true);
     try {
       await markListingSold(listing._id, price);
-      showSuccess("Listing marked as sold — commission created, seller notified");
+      showSuccess("Listing marked as sold — commission recorded, seller notified");
       onDone(listing._id);
     } catch (err) {
       showError(err?.response?.data?.message || "Failed to mark as sold");
@@ -202,7 +202,7 @@ function MarkSoldModal({ listing, onClose, onDone }) {
     <Modal title="Mark Listing as Sold" onClose={onClose}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="text-xs bg-blue-50 border border-blue-100 text-blue-700 rounded-lg px-3 py-2">
-          This will mark the listing as <strong>PENDING_COMMISSION</strong> and create a {commissionPct ?? "…"}% commission charge for the seller. The seller will be notified by email and has 30 minutes to pay.
+          This will mark the listing as <strong>SOLD</strong> and record the {commissionPct ?? "…"}% commission as settled — GearTrade deducts it from the sale amount and delivers the remaining proceeds to the seller. The seller is notified by email; no payment is required from them.
         </div>
         <div>
           <p className="text-xs text-brand-muted mb-1">Listing</p>
@@ -217,6 +217,7 @@ function MarkSoldModal({ listing, onClose, onDone }) {
           {commissionAmount !== null && (
             <p className="text-xs text-brand-muted mt-1">
               Commission ({commissionPct}%): <strong className="text-brand-dark">PKR {commissionAmount.toLocaleString()}</strong>
+              {" · "}Seller receives: <strong style={{ color: "#15803d" }}>PKR {(Number(salePrice) - commissionAmount).toLocaleString()}</strong>
             </p>
           )}
         </div>
@@ -315,19 +316,19 @@ export default function ManageListings() {
   const handleRemove = useCallback(async () => {
     const target = removeTarget;
     setRemoveTarget(null);
-    patchListing(target._id, { status: "REMOVED" });
+    patchListing(target._id, { status: "REMOVED", removedBy: "ADMIN" });
     try {
       await removeListing(target._id);
       showSuccess("Listing removed");
     } catch (err) {
-      patchListing(target._id, { status: target.status });
+      patchListing(target._id, { status: target.status, removedBy: target.removedBy ?? null });
       showError(err?.response?.data?.message ?? "Failed to remove");
     }
   }, [removeTarget]);
 
   const handleMarkSoldDone = useCallback((id) => {
     setMarkSoldTarget(null);
-    patchListing(id, { status: "PENDING_COMMISSION" });
+    patchListing(id, { status: "SOLD" });
   }, []);
 
   const prevPage = () => setPage(p => Math.max(1, p - 1));

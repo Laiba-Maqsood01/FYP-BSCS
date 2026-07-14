@@ -25,16 +25,10 @@ managedSaleRouter.get(
 );
 
 // ---------- Commission (User) ----------
-// GET /api/managed-sale/commission/:listingId
+// GET /api/managed-sale/commission/:listingId — settled commission details
 managedSaleRouter.get(
     "/commission/:listingId",
     managedSaleController.getCommissionDetails
-);
-
-// POST /api/managed-sale/commission/:commissionId/pay
-managedSaleRouter.post(
-    "/commission/:commissionId/pay",
-    managedSaleController.initiateCommissionPayment
 );
 
 export default managedSaleRouter;

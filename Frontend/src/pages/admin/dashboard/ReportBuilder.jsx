@@ -12,6 +12,7 @@ import {
 } from "../../../services/adminService";
 import { showSuccess, showError } from "../../../utils/toast";
 import CarDiagram, { PANEL_LABELS as DIAGRAM_PANEL_LABELS } from "../../../components/CarDiagram";
+import ReportBuilderSkeleton from "../../../components/admin/ReportBuilderSkeleton";
 
 // ── Quality colour helpers ────────────────────────────────────────────────────
 
@@ -228,7 +229,7 @@ function SectionStep({ sectionKey, sectionDef, items, onItemChange }) {
             <div key={group.name} className="border-b border-r border-slate-100">
               {/* group sub-header */}
               <div className="px-3 py-2 bg-slate-50 border-b border-slate-200">
-                <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">{group.name}</span>
+                <span className="text-xs font-bold text-slate-900 uppercase tracking-wider">{group.name}</span>
               </div>
               {groupItems.map(({ def: itemDef, item }) => (
                 <ItemRow
@@ -614,17 +615,23 @@ function PublishStep({ report, sectionKeys, checklistDef, sectionLabels, section
       {report?.status !== "PUBLISHED" && (
         <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
           <p className="text-sm text-amber-800 font-medium mb-1">Before publishing</p>
-          <p className="text-xs text-amber-700">Once published, the report cannot be edited. A public link and QR code will be generated.</p>
+          <p className="text-xs text-amber-700">Publishing generates a public link and QR code. You can still edit the report afterwards — a "Last updated" date will show any later changes.</p>
         </div>
       )}
 
       {report?.status === "PUBLISHED" ? (
-        <div className="flex items-center gap-2 p-4 rounded-xl bg-green-50 border border-green-200">
-          <Check size={18} className="text-green-600 shrink-0" />
+        <div className="flex items-start gap-2 p-4 rounded-xl bg-green-50 border border-green-200">
+          <Check size={18} className="text-green-600 shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-semibold text-green-800">Report Published</p>
             <p className="text-xs text-green-700 mt-0.5">
               Public link: <span className="font-mono">/reports/{report.verifyToken}</span>
+            </p>
+            <p className="text-xs text-green-700 mt-1.5">
+              You can still edit any section — changes save immediately to this same link.
+              {report.lastEditedAt && (
+                <> Last updated {new Date(report.lastEditedAt).toLocaleString("en-PK", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" })}.</>
+              )}
             </p>
           </div>
         </div>
@@ -779,11 +786,7 @@ export default function ReportBuilder() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (loading || !checklistDef) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-500" />
-      </div>
-    );
+    return <ReportBuilderSkeleton />;
   }
 
   const currentStepKey = STEPS[step]?.key;
@@ -833,9 +836,9 @@ export default function ReportBuilder() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      {/* top bar */}
-      <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
+    <div className="h-screen bg-slate-50 flex flex-col overflow-hidden">
+      {/* top bar — fixed, never scrolls */}
+      <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between shrink-0 z-10">
         <button
           onClick={() => navigate(-1)}
           className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800"
@@ -856,9 +859,9 @@ export default function ReportBuilder() {
         </button>
       </div>
 
-      <div className="flex flex-1 max-w-6xl mx-auto w-full">
-        {/* sidebar step navigator */}
-        <div className="hidden lg:flex flex-col w-52 shrink-0 py-6 pr-0 border-r border-slate-200 bg-white">
+      <div className="flex flex-1 min-h-0 w-full">
+        {/* sidebar step navigator — flush left, own inner scroll */}
+        <div className="hidden lg:flex flex-col w-52 shrink-0 py-6 pr-0 border-r border-slate-200 bg-white overflow-y-auto">
           {STEPS.map((s, i) => {
             const isCurrent = i === step;
             const isDone = i < step;
@@ -889,8 +892,9 @@ export default function ReportBuilder() {
           })}
         </div>
 
-        {/* main content */}
-        <div className="flex-1 px-4 lg:px-8 py-6 flex flex-col gap-6 min-w-0">
+        {/* main content — scrolls independently of the fixed sidebar */}
+        <div className="flex-1 overflow-y-auto min-w-0">
+          <div className="px-4 lg:px-8 py-6 flex flex-col gap-6 max-w-5xl mx-auto">
           {/* mobile step indicator */}
           <div className="flex lg:hidden items-center gap-2 overflow-x-auto pb-2">
             {STEPS.map((s, i) => (
@@ -925,6 +929,7 @@ export default function ReportBuilder() {
             >
               Next <ChevronRight size={16} />
             </button>
+          </div>
           </div>
         </div>
       </div>
