@@ -250,7 +250,18 @@ function CarInfoStep({ saleMode, cities, provinces, brands, bodyTypes, onBack, o
   const managedCities = cities.filter(c => isManagedCity(c.name));
   const displayCities = saleMode === "MANAGED" ? managedCities : cities;
 
-  const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
+  // Update a field and clear its validation error — the red hint should
+  // disappear as soon as the user fixes the field, not linger until resubmit.
+  const set = (key, val) => {
+    setForm(f => ({ ...f, [key]: val }));
+    setErrors(prev => {
+      if (!prev[key] && !(key === "isRegistered" && prev.registeredIn)) return prev;
+      const next = { ...prev, [key]: undefined };
+      // Unchecking "registered" removes the province field — drop its error too
+      if (key === "isRegistered" && !val) next.registeredIn = undefined;
+      return next;
+    });
+  };
 
   const validate = () => {
     const e = {};
@@ -671,7 +682,11 @@ function PriceStep({ onBack, onSubmit, submitting, saleMode }) {
   const [errors, setErrors] = useState({});
   const [descLen, setDescLen] = useState(0);
 
-  const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
+  // Update a field and clear its validation error immediately
+  const set = (key, val) => {
+    setForm(f => ({ ...f, [key]: val }));
+    setErrors(prev => (prev[key] ? { ...prev, [key]: undefined } : prev));
+  };
 
   // Primary contact is always the seller's verified account number
   const accountNumber = user?.mobileNumber || "";
