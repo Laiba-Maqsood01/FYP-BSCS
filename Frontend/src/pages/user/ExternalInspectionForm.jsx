@@ -72,6 +72,11 @@ export default function ExternalInspectionForm() {
   const isElectric = engineType === "electric";
   const phone = user?.mobileNumber || "";
 
+  // Clear a field's validation error the moment the user fixes it
+  const clearError = (key) =>
+    setErrors(prev => (prev[key] ? { ...prev, [key]: undefined } : prev));
+  const setAndClear = (setter, key) => (val) => { setter(val); clearError(key); };
+
   useEffect(() => {
     Promise.all([masterService.getBrands(), masterService.getBodyTypes()])
       .then(([b, bt]) => { setBrands(b ?? []); setBodyTypes(bt ?? []); })
@@ -172,7 +177,7 @@ export default function ExternalInspectionForm() {
             <Field label="Body Type" required error={errors.bodyType}>
               <CustomSelect
                 value={bodyType}
-                onChange={setBodyType}
+                onChange={setAndClear(setBodyType, "bodyType")}
                 placeholder="Select Body Type"
                 options={[{ value: "", label: "Select Body Type" }, ...bodyTypes.map(bt => ({ value: bt.name, label: bt.name }))]}
               />
@@ -181,7 +186,7 @@ export default function ExternalInspectionForm() {
             <Field label="Engine Type" required error={errors.engineType}>
               <CustomSelect
                 value={engineType}
-                onChange={setEngineType}
+                onChange={setAndClear(setEngineType, "engineType")}
                 placeholder="Select Engine Type"
                 options={[{ value: "", label: "Select Engine Type" }, ...ENGINE_TYPES.map(o => ({ value: o.value, label: o.label }))]}
               />
@@ -199,7 +204,7 @@ export default function ExternalInspectionForm() {
               className={inputCls}
               placeholder={isElectric ? "e.g. 75" : "e.g. 1300"}
               value={engineCapacity}
-              onChange={e => setEngineCapacity(e.target.value)}
+              onChange={e => { setEngineCapacity(e.target.value); clearError("engineCapacity"); }}
             />
           </Field>
 
@@ -211,7 +216,7 @@ export default function ExternalInspectionForm() {
               hint={`Service cities: ${MANAGED_CITY_NAMES.join(", ")}`}>
               <CustomSelect
                 value={city}
-                onChange={setCity}
+                onChange={setAndClear(setCity, "city")}
                 placeholder="Select City"
                 options={[{ value: "", label: "Select City" }, ...MANAGED_CITY_NAMES.map(c => ({ value: c, label: c }))]}
               />
@@ -235,7 +240,7 @@ export default function ExternalInspectionForm() {
               className={inputCls}
               placeholder="House / street where the car will be available"
               value={address}
-              onChange={e => setAddress(e.target.value)}
+              onChange={e => { setAddress(e.target.value); clearError("address"); }}
             />
           </Field>
 
@@ -249,7 +254,7 @@ export default function ExternalInspectionForm() {
                 className={inputCls}
                 placeholder="Enter your full name"
                 value={fullName}
-                onChange={e => setFullName(e.target.value)}
+                onChange={e => { setFullName(e.target.value); clearError("fullName"); }}
               />
             </Field>
 
@@ -309,14 +314,14 @@ export default function ExternalInspectionForm() {
           initialBrand={ymm?.brand}
           initialModel={ymm?.model}
           onClose={() => setShowYmm(false)}
-          onDone={(year, brand, model) => { setYmm({ year, brand, model }); setShowYmm(false); }}
+          onDone={(year, brand, model) => { setYmm({ year, brand, model }); clearError("ymm"); setShowYmm(false); }}
         />
       )}
       {showPicker && (
         <SlotPickerModal
           initial={slot}
           onCancel={() => setShowPicker(false)}
-          onConfirm={s => { setSlot(s); setShowPicker(false); }}
+          onConfirm={s => { setSlot(s); clearError("slot"); setShowPicker(false); }}
         />
       )}
     </div>

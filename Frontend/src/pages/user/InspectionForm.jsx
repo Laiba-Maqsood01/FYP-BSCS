@@ -197,7 +197,7 @@ export default function InspectionForm() {
                 className={inputCls}
                 placeholder="e.g. House 12, Street 4, Model Town"
                 value={address}
-                onChange={e => setAddress(e.target.value)}
+                onChange={e => { setAddress(e.target.value); setErrors(prev => ({ ...prev, address: undefined })); }}
               />
             </Field>
 
@@ -231,7 +231,7 @@ export default function InspectionForm() {
                 className={inputCls}
                 placeholder="Enter your full name"
                 value={fullName}
-                onChange={e => setFullName(e.target.value)}
+                onChange={e => { setFullName(e.target.value); setErrors(prev => ({ ...prev, fullName: undefined })); }}
               />
             </Field>
 

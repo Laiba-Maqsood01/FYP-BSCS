@@ -120,6 +120,12 @@ function PaymentDetailModal({ payment, onClose }) {
           </span>
         </div>
         <div className="flex justify-between items-center">
+          <span className="text-xs text-brand-muted">Paid via</span>
+          <span className="text-xs text-brand-dark">
+            {payment.paymentMethod === "CASH" ? "Cash — at GearTrade office" : "Online (Stripe)"}
+          </span>
+        </div>
+        <div className="flex justify-between items-center">
           <span className="text-xs text-brand-muted">Date</span>
           <span className="text-xs text-brand-dark">{formatDate(payment.createdAt)}</span>
         </div>
@@ -168,7 +174,15 @@ const PaymentRow = memo(function PaymentRow({ payment, onClick }) {
         <CreditCard size={15} style={{ color: purpose.text }} />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-brand-dark truncate">{purpose.label}</p>
+        <p className="text-sm font-semibold text-brand-dark truncate">
+          {purpose.label}
+          {payment.paymentMethod === "CASH" && (
+            <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded align-middle"
+              style={{ background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0" }}>
+              Paid at office
+            </span>
+          )}
+        </p>
         <p className="text-xs text-brand-muted mt-0.5">{formatDate(payment.createdAt)}</p>
       </div>
       <div className="text-right shrink-0 flex flex-col items-end gap-1">

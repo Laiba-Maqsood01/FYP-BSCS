@@ -149,10 +149,31 @@ export async function settleBreakCharge(charge, { paymentId = null } = {}) {
     if (paymentId) charge.payment = paymentId;
     await charge.save();
 
-    // Settled at the office after an online slot was opened: kill any unpaid
-    // checkout attempt so the owner can't be charged twice for the same fee.
+    // Paid at the office: kill any unpaid checkout attempt so the owner can't
+    // be charged twice, then record a CASH payment so the fee still shows up
+    // in the owner's payment history.
     if (!paymentId) {
         await voidPendingPayments(charge._id);
+
+        const seller = await userModel.findById(charge.seller).select("username email");
+        const cashPayment = await paymentModel.create({
+            user: charge.seller,
+            listing: charge.listing,
+            purpose: "AGREEMENT_BREAK",
+            referenceId: charge._id,
+            amount: charge.amount,
+            paymentMethod: "CASH",
+            transactionId: crypto.randomUUID(),
+            status: "SUCCESS",
+            payerSnapshot: {
+                userId: seller?._id,
+                username: seller?.username,
+                email: seller?.email,
+            },
+        });
+
+        charge.payment = cashPayment._id;
+        await charge.save();
     }
 
     await listingDeletionRequestModel.findByIdAndUpdate(charge.deletionRequest, {
