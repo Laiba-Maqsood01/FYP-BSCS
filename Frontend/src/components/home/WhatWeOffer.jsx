@@ -71,7 +71,7 @@ export default function WhatWeOffer() {
               />
 
               {/* Content */}
-              <div className="absolute bottom-0 left-0 right-0 p-6">
+              <div className="absolute bottom-0 left-0 right-0 p-6" style={{ height: "224px" }}>
                 <div className="w-9.5 h-9.5 rounded-full bg-white/15 backdrop-blur-md border border-white/25 text-white flex items-center justify-center mb-3">
                   {item.icon}
                 </div>

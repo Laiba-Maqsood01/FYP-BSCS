@@ -107,10 +107,6 @@ export async function loginUser({ email, password, rememberMe, ip, userAgent }) 
         });
     }
 
-    if (user.accountStatus === ACCOUNT_STATUS.SUSPENDED) {
-        throw new ApiError(403, "Your account is temporarily suspended. Contact support.");
-    }
-
     // User whose block expired tries to log in fresh
     await checkAndAutoUnblock(user);
 

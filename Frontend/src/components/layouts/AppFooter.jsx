@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Send } from "lucide-react";
+import { Phone, Mail, MapPin } from "lucide-react";
 import { FaFacebook, FaYoutube } from "react-icons/fa";
 import { RiInstagramFill } from "react-icons/ri";
+import api from "../../services/api";
+import { MANAGED_CITY_NAMES } from "../../utils/managedCities";
 
 const QUICK_LINKS = [
   { name: "Home",           href: "/",           internal: true },
@@ -10,11 +12,14 @@ const QUICK_LINKS = [
   { name: "Post an Ad",     href: "/post-ad",     internal: true },
 ];
 
+// Paste the real page URLs here once the accounts are created ("#" = not yet).
 const SOCIAL_LINKS = [
   { label: "Instagram", href: "#", icon: <RiInstagramFill size={16} /> },
   { label: "YouTube",   href: "#", icon: <FaYoutube      size={16} /> },
   { label: "Facebook",  href: "#", icon: <FaFacebook     size={16} /> },
 ];
+
+const SUPPORT_EMAIL = "support@geartrade.app";
 
 // .app-footer-link
 const footerLink = "no-underline transition-colors duration-[0.18s]";
@@ -22,12 +27,15 @@ const footerLink = "no-underline transition-colors duration-[0.18s]";
 export default function AppFooter({
   brand = { title: "GearTrade", short: "GT", href: "/" },
 }) {
-  const [email, setEmail] = useState("");
+  // Live company phone from Site Settings — same number the managed flow shows
+  const [companyPhone, setCompanyPhone] = useState(null);
 
-  const handleSubscribe = (e) => {
-    e.preventDefault();
-    setEmail("");
-  };
+  useEffect(() => {
+    api.get("/settings")
+      .then(r => setCompanyPhone(r.data.data?.companyPhone ?? null))
+      .catch(() => setCompanyPhone(null));
+  }, []);
+
 
   return (
     // .app-footer — padding: 4rem 0 0, border-top
@@ -109,6 +117,8 @@ export default function AppFooter({
                   {/* .app-footer-social-row */}
                   <a
                     href={item.href}
+                    target={item.href !== "#" ? "_blank" : undefined}
+                    rel={item.href !== "#" ? "noopener noreferrer" : undefined}
                     aria-label={item.label}
                     className={`${footerLink} inline-flex items-center`}
                     style={{ gap: "0.6rem", color: "#64748b", fontSize: "0.92rem" }}
@@ -143,56 +153,45 @@ export default function AppFooter({
             </ul>
           </div>
 
+          {/* Contact Us — live company phone from Site Settings */}
           <div>
             <h3 style={{ fontSize: "0.95rem", fontWeight: 700, color: "#0f172a", marginBottom: "1rem" }}>
-              Stay Updated
+              Contact Us
             </h3>
-            {/* .app-footer-description */}
-            <p style={{ color: "#64748b", fontSize: "0.9rem", lineHeight: 1.65, marginBottom: 0 }}>
-              Get the latest listings and market updates.
-            </p>
-
-            {/* .app-footer-newsletter — pill form, padding: 0.3rem 0.3rem 0.3rem 1rem */}
-            <form
-              onSubmit={handleSubscribe}
-              className="flex items-center"
-              style={{
-                background: "#f1f5f9",
-                border: "1px solid rgba(15,23,42,0.1)",
-                borderRadius: "999px",
-                padding: "0.3rem 0.3rem 0.3rem 1rem",
-                gap: "0.5rem",
-                marginTop: "1rem",
-              }}
-            >
-              {/* .app-footer-email-input */}
-              <input
-                type="email"
-                placeholder="Your email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="flex-1 min-w-0 bg-transparent border-none outline-none"
-                style={{ fontSize: "0.88rem", color: "#0f172a" }}
-              />
-
-              {/* .app-footer-send-btn */}
-              <button
-                type="submit"
-                aria-label="Subscribe"
-                className="flex items-center justify-center shrink-0 text-white transition-colors duration-[0.18s] hover:bg-brand-dark2"
-                style={{
-                  width: "2.1rem",
-                  height: "2.1rem",
-                  borderRadius: "50%",
-                  background: "#111827",
-                  border: "none",
-                  cursor: "pointer",
-                }}
-              >
-                <Send size={15} />
-              </button>
-            </form>
+            <ul className="list-none p-0 m-0 flex flex-col gap-2.5">
+              {companyPhone && (
+                <li className="flex items-center" style={{ gap: "0.6rem" }}>
+                  <Phone size={15} style={{ color: "#64748b", flexShrink: 0 }} />
+                  <a
+                    href={`tel:${companyPhone}`}
+                    className={footerLink}
+                    style={{ color: "#64748b", fontSize: "0.92rem" }}
+                    onMouseEnter={e => (e.currentTarget.style.color = "#0f172a")}
+                    onMouseLeave={e => (e.currentTarget.style.color = "#64748b")}
+                  >
+                    {companyPhone}
+                  </a>
+                </li>
+              )}
+              <li className="flex items-center" style={{ gap: "0.6rem" }}>
+                <Mail size={15} style={{ color: "#64748b", flexShrink: 0 }} />
+                <a
+                  href={`mailto:${SUPPORT_EMAIL}`}
+                  className={footerLink}
+                  style={{ color: "#64748b", fontSize: "0.92rem" }}
+                  onMouseEnter={e => (e.currentTarget.style.color = "#0f172a")}
+                  onMouseLeave={e => (e.currentTarget.style.color = "#64748b")}
+                >
+                  {SUPPORT_EMAIL}
+                </a>
+              </li>
+              <li className="flex items-start" style={{ gap: "0.6rem" }}>
+                <MapPin size={15} style={{ color: "#64748b", flexShrink: 0, marginTop: "2px" }} />
+                <span style={{ color: "#64748b", fontSize: "0.92rem", lineHeight: 1.6 }}>
+                  Service cities: {MANAGED_CITY_NAMES.join(", ")}
+                </span>
+              </li>
+            </ul>
           </div>
 
         </div>
