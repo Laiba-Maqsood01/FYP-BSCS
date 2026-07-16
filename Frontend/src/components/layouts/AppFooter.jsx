@@ -19,7 +19,8 @@ const SOCIAL_LINKS = [
   { label: "Facebook",  href: "#", icon: <FaFacebook     size={16} /> },
 ];
 
-const SUPPORT_EMAIL = "support@geartrade.app";
+// const SUPPORT_EMAIL = "support@geartrade.app";
+const SUPPORT_EMAIL = "nimra4810021@gmail.com";
 
 // .app-footer-link
 const footerLink = "no-underline transition-colors duration-[0.18s]";
