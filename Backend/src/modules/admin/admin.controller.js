@@ -208,9 +208,17 @@ export const getDeletionRequests = asyncHandler(async (req, res) => {
     res.status(200).json(new ApiResponse(200, "Deletion requests fetched", data));
 });
 
-export const approveDeletionRequest = asyncHandler(async (req, res) => {
-    const data = await adminService.approveDeletionRequest(req.params.id);
-    res.status(200).json(new ApiResponse(200, "Deletion request approved", data));
+export const acceptDeletionRequest = asyncHandler(async (req, res) => {
+    const data = await adminService.acceptDeletionRequest(req.params.id, req.user._id, {
+        amount: req.body.amount,
+        paymentMode: req.body.paymentMode,
+    });
+    res.status(200).json(new ApiResponse(200, "Deletion request accepted", data));
+});
+
+export const markBreakChargePaid = asyncHandler(async (req, res) => {
+    const data = await adminService.markBreakChargePaid(req.params.id);
+    res.status(200).json(new ApiResponse(200, "Break charge settled", data));
 });
 
 export const rejectDeletionRequest = asyncHandler(async (req, res) => {

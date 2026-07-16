@@ -17,6 +17,15 @@ export const getMyDeletionRequests = asyncHandler(async (req, res) => {
     res.status(200).json(new ApiResponse(200, "Deletion requests fetched", data));
 });
 
+// Agreement break charge — owner pays online
+export const createBreakChargePayment = asyncHandler(async (req, res) => {
+    const data = await managedSaleService.createBreakChargePayment(
+        req.params.chargeId,
+        req.user._id
+    );
+    res.status(200).json(new ApiResponse(200, "Break charge payment session created", data));
+});
+
 // Commission
 export const getCommissionDetails = asyncHandler(async (req, res) => {
     const data = await managedSaleService.getCommissionDetails(

@@ -287,7 +287,7 @@ export default function InspectionReport() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-500" />
       </div>
     );
@@ -379,11 +379,12 @@ export default function InspectionReport() {
             </span>
           </div>
 
-          {/* hero */}
+          {/* hero — listing gallery cover, else the first inspector photo
+              (external reports have no listing gallery) */}
           <div className="flex gap-5 p-5 items-center flex-wrap">
-            {cs.images?.[0]?.url ? (
+            {(cs.images?.[0]?.url || photos?.[0]?.url) ? (
               <img
-                src={cs.images[0].url}
+                src={cs.images?.[0]?.url ?? photos[0].url}
                 alt={cs.title || "Cover photo"}
                 style={{ width: "150px", height: "104px", objectFit: "cover", borderRadius: "10px", flexShrink: 0 }}
               />
@@ -522,6 +523,7 @@ export default function InspectionReport() {
             <CarDiagram
               markers={damage}
               readonly
+              bodyType={cs.bodyType}
               onImageClick={m => setActiveDamageMarker(m)}
             />
           </div>

@@ -20,6 +20,12 @@ const CONTENT = {
     badge: "Featured Listing Payment",
     retryLabel: "Try Again",
   },
+  AGREEMENT_BREAK: {
+    title: "Payment Failed",
+    subtitle: "Your agreement break fee was not paid. No charges have been made — your listing remains active with GearTrade.",
+    badge: "Agreement Break Fee",
+    retryLabel: "Try Again",
+  },
 };
 
 const DEFAULT_CONTENT = {

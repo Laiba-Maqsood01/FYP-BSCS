@@ -8,6 +8,25 @@
  *   readonly           — disables onPanelClick; labels still show, imageClick still works
  */
 import { useState } from "react";
+import sedanArtUrl from "./car-diagrams/sedan.svg";
+
+// PakWheels ships two top-view artworks that cover every body type. The
+// hatchback one is inlined below (with exact panel paths); the sedan one is
+// rendered as an <image> layer under the same panel hit-shapes — both
+// templates share the same proportions, so the hit areas line up.
+// Unknown / missing body type → sedan (the "Compact sedan" default).
+const HATCHBACK_BODY_TYPES = [
+  "hatchback",
+  "subcompact hatchback",
+  "compact hatchback",
+  "crossover",
+  "station wagon",
+];
+
+export function diagramVariantFor(bodyType) {
+  const name = (bodyType ?? "").trim().toLowerCase();
+  return HATCHBACK_BODY_TYPES.includes(name) ? "hatchback" : "sedan";
+}
 
 export const DAMAGE_CODES = ["E1","P","A1","A2","A3","B1","B3","U1","U3"];
 export const DAMAGE_LABELS = {
@@ -126,8 +145,9 @@ function nearestPanel(e) {
   return best;
 }
 
-export default function CarDiagram({ markers = [], onPanelClick, onImageClick, readonly = false }) {
+export default function CarDiagram({ markers = [], onPanelClick, onImageClick, readonly = false, bodyType = "" }) {
   const [hovered, setHovered] = useState(null);
+  const variant = diagramVariantFor(bodyType);
 
   // Group markers by panel (multiple marks per panel are supported)
   const markersByPanel = {};
@@ -180,7 +200,17 @@ export default function CarDiagram({ markers = [], onPanelClick, onImageClick, r
             <clipPath id="clip-rr-door"><rect x="297" y="277" width="170" height="300"/></clipPath>
           </defs>
 
-          {/* ── Original SVG paths (PakWheels hatchback, unmodified) ───────── */}
+          {/* ── Artwork layer: inline hatchback OR sedan image file ────────── */}
+          {variant === "sedan" && (
+            <image
+              href={sedanArtUrl}
+              x="0" y="0" width="465.95" height="574.6"
+              preserveAspectRatio="none"
+              pointerEvents="none"
+            />
+          )}
+
+          {variant === "hatchback" && <>
           <path d="m191.91 53.41-3.16 2.21-14 9.83a2 2 0 0 1-.63.31c-1.69.53-9.26 2.9-13.73 4.19a1.93 1.93 0 0 1-2.56-2.29 24.6 24.6 0 0 1 3.27-6.62 26 26 0 0 1 2-2.45c8.62-9.41 21.81-9.28 23.9-9.21h.25l3.92.59a1.85 1.85 0 0 1 .74 3.44Z" fill="url(#lg)" stroke="#000" strokeMiterlimit="10" strokeWidth="1.09"/>
           <path d="m191.91 53.41-3.16 2.21-14 9.83a2 2 0 0 1-.63.31c-1.69.53-9.26 2.9-13.73 4.19a1.93 1.93 0 0 1-2.56-2.29 24.6 24.6 0 0 1 3.27-6.62 26 26 0 0 1 2-2.45c8.62-9.41 21.81-9.28 23.9-9.21h.25l3.92.59a1.85 1.85 0 0 1 .74 3.44Z" fill="url(#lg)" stroke="#000" strokeMiterlimit="10" strokeWidth="1.09"/>
           <path d="m192.43 54.11-3.16 2.21-14 9.83a2 2 0 0 1-.63.31c-1.69.53-9.26 2.9-13.73 4.19a1.93 1.93 0 0 1-2.56-2.29 24.6 24.6 0 0 1 3.27-6.62 26 26 0 0 1 2-2.45c8.62-9.41 21.81-9.28 23.9-9.21h.25l3.92.59a1.85 1.85 0 0 1 .74 3.44Z" fill="url(#lg3)" stroke="#000" strokeMiterlimit="10" strokeWidth="1.09" transform="translate(-.52 -.7)"/>
@@ -217,6 +247,7 @@ export default function CarDiagram({ markers = [], onPanelClick, onImageClick, r
           <path d="M45.42 405.16c41.44 31.09 58 33 64.94 31.7 1-.19 2-.41 3-.64 7.14-1.69 36.24-8.44 36.24-8.44-4.14 13.33-12 31.48-12.22 32.28a98.3 98.3 0 0 0-14.61 15.83c-1.26 1.72-8 10.94-12.55 15.82a44.6 44.6 0 0 1-7.86 6.46l-.84.51a40.8 40.8 0 0 1-10.13 4.18c-3.64.13-12.44 1-19.78 7.09a26 26 0 0 0-3.3 3.27 8.7 8.7 0 0 1-4.83 2.84 40 40 0 0 1-6.55 1 34.6 34.6 0 0 1-6.76.17 14.4 14.4 0 0 1-7.69-3.4c-1.71-1.73-3.83-3.76-6.35-5.91-3.25-2.78-4.68-3.64-6-4.81-2.86-2.62-5.95-4.34-5.15-17.35 20.61 1.06 36.28-10.94 39.6-28.36a31.2 31.2 0 0 0-.32-13.25c-3.78-15.49-20.13-28.23-39.64-26.36v-29.11s13.58 11.06 20.8 16.48Z" fill="none" stroke="#000" strokeMiterlimit="10" strokeWidth="1.09"/>
           <ellipse cx="29.02" cy="117.78" rx="27.88" ry="26.7" fill="none" stroke="#000" strokeMiterlimit="10" strokeWidth="1.09"/>
           <path d="M.68 178.7h15.11v194.08H.68zM450.16 178.7h15.11v194.08h-15.11z" fill="none" stroke="#231f20" strokeMiterlimit="10" strokeWidth="1.36"/>
+          </>}
 
           {/* ── Catch-all hit layer: any click maps to the nearest panel ──── */}
           <rect

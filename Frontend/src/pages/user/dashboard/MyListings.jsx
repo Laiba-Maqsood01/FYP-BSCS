@@ -3,10 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { Edit2, Trash2, Star, Check, ExternalLink, Info, ShieldCheck, Clock, Calendar, CheckCircle2, Download, FileText,
 } from "lucide-react";
 import { getMyListings, updateListing, deleteListing, markMyListingSold } from "../../../services/listingService";
-import { getDeletionRequests, submitDeletionRequest, getCommissionDetails } from "../../../services/managedSaleService";
+import { getDeletionRequests, submitDeletionRequest, getCommissionDetails, createBreakChargePayment } from "../../../services/managedSaleService";
 import { requestFeatured, createFeaturedPayment, getFeaturedByListing, getActiveFeaturedPlans } from "../../../services/featuredService";
 import { getListingInspectionStatus } from "../../../services/inspectionService";
 import Modal from "../../../components/ui/Modal";
+import { showError } from "../../../utils/toast";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -372,12 +373,7 @@ function DeletionDetailModal({ request, onClose }) {
             <FileText size={16} className="text-brand-muted" />
             <p className="font-semibold text-brand-dark">Deletion Request</p>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-semibold px-2 py-0.5 rounded" style={{ background: style.bg, color: style.text }}>{request.status}</span>
-            <button onClick={onClose} className="text-brand-muted hover:text-brand-dark transition ml-1 cursor-pointer">
-              <FileText size={18} />
-            </button>
-          </div>
+          <span className="text-[11px] font-semibold px-2 py-0.5 rounded" style={{ background: style.bg, color: style.text }}>{request.status}</span>
         </div>
         <div className="overflow-y-auto px-5 py-4 space-y-4">
           <div>
@@ -582,6 +578,7 @@ const ListingCard = memo(function ListingCard({ listing, onEdit, onDelete, onFea
 
 const DR_BADGE = {
   PENDING:  { bg: "#fef9c3", text: "#b45309" },
+  ACCEPTED: { bg: "#dbeafe", text: "#1d4ed8" },
   APPROVED: { bg: "#dcfce7", text: "#16a34a" },
   REJECTED: { bg: "#fee2e2", text: "#dc2626" },
 };
@@ -597,6 +594,18 @@ function ManagedSection({ listings }) {
   const [loading,      setLoading]      = useState(true);
   const [requestTarget, setRequestTarget] = useState(null);
   const [detailTarget,  setDetailTarget]  = useState(null);
+  const [payingChargeId, setPayingChargeId] = useState(null);
+
+  async function onPayBreakCharge(chargeId) {
+    setPayingChargeId(chargeId);
+    try {
+      const { checkoutUrl } = await createBreakChargePayment(chargeId);
+      window.location.href = checkoutUrl;
+    } catch (e) {
+      showError(e?.response?.data?.message ?? "Failed to start payment.");
+      setPayingChargeId(null);
+    }
+  }
 
   useEffect(() => {
     // Commission records exist for SOLD managed listings — the GearTrade team
@@ -679,15 +688,37 @@ function ManagedSection({ listings }) {
                   <p className="text-base font-bold text-brand-dark mt-1.5">{formatPKR(l.price)}</p>
                   <div className="mt-3">
                     {existingReq ? (
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-semibold px-2.5 py-1.5 rounded-lg" style={{ background: drBadge.bg, color: drBadge.text }}>
-                          Deletion Request: {existingReq.status}
-                        </span>
-                        <button onClick={() => setDetailTarget(existingReq)}
-                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition hover:opacity-80 cursor-pointer"
-                          style={{ border: "1px solid rgba(0,0,0,0.1)", color: "#64748b" }}>
-                          <FileText size={11} /> View Details
-                        </button>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-semibold px-2.5 py-1.5 rounded-lg" style={{ background: drBadge.bg, color: drBadge.text }}>
+                            Deletion Request: {existingReq.status}
+                          </span>
+                          <button onClick={() => setDetailTarget(existingReq)}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition hover:opacity-80 cursor-pointer"
+                            style={{ border: "1px solid rgba(0,0,0,0.1)", color: "#64748b" }}>
+                            <FileText size={11} /> View Details
+                          </button>
+                        </div>
+                        {existingReq.status === "ACCEPTED" && existingReq.breakCharge?.status === "AWAITING_PAYMENT" && (
+                          <div className="rounded-lg px-3 py-2.5 flex items-center justify-between gap-3 flex-wrap"
+                            style={{ background: "#fffbeb", border: "1px solid #fde68a" }}>
+                            <p className="text-xs text-amber-800">
+                              Agreement break fee: <strong>PKR {existingReq.breakCharge.amount?.toLocaleString()}</strong>
+                              {existingReq.breakCharge.daysHeld > 0 && ` · ${existingReq.breakCharge.daysHeld} day(s) on GearTrade`}
+                            </p>
+                            {existingReq.breakCharge.paymentMode === "ONLINE" ? (
+                              <button
+                                onClick={() => onPayBreakCharge(existingReq.breakCharge._id)}
+                                disabled={payingChargeId === existingReq.breakCharge._id}
+                                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white hover:opacity-90 transition cursor-pointer disabled:opacity-50"
+                                style={{ background: "#ea6d00" }}>
+                                {payingChargeId === existingReq.breakCharge._id ? "Redirecting…" : "Pay Now"}
+                              </button>
+                            ) : (
+                              <span className="text-[11px] text-amber-700">Payable at the GearTrade office</span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <button onClick={() => setRequestTarget(l)}

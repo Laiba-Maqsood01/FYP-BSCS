@@ -35,7 +35,8 @@ export const approveRefund        = (id)         => api.patch(`/admin/refunds/${
 
 // ── Deletion Requests ─────────────────────────────────────────────────────────
 export const getAdminDeletions    = (params)          => api.get("/admin/deletion-requests", { params });
-export const approveDeletion      = (id)              => api.patch(`/admin/deletion-requests/${id}/approve`);
+export const acceptDeletion       = (id, body)        => api.patch(`/admin/deletion-requests/${id}/accept`, body);
+export const markBreakChargePaid  = (id)              => api.patch(`/admin/deletion-requests/${id}/mark-paid`);
 export const rejectDeletion       = (id, adminNote)   => api.patch(`/admin/deletion-requests/${id}/reject`, { adminNote });
 
 // ── Commissions (settlement ledger — records are created already PAID) ────────

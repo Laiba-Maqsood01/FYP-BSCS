@@ -2,10 +2,24 @@ import mongoose from "mongoose";
 
 const inspectionSchema = new mongoose.Schema(
   {
+    // Absent for external inspections (car not listed on GearTrade)
     listing: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "listings",
-      required: true
+      default: null
+    },
+
+    // External inspection: snapshot of the off-platform car, entered by the
+    // requester. Plain strings (not refs) — there is no listing to stay in
+    // sync with, this is frozen booking data.
+    externalCar: {
+      year:           { type: Number, default: null },
+      brand:          { type: String, default: "" },
+      carModel:       { type: String, default: "" },
+      bodyType:       { type: String, default: "" },
+      engineType:     { type: String, default: "" },
+      engineCapacity: { type: Number, default: null },
+      city:           { type: String, default: "" },
     },
 
     requestedBy: {
@@ -107,13 +121,16 @@ const inspectionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// prevent duplicate active requests
+// prevent duplicate active requests (listing-linked inspections only — the
+// $type guard keeps external inspections, whose listing is null, out of the
+// unique constraint)
 inspectionSchema.index(
   { listing: 1, status: 1 },
   {
     unique: true,
     partialFilterExpression: {
-      status: { $in: ["PENDING", "SCHEDULED", "IN_PROGRESS"] }
+      status: { $in: ["PENDING", "SCHEDULED", "IN_PROGRESS"] },
+      listing: { $type: "objectId" }
     }
   }
 );

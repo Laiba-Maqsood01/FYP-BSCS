@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, ChevronRight, ChevronDown, Upload, X, User, Crown, AlertCircle } from "lucide-react";
+import { Check, ChevronRight, Upload, X, User, Crown, AlertCircle } from "lucide-react";
 import { showError, showSuccess } from "../../utils/toast";
 import * as masterService from "../../services/masterService";
 import * as listingService from "../../services/listingService";
 import { useAuth } from "../../context/AuthContext";
+import CustomSelect from "../../components/ui/CustomSelect";
+import YMMModal from "../../components/YMMModal";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -16,8 +18,6 @@ const normalizeCityName = (name) => String(name || "").toLowerCase().replace(/[\
 const isManagedCity = (name) =>
   MANAGED_CITY_NAMES.some(n => normalizeCityName(n) === normalizeCityName(name));
 
-const CURRENT_YEAR = new Date().getFullYear();
-const YEARS = Array.from({ length: CURRENT_YEAR - 1949 }, (_, i) => CURRENT_YEAR - i);
 
 const COLORS = [
   "White", "Pearl White", "Silver", "Grey", "Black",
@@ -46,82 +46,6 @@ const ASSEMBLIES = [
 
 const inputCls =
   "w-full bg-brand-surface border border-black/10 rounded-lg px-3 py-2.5 text-brand-dark2 text-sm outline-none focus:border-[#374151] focus:ring-2 focus:ring-[#37415114] transition placeholder:text-gray-400";
-
-const selectCls =
-  "w-full bg-brand-surface border border-black/10 rounded-lg px-3 py-2.5 text-brand-dark2 text-sm outline-none focus:border-[#374151] focus:ring-2 focus:ring-[#37415114] transition appearance-none cursor-pointer";
-
-function CustomSelect({ value, onChange, options, placeholder, disabled, searchable, searchPlaceholder = "Search..." }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const ref = useRef(null);
-
-  useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const selected = options.find(o => o.value === value);
-
-  const visibleOptions = searchable && query.trim()
-    ? options.filter(o => o.label.toLowerCase().includes(query.trim().toLowerCase()))
-    : options;
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => { if (!disabled) { setQuery(""); setOpen(p => !p); } }}
-        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border border-black/10 text-sm text-left transition"
-        style={{
-          background: disabled ? "#f1f5f9" : "rgba(255,255,255,0.8)",
-          backdropFilter: "blur(8px)",
-          opacity: disabled ? 0.45 : 1,
-          cursor: disabled ? "not-allowed" : "pointer",
-        }}
-      >
-        <span className={selected ? "text-brand-dark2" : "text-gray-400"}>
-          {selected ? selected.label : placeholder}
-        </span>
-        <ChevronDown size={15} className="text-gray-400 shrink-0" />
-      </button>
-      {open && !disabled && (
-        <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white border border-black/10 rounded-xl shadow-[0_10px_30px_rgba(15,23,42,0.1)] max-h-56 flex flex-col overflow-hidden z-500">
-          {searchable && (
-            <div className="p-2 border-b border-black/6 shrink-0">
-              <input
-                autoFocus
-                className="w-full bg-brand-surface border border-black/10 rounded-lg text-brand-dark2 text-[0.85rem] outline-none focus:border-[#374151] transition px-3 py-2"
-                placeholder={searchPlaceholder}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-            </div>
-          )}
-          <div className="overflow-y-auto">
-            {visibleOptions.map(opt => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => { onChange(opt.value); setOpen(false); }}
-                className={`block w-full text-left px-4 py-2.5 text-[0.88rem] cursor-pointer transition ${
-                  value === opt.value
-                    ? "bg-[#f1f5f9] font-semibold text-brand-dark"
-                    : "text-[#374151] hover:bg-brand-surface"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-            {visibleOptions.length === 0 && (
-              <p className="px-4 py-3 text-[0.85rem] text-brand-muted">No results found.</p>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 const labelCls = "block text-sm font-medium text-brand-dark2 mb-1";
 
@@ -206,243 +130,6 @@ function WhatsAppToggle({ checked, onChange }) {
           style={{ transform: checked ? "translateX(1.375rem)" : "translateX(0.125rem)" }}
         />
       </button>
-    </div>
-  );
-}
-
-// ── Year / Make / Model Modal ─────────────────────────────────────────────────
-
-function YMMModal({ brands, onDone, onClose, initialYear, initialBrand, initialModel }) {
-  const [year, setYear]   = useState(initialYear || null);
-  const [brand, setBrand] = useState(initialBrand || null);
-  const [model, setModel] = useState(initialModel || null);
-  const [models, setModels] = useState([]);
-  const [loadingModels, setLoadingModels] = useState(false);
-
-  // Per-column search
-  const [yearQuery,  setYearQuery]  = useState("");
-  const [makeQuery,  setMakeQuery]  = useState("");
-  const [modelQuery, setModelQuery] = useState("");
-
-  const yearRef  = useRef(null);
-
-  useEffect(() => {
-    if (year && yearRef.current) {
-      const el = yearRef.current.querySelector(`[data-year="${year}"]`);
-      if (el) el.scrollIntoView({ block: "center" });
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!brand) { setModels([]); setModel(null); return; }
-    setLoadingModels(true);
-    setModel(null);
-    masterService.getModels(brand._id)
-      .then(setModels)
-      .catch(() => showError("Failed to load models"))
-      .finally(() => setLoadingModels(false));
-  }, [brand?._id]);
-
-  const canDone = year && brand && model;
-
-  const visibleYears  = yearQuery.trim()
-    ? YEARS.filter(y => String(y).includes(yearQuery.trim()))
-    : YEARS;
-  const visibleBrands = makeQuery.trim()
-    ? brands.filter(b => b.name.toLowerCase().includes(makeQuery.trim().toLowerCase()))
-    : brands;
-  const visibleModels = modelQuery.trim()
-    ? models.filter(m => m.name.toLowerCase().includes(modelQuery.trim().toLowerCase()))
-    : models;
-
-  const searchInputCls =
-    "w-full bg-white border border-black/10 rounded-lg px-2.5 py-1.5 text-[13px] text-brand-dark2 outline-none focus:border-[#374151] transition placeholder:text-gray-400";
-
-  return (
-    <div className="fixed inset-0 z-2000 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div
-        className="relative bg-white w-full overflow-hidden flex flex-col"
-        style={{
-          maxWidth: "720px",
-          maxHeight: "90vh",
-          borderRadius: "1rem",
-          boxShadow: "0 25px 50px -12px rgba(0,0,0,0.35)",
-        }}
-      >
-        {/* Breadcrumb header */}
-        <div className="flex items-center px-5 py-4 border-b border-black/8">
-          <div className="flex items-center gap-1 flex-1 min-w-0">
-            <span
-              className="text-sm font-semibold"
-              style={{ color: year ? "#ea6d00" : "#94a3b8" }}
-            >
-              {year || "MODEL YEAR"}
-            </span>
-            <ChevronRight size={14} className="text-gray-300 shrink-0" />
-            <span
-              className="text-sm font-semibold"
-              style={{ color: brand ? "#ea6d00" : "#94a3b8" }}
-            >
-              {brand ? brand.name : "MAKE"}
-            </span>
-            <ChevronRight size={14} className="text-gray-300 shrink-0" />
-            <span
-              className="text-sm font-semibold"
-              style={{ color: model ? "#ea6d00" : "#94a3b8" }}
-            >
-              {model ? model.name : "MODEL"}
-            </span>
-          </div>
-          <button
-            onClick={onClose}
-            className="ml-3 shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition"
-          >
-            <X size={16} className="text-gray-500" />
-          </button>
-        </div>
-
-        {/* Three columns */}
-        <div className="flex flex-1 min-h-0 divide-x divide-black/8" style={{ minHeight: "400px" }}>
-          {/* MODEL YEAR */}
-          <div className="flex flex-col w-1/3 min-h-0">
-            <div className="px-4 py-2.5 bg-gray-50 border-b border-black/8">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-brand-muted">Model Year</span>
-            </div>
-            <div className="px-3 py-2 border-b border-black/6 shrink-0">
-              <input
-                className={searchInputCls}
-                placeholder="Search year..."
-                value={yearQuery}
-                onChange={e => setYearQuery(e.target.value)}
-              />
-            </div>
-            <div ref={yearRef} className="flex-1 overflow-y-auto">
-              {visibleYears.length === 0 && (
-                <p className="px-4 py-6 text-sm text-brand-muted text-center">No years found</p>
-              )}
-              {visibleYears.map(y => (
-                <button
-                  key={y}
-                  data-year={y}
-                  onClick={() => setYear(y)}
-                  className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-left transition"
-                  style={{
-                    background: year === y ? "#fff7ed" : undefined,
-                    color: year === y ? "#ea6d00" : "#334155",
-                    fontWeight: year === y ? 600 : 400,
-                  }}
-                  onMouseEnter={e => { if (year !== y) e.currentTarget.style.background = "#f9fafb"; }}
-                  onMouseLeave={e => { if (year !== y) e.currentTarget.style.background = ""; }}
-                >
-                  {y}
-                  {year === y && <ChevronRight size={14} style={{ color: "#ea6d00", flexShrink: 0 }} />}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* MAKE */}
-          <div className="flex flex-col w-1/3 min-h-0">
-            <div className="px-4 py-2.5 bg-gray-50 border-b border-black/8">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-brand-muted">Make</span>
-            </div>
-            <div className="px-3 py-2 border-b border-black/6 shrink-0">
-              <input
-                className={searchInputCls}
-                placeholder="Search make..."
-                value={makeQuery}
-                onChange={e => setMakeQuery(e.target.value)}
-              />
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              {visibleBrands.length === 0 && (
-                <p className="px-4 py-6 text-sm text-brand-muted text-center">No makes found</p>
-              )}
-              {visibleBrands.map(b => (
-                <button
-                  key={b._id}
-                  onClick={() => { setBrand(b); setModel(null); setModelQuery(""); }}
-                  className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-left transition"
-                  style={{
-                    background: brand?._id === b._id ? "#fff7ed" : undefined,
-                    color: brand?._id === b._id ? "#ea6d00" : "#334155",
-                    fontWeight: brand?._id === b._id ? 600 : 400,
-                  }}
-                  onMouseEnter={e => { if (brand?._id !== b._id) e.currentTarget.style.background = "#f9fafb"; }}
-                  onMouseLeave={e => { if (brand?._id !== b._id) e.currentTarget.style.background = ""; }}
-                >
-                  {b.name}
-                  {brand?._id === b._id && <ChevronRight size={14} style={{ color: "#ea6d00", flexShrink: 0 }} />}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* MODEL */}
-          <div className="flex flex-col w-1/3 min-h-0">
-            <div className="px-4 py-2.5 bg-gray-50 border-b border-black/8">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-brand-muted">Model</span>
-            </div>
-            <div className="px-3 py-2 border-b border-black/6 shrink-0">
-              <input
-                className={searchInputCls}
-                placeholder="Search model..."
-                value={modelQuery}
-                onChange={e => setModelQuery(e.target.value)}
-                disabled={!brand}
-              />
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              {!brand ? (
-                <p className="px-4 py-6 text-sm text-brand-muted text-center">Select a make first</p>
-              ) : loadingModels ? (
-                <p className="px-4 py-6 text-sm text-brand-muted text-center">Loading…</p>
-              ) : visibleModels.length === 0 ? (
-                <p className="px-4 py-6 text-sm text-brand-muted text-center">No models found</p>
-              ) : visibleModels.map(m => (
-                <button
-                  key={m._id}
-                  onClick={() => setModel(m)}
-                  className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-left transition"
-                  style={{
-                    background: model?._id === m._id ? "#fff7ed" : undefined,
-                    color: model?._id === m._id ? "#ea6d00" : "#334155",
-                    fontWeight: model?._id === m._id ? 600 : 400,
-                  }}
-                  onMouseEnter={e => { if (model?._id !== m._id) e.currentTarget.style.background = "#f9fafb"; }}
-                  onMouseLeave={e => { if (model?._id !== m._id) e.currentTarget.style.background = ""; }}
-                >
-                  {m.name}
-                  {model?._id === m._id && <Check size={14} style={{ color: "#ea6d00", flexShrink: 0 }} />}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between px-5 py-4 border-t border-black/8 bg-gray-50">
-          <p className="text-sm text-brand-muted">
-            {canDone
-              ? `${year} · ${brand.name} · ${model.name}`
-              : "Select year, make, and model to continue"}
-          </p>
-          <button
-            onClick={() => canDone && onDone(year, brand, model)}
-            disabled={!canDone}
-            className="px-6 py-2 text-sm font-semibold transition"
-            style={{
-              background: canDone ? "#ea6d00" : "#e2e8f0",
-              color: canDone ? "#fff" : "#94a3b8",
-              cursor: canDone ? "pointer" : "not-allowed",
-              borderRadius: "0.5rem",
-            }}
-          >
-            Done
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -832,6 +519,7 @@ function UploadStep({ onBack, onContinue }) {
   const [files, setFiles] = useState([]);
   const inputRef = useRef(null);
   const [dragging, setDragging] = useState(false);
+  const [hovering, setHovering] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   const addFiles = useCallback((incoming) => {
@@ -896,10 +584,12 @@ function UploadStep({ onBack, onContinue }) {
         <div
           className="rounded-xl border-2 border-dashed flex flex-col items-center justify-center p-10 cursor-pointer transition-colors"
           style={{
-            borderColor: dragging ? "#ea6d00" : "rgba(0,0,0,0.12)",
+            borderColor: dragging || hovering ? "#ea6d00" : "rgba(0,0,0,0.12)",
             background: dragging ? "#fff7ed" : "#f8fafc",
           }}
           onClick={() => inputRef.current?.click()}
+          onMouseEnter={() => setHovering(true)}
+          onMouseLeave={() => setHovering(false)}
           onDragOver={e => { e.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
           onDrop={handleDrop}

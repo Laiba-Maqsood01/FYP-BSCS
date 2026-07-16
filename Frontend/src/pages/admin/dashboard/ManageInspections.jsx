@@ -505,14 +505,20 @@ const InspectionRow = memo(function InspectionRow({ insp, onAction }) {
         <p className="font-medium text-brand-dark text-sm truncate max-w-45 mb-1.5">
           {insp.listing?.brand?.name
             ? `${insp.listing.brand.name} ${insp.listing.carModel?.name ?? ""} · ${insp.listing.year ?? ""}`
-            : "—"}
+            : insp.externalCar?.brand
+              ? `${insp.externalCar.brand} ${insp.externalCar.carModel ?? ""} · ${insp.externalCar.year ?? ""}`
+              : "—"}
         </p>
-        {insp.listing?._id && (
+        {insp.listing?._id ? (
           <a href={`/browse-cars/${insp.listing._id}`} target="_blank" rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg transition"
             style={{ background: "#f1f5f9", color: "#334155", border: "1px solid #e2e8f0" }}>
             <ExternalLink size={12} /> View
           </a>
+        ) : (
+          <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-semibold" style={{ background: "#e0f2fe", color: "#0369a1" }}>
+            EXTERNAL
+          </span>
         )}
       </td>
       <td className="px-4 py-3"><TypeBadge type={insp.type} inspectionBy={insp.inspectionBy} /></td>
@@ -562,15 +568,21 @@ const InspectionCard = memo(function InspectionCard({ insp, onAction }) {
           <p className="font-medium text-brand-dark text-sm truncate">
             {insp.listing?.brand?.name
               ? `${insp.listing.brand.name} ${insp.listing.carModel?.name ?? ""} · ${insp.listing.year ?? ""}`
-              : "—"}
+              : insp.externalCar?.brand
+                ? `${insp.externalCar.brand} ${insp.externalCar.carModel ?? ""} · ${insp.externalCar.year ?? ""}`
+                : "—"}
           </p>
           <p className="text-xs text-brand-muted mt-0.5">{insp.requestedBy?.username} · {insp.requestedBy?.email}</p>
-          {insp.listing?._id && (
+          {insp.listing?._id ? (
             <a href={`/browse-cars/${insp.listing._id}`} target="_blank" rel="noopener noreferrer"
               className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg transition"
               style={{ background: "#f1f5f9", color: "#334155", border: "1px solid #e2e8f0" }}>
               <ExternalLink size={12} /> View
             </a>
+          ) : (
+            <span className="mt-1.5 inline-flex px-2 py-0.5 rounded text-[10px] font-semibold" style={{ background: "#e0f2fe", color: "#0369a1" }}>
+              EXTERNAL
+            </span>
           )}
         </div>
         <ActionsDropdown inspection={insp} onAction={onAction} />

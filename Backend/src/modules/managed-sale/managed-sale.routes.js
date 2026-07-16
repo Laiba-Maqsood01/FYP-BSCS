@@ -24,6 +24,13 @@ managedSaleRouter.get(
     managedSaleController.getMyDeletionRequests
 );
 
+// ---------- Agreement break charge (User) ----------
+// POST /api/managed-sale/break-charge/:chargeId/payment
+managedSaleRouter.post(
+    "/break-charge/:chargeId/payment",
+    managedSaleController.createBreakChargePayment
+);
+
 // ---------- Commission (User) ----------
 // GET /api/managed-sale/commission/:listingId — settled commission details
 managedSaleRouter.get(

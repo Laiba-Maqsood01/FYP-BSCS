@@ -14,9 +14,10 @@ function formatDate(d) {
 }
 
 const PURPOSE_BADGE = {
-  INSPECTION:    { bg: "#fff7ed", text: "#c2410c", label: "Inspection"    },
-  RE_INSPECTION: { bg: "#fef9c3", text: "#b45309", label: "Re-Inspection" },
-  FEATURED:      { bg: "#dbeafe", text: "#1d4ed8", label: "Featured"      },
+  INSPECTION:      { bg: "#fff7ed", text: "#c2410c", label: "Inspection"      },
+  RE_INSPECTION:   { bg: "#fef9c3", text: "#b45309", label: "Re-Inspection"   },
+  FEATURED:        { bg: "#dbeafe", text: "#1d4ed8", label: "Featured"        },
+  AGREEMENT_BREAK: { bg: "#fee2e2", text: "#b91c1c", label: "Agreement Break" },
 };
 
 const STATUS_BADGE = {
@@ -27,12 +28,13 @@ const STATUS_BADGE = {
 };
 
 const RETRYABLE = ["INSPECTION", "RE_INSPECTION", "FEATURED"];
-const TABS = ["All", "Inspection", "Re-Inspection", "Featured"];
+const TABS = ["All", "Inspection", "Re-Inspection", "Featured", "Agreement Break"];
 
 const PURPOSE_KEY = {
-  "Inspection":    "INSPECTION",
-  "Re-Inspection": "RE_INSPECTION",
-  "Featured":      "FEATURED",
+  "Inspection":      "INSPECTION",
+  "Re-Inspection":   "RE_INSPECTION",
+  "Featured":        "FEATURED",
+  "Agreement Break": "AGREEMENT_BREAK",
 };
 
 // ── Retry helper ──────────────────────────────────────────────────────────────
@@ -79,9 +81,10 @@ function PaymentDetailModal({ payment, onClose }) {
           const car = `${l.year ?? ""} ${l.brand?.name ?? ""} ${l.carModel?.name ?? ""}`.trim();
           const img = l.images?.[0]?.url;
           const purposeVerb = {
-            INSPECTION:    "Inspection for",
-            RE_INSPECTION: "Re-inspection for",
-            FEATURED:      "Featured listing for",
+            INSPECTION:      "Inspection for",
+            RE_INSPECTION:   "Re-inspection for",
+            FEATURED:        "Featured listing for",
+            AGREEMENT_BREAK: "Agreement break fee for",
           }[payment.purpose] ?? "Payment for";
           return (
             <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: "#f8fafc", border: "1px solid rgba(0,0,0,0.07)" }}>

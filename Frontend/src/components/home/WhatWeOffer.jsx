@@ -10,14 +10,14 @@ const OFFERS = [
   },
   {
     icon: <User size={20} />,
-    title: "Generic Sale",
+    title: "Drive the Sale",
     description:
       "List your car yourself. Create your ad, set your price, and connect directly with buyers. Simple and free.",
     img: "https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?w=600&q=80&auto=format&fit=crop",
   },
   {
     icon: <Crown size={20} />,
-    title: "Managed Sale",
+    title: "Hand Us the Keys",
     description:
       "We handle everything for you. From photography to negotiations and paperwork. Sit back and get the best price.",
     img: "https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=600&q=80&auto=format&fit=crop",

@@ -15,11 +15,27 @@ const stripe = new Stripe(config.STRIPE_SECRET_KEY);
 
 
 // Void any still-PENDING payment attempts for a reference (e.g. when its
-// inspection is cancelled) so the user's payments page stops offering retry.
-// Money that still lands through an already-open Stripe session is caught by
-// the webhook, which sees the cancelled inspection and simply records the
-// payment (inspection fees are non-refundable per the Terms of Service).
+// inspection is cancelled, or an agreement-break fee is settled offline).
+// Expiring the live Stripe checkout session closes any tab the user left
+// open, so the abandoned page can no longer be paid after the fact.
 export async function voidPendingPayments(referenceId) {
+  const pending = await paymentModel.find(
+    { referenceId, status: "PENDING" },
+    { stripeSessionId: 1 }
+  );
+
+  for (const p of pending) {
+    if (!p.stripeSessionId) continue;
+    try {
+      const session = await stripe.checkout.sessions.retrieve(p.stripeSessionId);
+      if (session.status === "open") {
+        await stripe.checkout.sessions.expire(p.stripeSessionId);
+      }
+    } catch {
+      // Session not retrievable (already gone / wrong env) — nothing to close
+    }
+  }
+
   await paymentModel.updateMany(
     { referenceId, status: "PENDING" },
     { $set: { status: "FAILED" } }
@@ -234,6 +250,20 @@ async function handleCheckoutSessionCompleted(session) {
       listing.isFeatured = true;
       await listing.save();
     }
+  }
+
+  // AGREEMENT BREAK FLOW — owner paid the fee for withdrawing a managed car.
+  // (Dynamic import: managed-sale.service statically imports this module.)
+  if (payment.purpose === "AGREEMENT_BREAK") {
+    const { default: agreementBreakChargeModel } =
+      await import("../managed-sale/agreementBreakCharge.model.js");
+    const { settleBreakCharge } =
+      await import("../managed-sale/managed-sale.service.js");
+
+    const charge = await agreementBreakChargeModel.findById(payment.referenceId);
+    if (!charge) return;
+
+    await settleBreakCharge(charge, { paymentId: payment._id });
   }
 
   // INSPECTION FLOW

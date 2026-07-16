@@ -19,6 +19,8 @@ import { sendSms } from "../../services/sms.service.js";
 
 import listingDeletionRequestModel from "../managed-sale/listing-deletion-request.model.js";
 import commissionModel from "../managed-sale/commission.model.js";
+import agreementBreakChargeModel from "../managed-sale/agreementBreakCharge.model.js";
+import { computeAgreementBreakFee, settleBreakCharge } from "../managed-sale/managed-sale.service.js";
 
 
 
@@ -27,7 +29,7 @@ export async function getDashboard() {
   const now        = new Date();
   const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
 
-  const [userStats, listingStats, inspectionStats, revenueStats, weeklyRevenueStats, weeklyListingStats, favoriteStats] = await Promise.all([
+  const [userStats, listingStats, inspectionStats, revenueStats, weeklyRevenueStats, weeklyListingStats, favoriteStats, pendingDeletions] = await Promise.all([
     // User stats
     userModel.aggregate([
       {
@@ -105,6 +107,11 @@ export async function getDashboard() {
           ],
           pendingRefunds: [
             { $match: { refundRequired: true, refundStatus: "PENDING" } },
+            { $count: "count" },
+          ],
+          // Booked (paid) inspections that still have no inspector assigned
+          unassigned: [
+            { $match: { assignedInspector: null, status: { $in: ["SCHEDULED", "IN_PROGRESS"] } } },
             { $count: "count" },
           ],
         },
@@ -209,7 +216,10 @@ export async function getDashboard() {
           ]
         }
       }
-    ])
+    ]),
+
+    // Deletion requests still awaiting an admin decision
+    listingDeletionRequestModel.countDocuments({ status: "PENDING" }),
 
   ]);
 
@@ -287,6 +297,10 @@ export async function getDashboard() {
       completed: count(inspectionStats, "completed"),
       cancelled: count(inspectionStats, "cancelled"),
       pendingRefunds: count(inspectionStats, "pendingRefunds"),
+      unassigned: count(inspectionStats, "unassigned"),
+    },
+    deletionRequests: {
+      pending: pendingDeletions ?? 0,
     },
     favorite: {
       totalFavorites: count(favoriteStats, "totalFavorites"),
@@ -595,6 +609,39 @@ export async function getListingDetail(listingId) {
   return getListingDetails(listingId, true);
 }
 
+// Email the seller whenever an admin changes their listing's status.
+// Failures are swallowed by sendEmail — a broken mailbox must never block
+// the admin action itself.
+async function notifyListingStatusChange(listing, { subject, heading, message, accent = "#0f172a" }) {
+  const [seller, populated] = await Promise.all([
+    userModel.findById(listing.seller).select("username email"),
+    listingModel
+      .findById(listing._id)
+      .populate("brand", "name")
+      .populate("carModel", "name")
+      .select("year brand carModel"),
+  ]);
+
+  if (!seller?.email) return;
+
+  const carLabel =
+    [populated?.year, populated?.brand?.name, populated?.carModel?.name]
+      .filter(Boolean)
+      .join(" ") || "your listing";
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0">
+      <h2 style="font-size:20px;font-weight:700;color:${accent};margin:0 0 8px">${heading}</h2>
+      <p style="font-size:14px;color:#64748b;margin:0 0 16px">Hi ${seller.username},</p>
+      <p style="font-size:14px;color:#334155;margin:0 0 24px">${message.replace("{car}", `<strong>${carLabel}</strong>`)}</p>
+      <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0" />
+      <p style="font-size:12px;color:#94a3b8;margin:0">GearTrade.app — Pakistan's trusted car marketplace</p>
+    </div>
+  `;
+
+  await sendEmail(seller.email, subject, message.replace("{car}", carLabel), html);
+}
+
 export async function approveListing(listingId) {
   const listing = await listingModel.findById(listingId);
 
@@ -614,6 +661,13 @@ export async function approveListing(listingId) {
 
   listing.status = "ACTIVE";
   await listing.save();
+
+  await notifyListingStatusChange(listing, {
+    subject: "Your Listing Is Now Live — GearTrade",
+    heading: "Listing Approved",
+    message: "Good news — your listing {car} has been approved by our team and is now live on GearTrade. Buyers can now find and contact you about it.",
+    accent: "#16a34a",
+  });
 
   return { message: "Listing approved successfully", listing };
 }
@@ -682,6 +736,13 @@ export async function rejectListing(listingId, reason) {
   listing.rejectionReason = reason;
   await listing.save();
 
+  await notifyListingStatusChange(listing, {
+    subject: "Your Listing Was Not Approved — GearTrade",
+    heading: "Listing Rejected",
+    message: `Your listing {car} was not approved. Reason: ${reason}. You can fix the issue and edit the listing to resubmit it for review${listing.saleMode === "MANAGED" ? " within 2–3 working days — your inspection fee carries over, so no new payment is needed" : ""}.`,
+    accent: "#dc2626",
+  });
+
   return { message: "Listing rejected successfully", listing };
 }
 
@@ -729,6 +790,13 @@ export async function removeListing(listingId) {
   listing.removedAt = new Date();
   await listing.save();
 
+  await notifyListingStatusChange(listing, {
+    subject: "Your Listing Has Been Removed — GearTrade",
+    heading: "Listing Removed",
+    message: "Your listing {car} has been removed from GearTrade by our team. If you believe this was a mistake, please contact our support team.",
+    accent: "#dc2626",
+  });
+
   return { message: "Listing removed successfully", listing };
 }
 
@@ -767,7 +835,7 @@ export async function getInspections(query) {
     inspectionModel.aggregate([
       { $match: matchStage },
 
-      // Join listing
+      // Join listing (external inspections have none — keep them in)
       {
         $lookup: {
           from: "listings",
@@ -776,7 +844,7 @@ export async function getInspections(query) {
           as: "listing",
         },
       },
-      { $unwind: "$listing" },
+      { $unwind: { path: "$listing", preserveNullAndEmptyArrays: true } },
 
       // Join brand + carModel (for the listing name in the admin table)
       {
@@ -787,7 +855,7 @@ export async function getInspections(query) {
           as: "listing.brand",
         },
       },
-      { $unwind: "$listing.brand" },
+      { $unwind: { path: "$listing.brand", preserveNullAndEmptyArrays: true } },
       {
         $lookup: {
           from: "car_models",
@@ -796,7 +864,7 @@ export async function getInspections(query) {
           as: "listing.carModel",
         },
       },
-      { $unwind: "$listing.carModel" },
+      { $unwind: { path: "$listing.carModel", preserveNullAndEmptyArrays: true } },
 
       // Join requestedBy user
       {
@@ -833,6 +901,7 @@ export async function getInspections(query) {
           inspectionBy: 1,
           status: 1,
           cancelReason: 1,
+          externalCar: 1,
           assignedInspector: 1,
           refundRequired: 1,
           refundStatus: 1,
@@ -1210,9 +1279,28 @@ export async function getDeletionRequests(query) {
       .populate("requestedBy", "username email")
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(Number(limit)),
+      .limit(Number(limit))
+      .lean(),
     listingDeletionRequestModel.countDocuments(filter),
   ]);
+
+  // Attach the break charge (accepted requests) and a live fee quote
+  // (pending requests) so the admin sees the amount before accepting.
+  const charges = await agreementBreakChargeModel
+    .find({ deletionRequest: { $in: requests.map(r => r._id) } })
+    .lean();
+  const chargeByRequest = new Map(charges.map(c => [c.deletionRequest.toString(), c]));
+
+  for (const r of requests) {
+    r.breakCharge = chargeByRequest.get(r._id.toString()) ?? null;
+    if (r.status === "PENDING" && r.listing?._id) {
+      try {
+        r.feeQuote = await computeAgreementBreakFee(r.listing._id);
+      } catch {
+        r.feeQuote = null; // e.g. no active featured plans configured
+      }
+    }
+  }
 
   return {
     requests,
@@ -1225,7 +1313,11 @@ export async function getDeletionRequests(query) {
   };
 }
 
-export async function approveDeletionRequest(requestId) {
+// Admin accepted the owner's request at the office: create the agreement
+// break charge (bracket fee from featured plans, admin may override the
+// amount). OFFLINE = cash received now → settle immediately (listing
+// removed). ONLINE = open a payment slot and wait for the owner to pay.
+export async function acceptDeletionRequest(requestId, adminId, { amount, paymentMode }) {
   const request = await listingDeletionRequestModel
     .findById(requestId)
     .populate("listing");
@@ -1236,25 +1328,72 @@ export async function approveDeletionRequest(requestId) {
     throw new ApiError(400, `Request is already ${request.status}`);
   }
 
-  // Force cleanup the listing (admin override)
-  await cleanupListingForDeletion(
-    request.listing._id,
-    true, // forceCancel
-    "Listing deleted — deletion request approved by admin"
-  );
+  const { daysHeld, amount: computedAmount } =
+    await computeAgreementBreakFee(request.listing._id);
 
-  // Mark listing as REMOVED — the owner asked for this deletion
-  await listingModel.findByIdAndUpdate(request.listing._id, {
-    status: "REMOVED",
-    removedBy: "OWNER",
-    removedAt: new Date(),
+  const finalAmount = amount != null && Number(amount) > 0
+    ? Math.round(Number(amount))
+    : computedAmount;
+
+  const charge = await agreementBreakChargeModel.create({
+    listing: request.listing._id,
+    seller: request.listing.seller,
+    deletionRequest: request._id,
+    daysHeld,
+    computedAmount,
+    amount: finalAmount,
+    paymentMode,
+    acceptedBy: adminId,
   });
 
-  // Approve the request
-  request.status = "APPROVED";
+  request.status = "ACCEPTED";
   await request.save();
 
-  return { message: "Deletion request approved, listing removed", request };
+  if (paymentMode === "OFFLINE") {
+    await settleBreakCharge(charge);
+    return { message: "Fee received offline — listing removed", charge };
+  }
+
+  // ONLINE — tell the owner the amount and where to pay
+  const seller = await userModel.findById(request.listing.seller).select("username email");
+  if (seller?.email) {
+    await sendEmail(
+      seller.email,
+      "Agreement Break Fee — GearTrade",
+      `Hi ${seller.username}, your deletion request has been accepted. Pay the agreement break fee of PKR ${finalAmount.toLocaleString()} from your GearTrade dashboard (My Listings → Managed → Deletion Requests) to complete the withdrawal.`,
+      `
+      <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0">
+        <h2 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px">Agreement Break Fee</h2>
+        <p style="font-size:14px;color:#64748b;margin:0 0 16px">Hi ${seller.username},</p>
+        <p style="font-size:14px;color:#334155;margin:0 0 16px">Your request to withdraw your managed listing has been accepted. As per the sale agreement, an agreement break fee applies:</p>
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;margin-bottom:20px">
+          <table style="width:100%;font-size:13px;border-collapse:collapse">
+            <tr><td style="color:#64748b;padding:4px 0">Days on GearTrade</td><td style="color:#0f172a;font-weight:600;text-align:right">${daysHeld || "—"}</td></tr>
+            <tr><td style="color:#0f172a;padding:8px 0 4px;font-weight:700;border-top:1px solid #e2e8f0">Fee to pay</td><td style="color:#b45309;font-weight:700;text-align:right;padding:8px 0 4px;border-top:1px solid #e2e8f0">PKR ${finalAmount.toLocaleString()}</td></tr>
+          </table>
+        </div>
+        <p style="font-size:14px;color:#334155;margin:0 0 24px">Pay online from your dashboard: <strong>My Listings → Managed → Deletion Requests → Pay Now</strong>. Your listing is removed as soon as the payment completes.</p>
+        <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0" />
+        <p style="font-size:12px;color:#94a3b8;margin:0">GearTrade.app — Pakistan's trusted car marketplace</p>
+      </div>
+      `
+    );
+  }
+
+  return { message: "Request accepted — awaiting online payment", charge };
+}
+
+// Owner paid at the office after an ONLINE slot was opened (or any late
+// offline settlement) — admin marks the charge as received.
+export async function markBreakChargePaid(requestId) {
+  const charge = await agreementBreakChargeModel.findOne({ deletionRequest: requestId });
+
+  if (!charge) throw new ApiError(404, "No break charge found for this request");
+  if (charge.status === "PAID") throw new ApiError(400, "Charge is already paid");
+
+  await settleBreakCharge(charge);
+
+  return { message: "Charge marked as paid — listing removed", charge };
 }
 
 export async function rejectDeletionRequest(requestId, adminNote) {

@@ -7,7 +7,10 @@ import InspectionReport, {
 } from "./inspectionReport.model.js";
 import inspectionModel from "../inspection/inspection.model.js";
 import listingModel    from "../listing/listing.model.js";
+import userModel       from "../../models/user.model.js";
 import { ApiError }    from "../../utils/apiError.js";
+import { sendEmail }   from "../../services/email.service.js";
+import config          from "../../config/config.js";
 
 // ── Init / get ────────────────────────────────────────────────────────────────
 
@@ -19,6 +22,7 @@ async function getInspectionWithListing(inspectionId) {
       populate: [
         { path: "brand",        select: "name" },
         { path: "carModel",     select: "name" },
+        { path: "bodyType",     select: "name" },
         { path: "city",         select: "name" },
         { path: "registeredIn", select: "name" },
       ],
@@ -34,6 +38,10 @@ async function getInspectionWithListing(inspectionId) {
 async function syncDraftSnapshot(report) {
   if (!report || report.status !== "DRAFT") return report;
 
+  // External inspections have no listing — their snapshot is frozen booking
+  // data from the requester, nothing to re-sync.
+  if (!report.listing) return report;
+
   const inspection = await getInspectionWithListing(report.inspection);
   const l = inspection?.listing;
   if (!l) return report;
@@ -42,6 +50,7 @@ async function syncDraftSnapshot(report) {
   report.carSnapshot.year           = l.year;
   report.carSnapshot.brand          = l.brand?.name ?? "";
   report.carSnapshot.carModel       = l.carModel?.name ?? "";
+  report.carSnapshot.bodyType       = l.bodyType?.name ?? "";
   report.carSnapshot.engineCapacity = l.engineCapacity;
   report.carSnapshot.transmission   = l.transmission;
   report.carSnapshot.engineType     = l.engineType;
@@ -66,12 +75,16 @@ export async function initReport(inspectionId) {
     throw new ApiError(400, "Report can only be created for COMPLETED inspections");
 
   const l = inspection.listing;
+  const ext = inspection.externalCar;
 
-  const carSnapshot = {
+  // External inspection → snapshot from the requester's booking details;
+  // listing inspection → snapshot from the live listing.
+  const carSnapshot = l ? {
     title:          l.title ?? `${l.brand?.name} ${l.carModel?.name} ${l.year}`,
     year:           l.year,
     brand:          l.brand?.name  ?? "",
     carModel:       l.carModel?.name ?? "",
+    bodyType:       l.bodyType?.name ?? "",
     engineCapacity: l.engineCapacity,
     mileage:        l.mileage,
     transmission:   l.transmission,
@@ -83,11 +96,24 @@ export async function initReport(inspectionId) {
     registeredCity: l.registeredIn?.name ?? "",
     location:       l.city?.name ?? "",
     images:         l.images ?? [],
+  } : {
+    title:          `${ext?.brand ?? ""} ${ext?.carModel ?? ""} ${ext?.year ?? ""}`.trim(),
+    year:           ext?.year,
+    brand:          ext?.brand ?? "",
+    carModel:       ext?.carModel ?? "",
+    bodyType:       ext?.bodyType ?? "",
+    engineCapacity: ext?.engineCapacity,
+    engineType:     ext?.engineType ?? "",
+    chassisNo:      "",
+    engineNo:       "",
+    registrationNo: "",
+    location:       ext?.city ?? "",
+    images:         [],
   };
 
   const report = await InspectionReport.create({
     inspection:    inspectionId,
-    listing:       l._id,
+    listing:       l?._id ?? null,
     carSnapshot,
     inspectorName: inspection.assignedInspector ?? "",
     inspectionDate: inspection.scheduledDate ?? new Date(),
@@ -169,6 +195,15 @@ export async function publishReport(reportId) {
   if (report.status === "PUBLISHED")
     throw new ApiError(400, "Report is already published");
 
+  // External reports have no listing gallery — the report's own photos are
+  // the only images. Require at least two (the first becomes the cover).
+  if (!report.listing && (report.reportPhotos?.length ?? 0) < 2) {
+    throw new ApiError(
+      400,
+      "Upload at least 2 photos in the Photos step before publishing — external reports use them as the car's images."
+    );
+  }
+
   // Freeze the latest listing identity/images into the report at the moment
   // of publishing — after this the snapshot never changes again.
   await syncDraftSnapshot(report);
@@ -189,6 +224,51 @@ export async function publishReport(reportId) {
     await listing.save();
   }
 
+  // Email the report link to the requester — and to the listing owner too,
+  // when someone else (a buyer) requested the inspection.
+  const inspection = await inspectionModel
+    .findById(report.inspection)
+    .select("requestedBy");
+
+  const recipientIds = [
+    ...new Set(
+      [inspection?.requestedBy, listing?.seller]
+        .filter(Boolean)
+        .map(id => id.toString())
+    ),
+  ];
+
+  const recipients = await userModel
+    .find({ _id: { $in: recipientIds } })
+    .select("username email");
+
+  const reportUrl = `${config.CLIENT_URL}/reports/${report.verifyToken}`;
+  const carLabel  = report.carSnapshot?.title || "your vehicle";
+
+  for (const recipient of recipients) {
+    if (!recipient.email) continue;
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0">
+        <h2 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px">Inspection Report Published</h2>
+        <p style="font-size:14px;color:#64748b;margin:0 0 24px">Hi ${recipient.username}, the inspection of <strong>${carLabel}</strong> is complete and its report is now available.</p>
+
+        <a href="${reportUrl}" style="display:inline-block;background:#16a34a;color:#ffffff;font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;margin-bottom:24px">View Inspection Report</a>
+
+        <p style="font-size:13px;color:#64748b;margin:16px 0 0">Or copy this link into your browser:</p>
+        <p style="font-size:12px;color:#334155;word-break:break-all;margin:4px 0 0">${reportUrl}</p>
+
+        <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0" />
+        <p style="font-size:12px;color:#94a3b8;margin:0">GearTrade.app — Pakistan's trusted car marketplace</p>
+      </div>
+    `;
+    await sendEmail(
+      recipient.email,
+      "Inspection Report Published — GearTrade",
+      `The inspection of ${carLabel} is complete. View the report: ${reportUrl}`,
+      html
+    );
+  }
+
   return report;
 }
 
@@ -198,15 +278,9 @@ export async function getPublicReport(verifyToken) {
   const report = await InspectionReport.findOne({ verifyToken, status: "PUBLISHED" });
   if (!report) throw new ApiError(404, "Report not found or not yet published");
 
-  // A published report stays reachable by its link/QR for both ACTIVE and
-  // SOLD listings — a buyer who bought the car (or downloaded the report)
-  // must still be able to verify it. ONLY a REMOVED listing blocks the
-  // report, so a downloaded copy of a taken-down listing can't masquerade
-  // as live. (Do NOT gate this on ACTIVE — that hides sold cars' reports.)
-  const listing = await listingModel.findById(report.listing).select("status");
-  if (!listing || listing.status === "REMOVED") {
-    throw new ApiError(410, "This report is no longer available — the listing has been removed.");
-  }
-
+  // A published report is a self-contained verifiable document — anyone
+  // holding its URL / QR code can open it, regardless of what later happened
+  // to the listing (sold, removed), and for external inspections that never
+  // had a listing at all. It renders entirely from its frozen car snapshot.
   return report;
 }

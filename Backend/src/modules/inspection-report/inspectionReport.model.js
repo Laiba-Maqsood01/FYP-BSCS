@@ -483,10 +483,11 @@ const inspectionReportSchema = new mongoose.Schema({
     required: true,
     unique:   true,
   },
+  // Absent for external inspections (car not listed on GearTrade)
   listing: {
-    type:     mongoose.Schema.Types.ObjectId,
-    ref:      "listings",
-    required: true,
+    type:    mongoose.Schema.Types.ObjectId,
+    ref:     "listings",
+    default: null,
   },
 
   carSnapshot: {
@@ -494,6 +495,9 @@ const inspectionReportSchema = new mongoose.Schema({
     year:           Number,
     brand:          { type: String, default: "" },
     carModel:       { type: String, default: "" },
+    // Body type name (frozen) — selects which car diagram the report renders;
+    // unknown/missing falls back to "Compact sedan" on the frontend
+    bodyType:       { type: String, default: "" },
     engineCapacity: Number,
     mileage:        Number,
     transmission:   { type: String, default: "" },

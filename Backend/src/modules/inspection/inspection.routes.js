@@ -3,7 +3,8 @@ import { Router } from "express";
 import * as controller from "./inspection.controller.js";
 import { authMiddleware } from "../../middlewares/auth.middleware.js";
 import { validate } from "../../middlewares/validate.middleware.js";
-import { requestInspectionParamsSchema, inspectionRequestSchema } from "./inspection.validation.js";
+import { requestInspectionParamsSchema, inspectionRequestSchema, externalInspectionSchema } from "./inspection.validation.js";
+import { authorizeRoles } from "../../middlewares/role.middleware.js";
 
 const router = Router();
 
@@ -18,6 +19,22 @@ router.get(
 router.get(
   "/available-slots",
   controller.getAvailableSlots
+);
+
+// GET /api/inspection/external/fee — fee quote for an unlisted car
+router.get(
+  "/external/fee",
+  authMiddleware,
+  controller.getExternalFeeQuote
+);
+
+// POST /api/inspection/external/request — inspection for a car not on GearTrade
+router.post(
+  "/external/request",
+  authMiddleware,
+  authorizeRoles("user"),
+  validate(externalInspectionSchema),
+  controller.requestExternalInspection
 );
 
 // GET /api/inspection/:listingId/fee  — fee quote for the booking form

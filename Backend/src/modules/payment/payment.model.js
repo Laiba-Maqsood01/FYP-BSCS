@@ -20,7 +20,8 @@ const paymentSchema = new mongoose.Schema(
       enum: [
         "FEATURED",
         "INSPECTION",
-        "RE_INSPECTION"
+        "RE_INSPECTION",
+        "AGREEMENT_BREAK"
       ],
       required: true
     },
