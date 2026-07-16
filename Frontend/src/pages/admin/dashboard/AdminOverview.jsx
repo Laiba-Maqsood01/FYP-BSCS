@@ -49,9 +49,9 @@ function toInspectionCounts(inspections = {}) {
 function toActionItems(data = {}) {
   return {
     pendingListings:       data.listings?.pending             ?? 0,
-    unassignedInspections: data.inspections?.pending          ?? 0,
+    unassignedInspections: data.inspections?.unassigned       ?? 0,
     pendingRefunds:        data.inspections?.pendingRefunds   ?? 0,
-    pendingDeletions:      0,
+    pendingDeletions:      data.deletionRequests?.pending     ?? 0,
   };
 }
 

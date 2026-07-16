@@ -5,7 +5,7 @@ import { validate } from "../../middlewares/validate.middleware.js";
 import * as adminController from "./admin.controller.js";
 import * as reportController from "../inspection-report/inspectionReport.controller.js";
 
-import { blockUserSchema, assignInspectorSchema, updateInspectionStatusSchema, rejectListingSchema, rejectDeletionRequestSchema, markSoldSchema, createFeaturedPlanSchema, updateFeaturedPlanSchema, addSlotSchema, updateSlotSchema, updateSiteSettingsSchema } from "./admin.validation.js";
+import { blockUserSchema, assignInspectorSchema, updateInspectionStatusSchema, rejectListingSchema, rejectDeletionRequestSchema, acceptDeletionRequestSchema, markSoldSchema, createFeaturedPlanSchema, updateFeaturedPlanSchema, addSlotSchema, updateSlotSchema, updateSiteSettingsSchema } from "./admin.validation.js";
 
 const adminRouter = express.Router();
 
@@ -149,10 +149,20 @@ adminRouter.get(
     adminController.getDeletionRequests);
 
 
-// PATCH /api/admin/deletion-requests/:id/approve
+// PATCH /api/admin/deletion-requests/:id/accept
+// Accept the request at the office: creates the agreement break charge.
+// body: { amount?: number (override), paymentMode: "OFFLINE" | "ONLINE" }
 adminRouter.patch(
-    "/deletion-requests/:id/approve",
-    adminController.approveDeletionRequest
+    "/deletion-requests/:id/accept",
+    validate(acceptDeletionRequestSchema),
+    adminController.acceptDeletionRequest
+);
+
+// PATCH /api/admin/deletion-requests/:id/mark-paid
+// Settle an open (ONLINE) break charge that was paid offline after all
+adminRouter.patch(
+    "/deletion-requests/:id/mark-paid",
+    adminController.markBreakChargePaid
 );
 
 

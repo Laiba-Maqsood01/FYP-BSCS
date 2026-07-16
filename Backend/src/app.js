@@ -109,10 +109,13 @@ app.use("/api/managed-sale", managedSaleRouter);
 // Upload (signed Cloudinary signatures), starts with /api/upload
 app.use("/api/upload", uploadRouter);
 
-// Public settings endpoint (company phone for managed listings)
+// Public settings endpoint (company phone + inspection fees for the home page)
 app.get("/api/settings", asyncHandler(async (_req, res) => {
   const settings = await getSettings();
-  res.status(200).json(new ApiResponse(200, "Settings", { companyPhone: settings.companyPhone }));
+  res.status(200).json(new ApiResponse(200, "Settings", {
+    companyPhone: settings.companyPhone,
+    inspectionFees: settings.inspectionFees,
+  }));
 }));
 
 // Public inspection reports (verify by token)

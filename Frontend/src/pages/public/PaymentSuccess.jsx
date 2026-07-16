@@ -47,6 +47,20 @@ const CONTENT = {
     primary:   { label: "View My Listings", path: "/dashboard/listings" },
     secondary: { label: "My Payments",      path: "/dashboard/payments" },
   },
+  AGREEMENT_BREAK: {
+    title: "Agreement Break Settled!",
+    subtitle: "Your payment was successful. The sale agreement is closed and your listing has been removed.",
+    badge: "Agreement Break",
+    badgeColor: "#b91c1c",
+    badgeBg: "#fee2e2",
+    steps: [
+      "Your agreement break fee has been received",
+      "Your listing has been removed from GearTrade",
+      "Contact our team to arrange collecting your car",
+    ],
+    primary:   { label: "View My Listings", path: "/dashboard/listings" },
+    secondary: { label: "My Payments",      path: "/dashboard/payments" },
+  },
 };
 
 const DEFAULT_CONTENT = {

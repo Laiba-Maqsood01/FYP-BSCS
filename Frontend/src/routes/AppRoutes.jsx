@@ -21,6 +21,7 @@ import Profile       from "../pages/common/Profile";
 import PostAd        from "../pages/user/PostAd";
 import EditListing   from "../pages/user/EditListing";
 import InspectionForm from "../pages/user/InspectionForm";
+import ExternalInspectionForm from "../pages/user/ExternalInspectionForm";
 
 // User Dashboard
 import Dashboard     from "../pages/user/Dashboard";
@@ -79,6 +80,10 @@ const AppRoutes = () => {
       } />
       <Route path="/inspection/book/:listingId" element={
         <ProtectedRoute allowedRoles={["user", "admin"]}><InspectionForm /></ProtectedRoute>
+      } />
+      {/* Inspection for a car not listed on GearTrade */}
+      <Route path="/inspection/external" element={
+        <ProtectedRoute allowedRoles={["user"]}><ExternalInspectionForm /></ProtectedRoute>
       } />
 
       {/* ── USER DASHBOARD ── */}

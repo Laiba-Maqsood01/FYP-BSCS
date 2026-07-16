@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, memo } from "react";
-import { getAdminDeletions, approveDeletion, rejectDeletion } from "../../../services/adminService";
+import { getAdminDeletions, acceptDeletion, markBreakChargePaid, rejectDeletion } from "../../../services/adminService";
 import { showSuccess, showError } from "../../../utils/toast";
-import { Trash2, CheckCircle, XCircle, User, FileText, Eye, RefreshCw } from "lucide-react";
+import { Trash2, CheckCircle, XCircle, User, FileText, Eye, RefreshCw, Banknote } from "lucide-react";
 import Modal from "../../../components/admin/ui/Modal";
 import { TextPagination } from "../../../components/admin/ui/Pagination";
 import { SkeletonRow, SkeletonCard } from "../../../components/admin/ui/Skeleton";
@@ -19,6 +19,7 @@ function carLabel(listing) {
 
 const STATUS_COLORS = {
   PENDING:  "bg-yellow-50 text-yellow-700 border-yellow-200",
+  ACCEPTED: "bg-blue-50 text-blue-700 border-blue-200",
   APPROVED: "bg-green-50 text-green-700 border-green-200",
   REJECTED: "bg-red-50 text-red-700 border-red-200",
 };
@@ -30,7 +31,7 @@ const LISTING_STATUS_COLORS = {
   SOLD:               "bg-blue-50 text-blue-700 border-blue-200",
 };
 
-const TABS = ["All", "Pending", "Approved", "Rejected"];
+const TABS = ["All", "Pending", "Accepted", "Approved", "Rejected"];
 
 // ── Details modal ─────────────────────────────────────────────────────────────
 
@@ -49,9 +50,6 @@ function DetailsModal({ request, onClose }) {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <span className={`text-[11px] font-semibold px-2 py-0.5 rounded border ${statusCls}`}>{request.status}</span>
-            <button onClick={onClose} className="text-brand-muted hover:text-brand-dark transition ml-1">
-              <XCircle size={18} />
-            </button>
           </div>
         </div>
 
@@ -91,29 +89,98 @@ function DetailsModal({ request, onClose }) {
   );
 }
 
-// ── Approve confirm modal ─────────────────────────────────────────────────────
+// ── Accept & set fee modal ────────────────────────────────────────────────────
+// Accepting means the owner is breaking the sale agreement — a fee applies,
+// computed from the featured-plan brackets by days the car was live.
 
-function ApproveModal({ request, loading, onClose, onConfirm }) {
+function AcceptModal({ request, onClose, onDone }) {
+  const quote = request.feeQuote; // { daysHeld, amount } or null
+  const [amount, setAmount]           = useState(quote?.amount ?? "");
+  const [paymentMode, setPaymentMode] = useState("OFFLINE");
+  const [loading, setLoading]         = useState(false);
+
+  async function handleConfirm() {
+    if (!amount || Number(amount) <= 0) { showError("Enter a valid fee amount"); return; }
+    setLoading(true);
+    try {
+      const res = await acceptDeletion(request._id, { amount: Number(amount), paymentMode });
+      const charge = res.data.data.charge;
+      showSuccess(paymentMode === "OFFLINE"
+        ? "Fee received — listing removed"
+        : "Accepted — owner notified to pay online");
+      onDone(request._id, charge);
+    } catch (err) {
+      showError(err?.response?.data?.message || "Failed to accept request");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
-    <Modal title="Approve Deletion Request" onClose={onClose}>
+    <Modal title="Accept Request — Agreement Break Fee" onClose={onClose}>
       <div className="space-y-3">
-        <div className="bg-red-50 border border-red-100 rounded-xl p-3">
-          <p className="text-sm font-semibold text-red-800">{carLabel(request.listing)}</p>
-          <p className="text-xs text-red-600 mt-1">This listing will be permanently <strong>REMOVED</strong>. This cannot be undone.</p>
-        </div>
         <div className="bg-gray-50 rounded-xl p-3">
-          <p className="text-[11px] font-medium text-brand-muted uppercase tracking-wide mb-1">Seller's reason</p>
-          <p className="text-sm text-brand-dark">"{request.reason}"</p>
+          <p className="text-sm font-semibold text-brand-dark">{carLabel(request.listing)}</p>
+          <p className="text-xs text-brand-muted mt-1">
+            Requested by <strong>{request.requestedBy?.username}</strong> · "{request.reason}"
+          </p>
         </div>
+
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-800">
+          {quote ? (
+            <>Car was live for <strong>{quote.daysHeld || 0} day{quote.daysHeld === 1 ? "" : "s"}</strong> —
+            computed fee <strong>PKR {quote.amount?.toLocaleString()}</strong> (featured-plan brackets).
+            You can adjust the final amount below.</>
+          ) : (
+            <>Fee could not be computed automatically — enter the amount manually.</>
+          )}
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-brand-muted block mb-1">Fee amount (PKR) <span className="text-red-500">*</span></label>
+          <input
+            type="number" min={1} value={amount}
+            onChange={e => setAmount(e.target.value)}
+            className="w-full rounded-lg px-3 py-2 text-sm text-brand-dark outline-none"
+            style={{ border: "1px solid rgba(0,0,0,0.12)" }}
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-brand-muted block mb-1.5">How will the owner pay?</label>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { value: "OFFLINE", title: "Paid at office", sub: "Cash received — settle now" },
+              { value: "ONLINE",  title: "Pay online",     sub: "Open a payment slot for the owner" },
+            ].map(opt => (
+              <button key={opt.value} type="button" onClick={() => setPaymentMode(opt.value)}
+                className="text-left rounded-xl p-3 border-2 transition cursor-pointer"
+                style={{
+                  borderColor: paymentMode === opt.value ? "#ea6d00" : "rgba(0,0,0,0.1)",
+                  background:  paymentMode === opt.value ? "#fff7ed" : "#fff",
+                }}>
+                <p className="text-xs font-bold text-brand-dark">{opt.title}</p>
+                <p className="text-[11px] text-brand-muted mt-0.5">{opt.sub}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {paymentMode === "OFFLINE" && (
+          <p className="text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+            The listing will be <strong>REMOVED immediately</strong> — only confirm after receiving the payment.
+          </p>
+        )}
+
         <div className="flex gap-2 pt-1">
           <button onClick={onClose}
             className="flex-1 py-2 rounded-lg text-sm font-semibold text-brand-muted bg-gray-50 hover:bg-gray-100 transition cursor-pointer">
             Cancel
           </button>
-          <button onClick={onConfirm} disabled={loading}
+          <button onClick={handleConfirm} disabled={loading}
             className="flex-1 py-2 rounded-lg text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50 cursor-pointer"
             style={{ background: "#16a34a" }}>
-            {loading ? "Approving…" : "Yes, Approve & Delete"}
+            {loading ? "Saving…" : paymentMode === "OFFLINE" ? "Confirm — Paid & Remove" : "Accept & Open Payment"}
           </button>
         </div>
       </div>
@@ -182,8 +249,9 @@ function RejectModal({ request, onClose, onDone }) {
 
 // ── Memoized desktop row ──────────────────────────────────────────────────────
 
-const DeletionRow = memo(function DeletionRow({ req, onApprove, onReject, onViewDetails }) {
+const DeletionRow = memo(function DeletionRow({ req, onAccept, onReject, onMarkPaid, onViewDetails }) {
   const isPending   = req.status === "PENDING";
+  const isAccepted  = req.status === "ACCEPTED";
   const statusCls   = STATUS_COLORS[req.status]           ?? "bg-gray-50 text-gray-500 border-gray-200";
   const listingCls  = LISTING_STATUS_COLORS[req.listing?.status] ?? "bg-gray-50 text-gray-500 border-gray-200";
 
@@ -212,14 +280,19 @@ const DeletionRow = memo(function DeletionRow({ req, onApprove, onReject, onView
       <td className="px-4 py-3 text-xs text-brand-muted whitespace-nowrap">{formatDate(req.createdAt)}</td>
       <td className="px-4 py-3">
         <span className={`text-[11px] font-semibold px-2 py-0.5 rounded border ${statusCls}`}>{req.status}</span>
+        {req.breakCharge && (
+          <p className="text-[11px] text-brand-muted mt-1">
+            Fee PKR {req.breakCharge.amount?.toLocaleString()} · {req.breakCharge.status === "PAID" ? "Paid" : "Unpaid"}
+          </p>
+        )}
       </td>
       <td className="px-4 py-3">
         {isPending ? (
           <div className="flex gap-1.5">
-            <button onClick={() => onApprove(req)}
+            <button onClick={() => onAccept(req)}
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-white hover:opacity-90 transition cursor-pointer"
               style={{ background: "#16a34a" }}>
-              <CheckCircle size={11} /> Approve
+              <CheckCircle size={11} /> Accept
             </button>
             <button onClick={() => onReject(req)}
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-white hover:opacity-90 transition cursor-pointer"
@@ -227,6 +300,12 @@ const DeletionRow = memo(function DeletionRow({ req, onApprove, onReject, onView
               <XCircle size={11} /> Reject
             </button>
           </div>
+        ) : isAccepted ? (
+          <button onClick={() => onMarkPaid(req)}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-white hover:opacity-90 transition cursor-pointer"
+            style={{ background: "#1d4ed8" }}>
+            <Banknote size={11} /> Mark Paid
+          </button>
         ) : (
           <span className="text-xs text-brand-muted">—</span>
         )}
@@ -237,8 +316,9 @@ const DeletionRow = memo(function DeletionRow({ req, onApprove, onReject, onView
 
 // ── Memoized mobile card ──────────────────────────────────────────────────────
 
-const RequestCard = memo(function RequestCard({ request, onApprove, onReject, onViewDetails }) {
+const RequestCard = memo(function RequestCard({ request, onAccept, onReject, onMarkPaid, onViewDetails }) {
   const isPending  = request.status === "PENDING";
+  const isAccepted = request.status === "ACCEPTED";
   const statusCls  = STATUS_COLORS[request.status]                    ?? "bg-gray-50 text-gray-500 border-gray-200";
   const listingCls = LISTING_STATUS_COLORS[request.listing?.status]   ?? "bg-gray-50 text-gray-500 border-gray-200";
 
@@ -275,12 +355,19 @@ const RequestCard = memo(function RequestCard({ request, onApprove, onReject, on
         <Eye size={12} /> View Reason & Notes
       </button>
 
+      {request.breakCharge && (
+        <p className="text-xs text-brand-muted">
+          Break fee: <strong className="text-brand-dark">PKR {request.breakCharge.amount?.toLocaleString()}</strong>
+          {" "}· {request.breakCharge.status === "PAID" ? "Paid" : "Awaiting payment"}
+        </p>
+      )}
+
       {isPending && (
         <div className="flex gap-2 pt-1">
-          <button onClick={() => onApprove(request)}
+          <button onClick={() => onAccept(request)}
             className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-white transition hover:opacity-90 cursor-pointer"
             style={{ background: "#16a34a" }}>
-            <CheckCircle size={13} /> Approve
+            <CheckCircle size={13} /> Accept
           </button>
           <button onClick={() => onReject(request)}
             className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-white transition hover:opacity-90 cursor-pointer"
@@ -288,6 +375,14 @@ const RequestCard = memo(function RequestCard({ request, onApprove, onReject, on
             <XCircle size={13} /> Reject
           </button>
         </div>
+      )}
+
+      {isAccepted && (
+        <button onClick={() => onMarkPaid(request)}
+          className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-white transition hover:opacity-90 cursor-pointer"
+          style={{ background: "#1d4ed8" }}>
+          <Banknote size={13} /> Mark Paid (received offline)
+        </button>
       )}
     </div>
   );
@@ -302,7 +397,8 @@ export default function ManageDeletions() {
   const [tab,       setTab]       = useState("All");
   const [page,      setPage]      = useState(1);
 
-  const [approveTarget,  setApproveTarget]  = useState(null);
+  const [acceptTarget,   setAcceptTarget]   = useState(null);
+  const [markPaidTarget, setMarkPaidTarget] = useState(null);
   const [rejectTarget,   setRejectTarget]   = useState(null);
   const [detailTarget,   setDetailTarget]   = useState(null);
   const [actionLoading,  setActionLoading]  = useState(false);
@@ -323,21 +419,37 @@ export default function ManageDeletions() {
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { setPage(1); }, [tab]);
 
-  async function handleApprove() {
-    if (!approveTarget) return;
+  // Accept finished — OFFLINE settles immediately (listing removed),
+  // ONLINE waits for the owner's payment.
+  const handleAcceptDone = useCallback((id, charge) => {
+    setAcceptTarget(null);
+    setRequests(prev => prev.map(r => {
+      if (r._id !== id) return r;
+      const paid = charge?.status === "PAID";
+      return {
+        ...r,
+        status: paid ? "APPROVED" : "ACCEPTED",
+        breakCharge: charge,
+        listing: paid ? { ...r.listing, status: "REMOVED" } : r.listing,
+      };
+    }));
+  }, []);
+
+  async function handleMarkPaid() {
+    if (!markPaidTarget) return;
     setActionLoading(true);
     try {
-      await approveDeletion(approveTarget._id);
-      showSuccess("Listing deleted — deletion request approved");
-      setApproveTarget(null);
-      // Patch only this row — status → APPROVED, nested listing.status → REMOVED.
+      const res = await markBreakChargePaid(markPaidTarget._id);
+      const charge = res.data.data.charge;
+      showSuccess("Charge settled — listing removed");
+      setMarkPaidTarget(null);
       setRequests(prev => prev.map(r =>
-        r._id === approveTarget._id
-          ? { ...r, status: "APPROVED", listing: { ...r.listing, status: "REMOVED" } }
+        r._id === markPaidTarget._id
+          ? { ...r, status: "APPROVED", breakCharge: charge, listing: { ...r.listing, status: "REMOVED" } }
           : r
       ));
     } catch (err) {
-      showError(err?.response?.data?.message || "Failed to approve");
+      showError(err?.response?.data?.message || "Failed to mark as paid");
     } finally {
       setActionLoading(false);
     }
@@ -349,7 +461,8 @@ export default function ManageDeletions() {
     setRequests(prev => prev.map(r => r._id === id ? { ...r, status: "REJECTED", adminNote: note } : r));
   }, []);
 
-  const openApprove     = useCallback((r) => setApproveTarget(r),  []);
+  const openAccept      = useCallback((r) => setAcceptTarget(r),   []);
+  const openMarkPaid    = useCallback((r) => setMarkPaidTarget(r), []);
   const openReject      = useCallback((r) => setRejectTarget(r),   []);
   const openViewDetails = useCallback((r) => setDetailTarget(r),   []);
 
@@ -421,8 +534,9 @@ export default function ManageDeletions() {
                   <DeletionRow
                     key={req._id}
                     req={req}
-                    onApprove={openApprove}
+                    onAccept={openAccept}
                     onReject={openReject}
+                    onMarkPaid={openMarkPaid}
                     onViewDetails={openViewDetails}
                   />
                 ))}
@@ -436,8 +550,9 @@ export default function ManageDeletions() {
               <RequestCard
                 key={req._id}
                 request={req}
-                onApprove={openApprove}
+                onAccept={openAccept}
                 onReject={openReject}
+                onMarkPaid={openMarkPaid}
                 onViewDetails={openViewDetails}
               />
             ))}
@@ -456,13 +571,44 @@ export default function ManageDeletions() {
       )}
 
       {/* Modals */}
-      {approveTarget && (
-        <ApproveModal
-          request={approveTarget}
-          loading={actionLoading}
-          onClose={() => setApproveTarget(null)}
-          onConfirm={handleApprove}
+      {acceptTarget && (
+        <AcceptModal
+          request={acceptTarget}
+          onClose={() => setAcceptTarget(null)}
+          onDone={handleAcceptDone}
         />
+      )}
+
+      {markPaidTarget && (
+        <Modal title="Mark Break Charge as Paid" onClose={() => setMarkPaidTarget(null)}>
+          <div className="space-y-3">
+            <div className="bg-gray-50 rounded-xl p-3">
+              <p className="text-sm font-semibold text-brand-dark">{carLabel(markPaidTarget.listing)}</p>
+              <p className="text-xs text-brand-muted mt-1">
+                Fee: <strong>PKR {markPaidTarget.breakCharge?.amount?.toLocaleString() ?? "—"}</strong>
+              </p>
+            </div>
+            <p className="text-xs text-brand-muted bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+              Use this when the owner paid at the office instead of online. The fee is marked
+              <strong> paid</strong>, the pending online payment is cancelled so he can't be charged twice,
+              and the request is approved.
+            </p>
+            <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+              Confirm only if the owner has paid. The listing will be <strong>REMOVED immediately</strong>.
+            </p>
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setMarkPaidTarget(null)}
+                className="flex-1 py-2 rounded-lg text-sm font-semibold text-brand-muted bg-gray-50 hover:bg-gray-100 transition cursor-pointer">
+                Cancel
+              </button>
+              <button onClick={handleMarkPaid} disabled={actionLoading}
+                className="flex-1 py-2 rounded-lg text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50 cursor-pointer"
+                style={{ background: "#1d4ed8" }}>
+                {actionLoading ? "Settling…" : "Yes, Payment Received"}
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {detailTarget && (

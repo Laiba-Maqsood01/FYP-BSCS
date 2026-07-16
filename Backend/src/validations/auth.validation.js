@@ -20,7 +20,7 @@ export const loginSchema = z.object({
 
   password: z
     .string()
-    .min(6, "Password must be at least 8 characters")
+    .min(6, "Password must be at least 6 characters")
     .max(100, "Password must be at most 100 characters"),
 
   rememberMe: z

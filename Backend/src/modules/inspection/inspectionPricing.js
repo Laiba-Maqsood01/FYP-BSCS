@@ -7,9 +7,8 @@ export function calculateInspectionFee(listing, fees) {
   if (PREMIUM_BODY_TYPES.includes(bodyType)) return fees.premium;
 
   // Electric cars store battery kWh in engineCapacity, so the CC thresholds
-  // don't apply — for now EVs are priced by body type only: premium body
-  // types above, everything else the default (managed) fee.
-  if (listing.engineType === "electric") return fees.managed;
+  // don't apply — every EV pays the premium fee (high-voltage checks).
+  if (listing.engineType === "electric") return fees.premium;
 
   if (engineCC <= 1000) return fees.standard;
   return fees.managed;

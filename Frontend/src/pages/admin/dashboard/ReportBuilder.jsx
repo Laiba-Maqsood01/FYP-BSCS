@@ -251,7 +251,7 @@ function SectionStep({ sectionKey, sectionDef, items, onItemChange }) {
 
 function markId(m) { return m._id ?? m.localId; }
 
-function DamageStep({ damage, onChange, damageCodes, damageLabels, panelLabels }) {
+function DamageStep({ damage, onChange, damageCodes, damageLabels, panelLabels, bodyType }) {
   const [selectedPanel, setSelectedPanel] = useState(null);
   const [pendingCode, setPendingCode]     = useState("");
   const [uploading, setUploading]         = useState({});
@@ -301,7 +301,7 @@ function DamageStep({ damage, onChange, damageCodes, damageLabels, panelLabels }
       {/* diagram */}
       <div className="lg:col-span-3">
         <p className="text-sm text-slate-500 mb-3">Click a panel to add a damage mark. Multiple marks per panel are supported.</p>
-        <CarDiagram markers={damage} onPanelClick={handlePanelClick} />
+        <CarDiagram markers={damage} onPanelClick={handlePanelClick} bodyType={bodyType} />
       </div>
 
       {/* sidebar */}
@@ -813,6 +813,7 @@ export default function ReportBuilder() {
           damageCodes={damageCodes}
           damageLabels={damageLabels}
           panelLabels={panelLabels}
+          bodyType={report?.carSnapshot?.bodyType}
         />
       );
     }

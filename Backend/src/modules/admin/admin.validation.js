@@ -37,6 +37,12 @@ export const rejectDeletionRequestSchema = z.object({
     adminNote: z.string().min(5, "Admin note must be at least 5 characters"),
 });
 
+export const acceptDeletionRequestSchema = z.object({
+    // Optional override — omitted/empty means "use the computed bracket fee"
+    amount: z.coerce.number().positive().optional(),
+    paymentMode: z.enum(["OFFLINE", "ONLINE"]),
+});
+
 export const markSoldSchema = z.object({
     salePrice: z
         .number({ invalid_type_error: "Sale price must be a number" })

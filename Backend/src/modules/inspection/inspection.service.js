@@ -82,40 +82,9 @@ export async function requestInspection(listingId, userId, payload = {}) {
         );
     }
 
-    // 7. Date validation
-    const selectedDate = new Date(scheduledDate);
-    selectedDate.setHours(0, 0, 0, 0);
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    if (selectedDate < today) {
-        throw new ApiError(
-            400,
-            "Date cannot be in the past"
-        );
-    }
-
-    // 8. Time slot checking (only when a slot is provided)
-    if (timeSlot) {
-        const slotMap = {
-            "10:00 AM": 10,
-            "12:00 PM": 12,
-            "2:00 PM":  14,
-            "4:00 PM":  16,
-            "6:00 PM":  18,
-        };
-
-        const isToday =
-            selectedDate.toDateString() === new Date().toDateString();
-
-        if (isToday) {
-            const slotHour = slotMap[timeSlot];
-            if (slotHour !== undefined && slotHour <= new Date().getHours()) {
-                throw new ApiError(400, "Time slot has already passed");
-            }
-        }
-    }
+    // 7-8. Date + slot validation against the admin-managed slots in Site
+    // Settings (shared with external bookings)
+    const selectedDate = await validateSchedule(scheduledDate, timeSlot);
 
     // 9. Slot collision check (only when a slot is provided)
     if (timeSlot) {
@@ -146,6 +115,131 @@ export async function requestInspection(listingId, userId, payload = {}) {
     });
 
     return inspection;
+}
+
+// Parse a slot label like "09:00 AM" / "2:30 PM" into minutes since midnight
+function slotLabelToMinutes(label) {
+    const m = /(\d{1,2}):(\d{2})\s*(AM|PM)/i.exec(label ?? "");
+    if (!m) return null;
+    let hours = Number(m[1]) % 12;
+    if (m[3].toUpperCase() === "PM") hours += 12;
+    return hours * 60 + Number(m[2]);
+}
+
+// Shared date / slot validation used by both listing and external bookings.
+// Slots come from Site Settings (admin-managed) — the label must exist, be
+// active, be offered on the selected weekday, and not already have passed.
+async function validateSchedule(scheduledDate, timeSlot) {
+    const selectedDate = new Date(scheduledDate);
+    selectedDate.setHours(0, 0, 0, 0);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (selectedDate < today) {
+        throw new ApiError(400, "Date cannot be in the past");
+    }
+
+    if (timeSlot) {
+        const settings = await getSettings();
+        const slotDoc = (settings.inspectionSlots ?? []).find(
+            s => s.label === timeSlot && s.isActive
+        );
+
+        if (!slotDoc) {
+            throw new ApiError(400, "Invalid or unavailable time slot");
+        }
+
+        const dayOfWeek = selectedDate.getDay(); // 0=Sun … 6=Sat
+        if (!slotDoc.availableDays?.includes(dayOfWeek)) {
+            throw new ApiError(400, "This time slot is not offered on the selected day");
+        }
+
+        const isToday = selectedDate.toDateString() === new Date().toDateString();
+        if (isToday) {
+            const slotMinutes = slotLabelToMinutes(timeSlot);
+            const now = new Date();
+            const nowMinutes = now.getHours() * 60 + now.getMinutes();
+            if (slotMinutes !== null && slotMinutes <= nowMinutes) {
+                throw new ApiError(400, "Time slot has already passed");
+            }
+        }
+    }
+
+    return selectedDate;
+}
+
+// ── External inspections (car not listed on GearTrade) ──────────────────────
+
+export async function requestExternalInspection(userId, payload = {}) {
+    const {
+        year, brand, carModel, bodyType, engineType, engineCapacity,
+        city, inspectionAddress, scheduledDate, timeSlot,
+    } = payload;
+
+    // Service cities only — same rule as listing inspections
+    if (!city || !isManagedSaleCity(city)) {
+        throw new ApiError(
+            400,
+            `Inspection services are only available in: ${MANAGED_SALE_CITY_NAMES.join(", ")}`
+        );
+    }
+
+    if (!inspectionAddress || !scheduledDate) {
+        throw new ApiError(400, "Inspection address and date are required");
+    }
+
+    const selectedDate = await validateSchedule(scheduledDate, timeSlot);
+
+    // Slot collision check (shared inspector pool with listing inspections)
+    if (timeSlot) {
+        const slotStart = new Date(selectedDate); slotStart.setHours(0, 0, 0, 0);
+        const slotEnd   = new Date(selectedDate); slotEnd.setHours(23, 59, 59, 999);
+        const slotTaken = await inspectionModel.exists({
+            scheduledDate: { $gte: slotStart, $lte: slotEnd },
+            timeSlot,
+            status: { $in: ["PENDING", "SCHEDULED", "IN_PROGRESS"] },
+        });
+        if (slotTaken) {
+            throw new ApiError(400, "This time slot is already booked. Please choose another.");
+        }
+    }
+
+    const inspection = await inspectionModel.create({
+        listing: null,
+        externalCar: {
+            year,
+            brand,
+            carModel,
+            bodyType,
+            engineType,
+            engineCapacity,
+            city,
+        },
+        requestedBy: userId,
+        type: "INSPECTION",
+        inspectionBy: "BUYER",
+        status: "PENDING",
+        inspectionAddress: `${city}, ${inspectionAddress}`,
+        scheduledDate,
+        timeSlot: timeSlot || null,
+    });
+
+    return inspection;
+}
+
+// Fee quote for an external (unlisted) car — same formula the payment uses
+export async function getExternalFeeQuote({ bodyType, engineType, engineCapacity }) {
+    const settings = await getSettings();
+    const amount = calculateInspectionFee(
+        {
+            engineType,
+            engineCapacity: Number(engineCapacity),
+            bodyType: { name: bodyType },
+        },
+        settings.inspectionFees
+    );
+    return { amount };
 }
 
 export async function requestManagedInspection(listingId, userId, payload) {
@@ -270,7 +364,8 @@ export async function createInspectionPayment(inspectionId, userId) {
     }
 
     // Nor an inspection whose listing is no longer sellable (e.g. rejected
-    // by admin while the user was checking out).
+    // by admin while the user was checking out). External inspections have
+    // no listing — nothing to check.
     const listingStatus = inspection.listing?.status;
     if (["REJECTED", "REMOVED", "SOLD"].includes(listingStatus)) {
         throw new ApiError(
@@ -299,14 +394,20 @@ export async function createInspectionPayment(inspectionId, userId) {
     if (!user) throw new ApiError(404, "User not found");
 
     const settings = await getSettings();
-    // Re-inspections cost the same as first inspections — one CC/body-type based fee
-    const amount = calculateInspectionFee(inspection.listing, settings.inspectionFees);
+    // Re-inspections cost the same as first inspections — one CC/body-type
+    // based fee. External inspections price from the entered car details.
+    const feeBasis = inspection.listing ?? {
+        engineType:     inspection.externalCar?.engineType,
+        engineCapacity: inspection.externalCar?.engineCapacity,
+        bodyType:       { name: inspection.externalCar?.bodyType },
+    };
+    const amount = calculateInspectionFee(feeBasis, settings.inspectionFees);
 
     const transactionId = crypto.randomUUID();
 
     const payment = await paymentModel.create({
         user: userId,
-        listing: inspection.listing._id,
+        listing: inspection.listing?._id ?? null,
         purpose: inspection.type,
         referenceId: inspection._id,
         amount,
@@ -444,7 +545,8 @@ export async function getMyInspections(userId, filters = {}) {
             $match: matchStage
         },
 
-        // 2. join listing collection
+        // 2. join listing collection (external inspections have no listing —
+        // preserveNullAndEmptyArrays keeps them in the pipeline)
         {
             // replaces listing ID with full listing object
             $lookup: {
@@ -454,9 +556,9 @@ export async function getMyInspections(userId, filters = {}) {
                 as: "listing"
             }
         },
-        // converts array into object, Because $lookup returns an array 
+        // converts array into object, Because $lookup returns an array
         {
-            $unwind: "$listing"
+            $unwind: { path: "$listing", preserveNullAndEmptyArrays: true }
         },
 
         // 3. join users (requestedBy)
@@ -496,11 +598,11 @@ export async function getMyInspections(userId, filters = {}) {
             }
         },
         {
-            $unwind: "$listing.brand"
+            $unwind: { path: "$listing.brand", preserveNullAndEmptyArrays: true }
         },
 
         {
-            // // replaces car_models ID 
+            // // replaces car_models ID
             $lookup: {
                 from: "car_models",
                 localField: "listing.carModel",
@@ -509,7 +611,7 @@ export async function getMyInspections(userId, filters = {}) {
             }
         },
         {
-            $unwind: "$listing.carModel"
+            $unwind: { path: "$listing.carModel", preserveNullAndEmptyArrays: true }
         },
 
         // 6. sort latest first
@@ -533,6 +635,7 @@ export async function getMyInspections(userId, filters = {}) {
                 scheduledDate: 1,
                 timeSlot: 1,
                 createdAt: 1,
+                externalCar: 1,
 
                 requestedBy: {
                     _id: "$requestedBy._id",

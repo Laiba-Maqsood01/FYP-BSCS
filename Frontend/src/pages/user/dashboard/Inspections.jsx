@@ -23,12 +23,15 @@ const STATUS_BADGE = {
 
 const InspectionCard = memo(function InspectionCard({ insp, onCancelReason }) {
   const navigate = useNavigate();
-  const car   = `${insp.listing?.year ?? ""} ${insp.listing?.brand?.name ?? ""} ${insp.listing?.carModel?.name ?? ""}`.trim();
+  const isExternal = !insp.listing?._id;
+  const car = isExternal
+    ? `${insp.externalCar?.year ?? ""} ${insp.externalCar?.brand ?? ""} ${insp.externalCar?.carModel ?? ""}`.trim()
+    : `${insp.listing?.year ?? ""} ${insp.listing?.brand?.name ?? ""} ${insp.listing?.carModel?.name ?? ""}`.trim();
   const badge = STATUS_BADGE[insp.status] ?? { bg: "#f1f5f9", text: "#64748b", label: insp.status };
   const image = insp.listing?.images?.[0]?.url;
   const isManaged   = insp.listing?.saleMode === "MANAGED";
   const isCompleted = insp.status === "COMPLETED";
-  const canView     = !isManaged || isCompleted;
+  const canView     = !isExternal && (!isManaged || isCompleted);
 
   return (
     <div className="bg-white rounded-xl overflow-hidden flex sm:flex-row flex-col" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
@@ -40,7 +43,14 @@ const InspectionCard = memo(function InspectionCard({ insp, onCancelReason }) {
       <div className="flex-1 px-4 py-3">
         <div className="flex items-start justify-between gap-2 flex-wrap">
           <div>
-            <p className="text-sm font-semibold text-brand-dark">{car || "Unknown car"}</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm font-semibold text-brand-dark">{car || "Unknown car"}</p>
+              {isExternal && (
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold" style={{ background: "#e0f2fe", color: "#0369a1" }}>
+                  NOT LISTED ON GEARTRADE
+                </span>
+              )}
+            </div>
             <p className="text-xs text-brand-muted mt-0.5">
               {insp.scheduledDate
                 ? `${formatDate(insp.scheduledDate)}${insp.timeSlot ? ` · ${insp.timeSlot}` : ""}`

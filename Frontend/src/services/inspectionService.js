@@ -24,6 +24,14 @@ export const requestBuyerInspection = (listingId, body) =>
 export const getInspectionFeeQuote = (listingId) =>
   api.get(`/inspection/${listingId}/fee`).then(r => r.data.data);
 
+// External inspection (car not listed on GearTrade)
+export const requestExternalInspection = (body) =>
+  api.post("/inspection/external/request", body).then(r => r.data.data);
+
+// Fee quote for an unlisted car — { amount }
+export const getExternalFeeQuote = (params) =>
+  api.get("/inspection/external/fee", { params }).then(r => r.data.data);
+
 // Create payment session — returns { payment, checkoutUrl }
 export const createInspectionPayment = (inspectionId) =>
   api.post(`/inspection/${inspectionId}/payment`).then(r => r.data.data);

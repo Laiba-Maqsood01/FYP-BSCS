@@ -20,9 +20,13 @@ const listingDeletionRequestSchema = new mongoose.Schema(
             minlength: 10,
         },
 
+        // PENDING  → owner asked, admin hasn't decided
+        // ACCEPTED → admin accepted at the office; break fee awaits payment
+        // APPROVED → fee settled, listing removed
+        // REJECTED → admin declined the request
         status: {
             type: String,
-            enum: ["PENDING", "APPROVED", "REJECTED"],
+            enum: ["PENDING", "ACCEPTED", "APPROVED", "REJECTED"],
             default: "PENDING",
         },
 
