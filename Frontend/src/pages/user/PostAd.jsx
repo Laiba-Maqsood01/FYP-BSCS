@@ -162,8 +162,8 @@ function SaleModeStep({ selected, onChange, onContinue }) {
             )}
             <User size={26} style={{ color: "#ea6d00", marginBottom: "0.75rem" }} />
             <p className="text-[11px] font-bold uppercase tracking-widest text-brand-muted mb-1">General Sale</p>
-            <h2 className="text-xl font-bold text-brand-dark mb-2">Sell It Myself!</h2>
-            <p className="text-sm text-brand-muted mb-4 leading-relaxed min-h-[68px]">
+            <h2 className="text-xl font-bold text-brand-dark mb-2">Drive the Sale!</h2>
+            <p className="text-sm text-brand-muted mb-4 leading-relaxed min-h-17">
               Post an ad in 2 minutes and connect directly with buyers. Simple, free, and you're in control.
             </p>
             <ul className="space-y-1.5">
@@ -192,8 +192,8 @@ function SaleModeStep({ selected, onChange, onContinue }) {
             )}
             <Crown size={26} style={{ color: "#ea6d00", marginBottom: "0.75rem" }} />
             <p className="text-[11px] font-bold uppercase tracking-widest text-brand-muted mb-1">Managed Sale</p>
-            <h2 className="text-xl font-bold text-brand-dark mb-2">Sell It For Me</h2>
-            <p className="text-sm text-brand-muted mb-4 leading-relaxed min-h-[68px]">
+            <h2 className="text-xl font-bold text-brand-dark mb-2">Hand Us the Keys</h2>
+            <p className="text-sm text-brand-muted mb-4 leading-relaxed min-h-17">
               Let our experts handle everything. Free inspection, featured ad, and a dedicated sales agent to get you the best deal.
             </p>
             <ul className="space-y-1.5">
