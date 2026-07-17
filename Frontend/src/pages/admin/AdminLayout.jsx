@@ -44,6 +44,55 @@ function FooterActions({ collapsed, onNavigate }) {
   );
 }
 
+// Admin identity — moved to the sidebar bottom (brand owns the top).
+// Still opens the admin Profile page, same as the old header block.
+function IdentityChip({ user, collapsed, onNavigate }) {
+  return (
+    <Link
+      to="/admin/profile"
+      onClick={onNavigate}
+      title="Profile"
+      className={`flex items-center no-underline transition hover:opacity-80 mb-1 ${
+        collapsed ? "justify-center py-1.5" : "gap-2.5 px-2 py-1.5 rounded-lg"
+      }`}
+      style={collapsed ? undefined : { background: "#f8fafc", border: "1px solid rgba(0,0,0,0.07)" }}
+    >
+      <UserAvatar user={user} size={30} />
+      {!collapsed && (
+        <div className="min-w-0">
+          <p className="font-semibold text-xs text-brand-dark truncate">{user?.username ?? "Admin"}</p>
+          <p className="text-[10px] text-brand-muted truncate">{user?.email ?? ""}</p>
+        </div>
+      )}
+    </Link>
+  );
+}
+
+// Brand block for the sidebar header — links to the dashboard
+function BrandHeader({ collapsed }) {
+  if (collapsed) {
+    return (
+      <Link to="/admin/overview" title="Dashboard" className="no-underline hover:opacity-80 transition">
+        <img src="/logo2.svg" alt="GearTrade" className="h-7 w-auto" />
+      </Link>
+    );
+  }
+  return (
+    <Link
+      to="/admin/overview"
+      className="flex items-center gap-2.5 flex-1 min-w-0 mr-2 no-underline hover:opacity-80 transition"
+    >
+      <img src="/logo2.svg" alt="GearTrade" className="h-8 w-auto shrink-0" />
+      <div className="min-w-0">
+        <p className="font-bold text-sm text-brand-dark leading-tight truncate">GearTrade</p>
+        <p className="text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: "#ea6d00" }}>
+          Admin Panel
+        </p>
+      </div>
+    </Link>
+  );
+}
+
 const NAV_SECTIONS = [
   {
     label: "Overview",
@@ -118,17 +167,7 @@ export default function AdminLayout() {
           className="flex items-center shrink-0 px-3 py-4"
           style={{ borderBottom: "1px solid rgba(0,0,0,0.07)", minHeight: "68px" }}
         >
-          {!collapsed && (
-            <Link to="/admin/profile" className="flex-1 min-w-0 mr-2 no-underline hover:opacity-80 transition">
-              <UserAvatar user={user} size={32} className="mb-1.5" />
-              <p className="font-semibold text-xs text-brand-dark truncate">
-                {user?.username ?? "Admin"}
-              </p>
-              <p className="text-[11px] text-brand-muted truncate">
-                {user?.email ?? ""}
-              </p>
-            </Link>
-          )}
+          {!collapsed && <BrandHeader collapsed={false} />}
 
           <button
             onClick={() => setCollapsed(c => !c)}
@@ -139,13 +178,13 @@ export default function AdminLayout() {
           </button>
         </div>
 
-        {/* Avatar when collapsed */}
+        {/* Logo mark when collapsed */}
         {collapsed && (
           <div
             className="flex justify-center py-3"
             style={{ borderBottom: "1px solid rgba(0,0,0,0.07)" }}
           >
-            <UserAvatar user={user} size={32} />
+            <BrandHeader collapsed />
           </div>
         )}
 
@@ -168,6 +207,7 @@ export default function AdminLayout() {
         </nav>
 
         <div className="p-2" style={{ borderTop: "1px solid rgba(0,0,0,0.07)" }}>
+          <IdentityChip user={user} collapsed={collapsed} />
           <FooterActions collapsed={collapsed} />
         </div>
       </aside>
@@ -191,6 +231,7 @@ export default function AdminLayout() {
           ))}
         </nav>
         <div className="p-1.5" style={{ borderTop: "1px solid rgba(0,0,0,0.07)" }}>
+          <IdentityChip user={user} collapsed={true} />
           <FooterActions collapsed={true} />
         </div>
       </aside>
@@ -222,17 +263,7 @@ export default function AdminLayout() {
               className="flex items-center justify-between px-4 py-4 shrink-0"
               style={{ borderBottom: "1px solid rgba(0,0,0,0.07)" }}
             >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <UserAvatar user={user} size={32} />
-                <div className="min-w-0">
-                  <p className="font-semibold text-xs text-brand-dark truncate">
-                    {user?.username ?? "Admin"}
-                  </p>
-                  <p className="text-[11px] text-brand-muted truncate">
-                    {user?.email ?? ""}
-                  </p>
-                </div>
-              </div>
+              <BrandHeader collapsed={false} />
               <button
                 onClick={closeDrawer}
                 className="w-7 h-7 flex items-center justify-center rounded-lg text-brand-muted hover:bg-gray-100 transition shrink-0 ml-1"
@@ -263,6 +294,7 @@ export default function AdminLayout() {
             </nav>
 
             <div className="p-2" style={{ borderTop: "1px solid rgba(0,0,0,0.07)" }}>
+              <IdentityChip user={user} collapsed={false} onNavigate={closeDrawer} />
               <FooterActions collapsed={false} onNavigate={closeDrawer} />
             </div>
           </div>
