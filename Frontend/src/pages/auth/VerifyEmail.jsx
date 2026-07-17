@@ -18,16 +18,9 @@ export default function VerifyEmail() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    const sendOtp = async () => {
-      try {
-        await api.post("/auth/resend-otp", { email });
-      } catch {
-        // silent
-      }
-    };
-    if (email) sendOtp();
-  }, [email]);
+  // No OTP send on mount — every path into this page has already sent one
+  // (registration sends it server-side; unverified login resends before
+  // navigating here). The Resend button covers expired codes.
 
   useEffect(() => {
     let interval;
