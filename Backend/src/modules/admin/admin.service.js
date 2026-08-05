@@ -496,100 +496,136 @@ export async function getListings(query) {
   if (seller)    matchStage.seller = new mongoose.Types.ObjectId(seller);
   if (isFeatured !== undefined) matchStage.isFeatured = isFeatured === "true";
 
-  // Search by title
+  // NOTE: there is no stored "title" field on the listing document — it's
+  // derived from year + brand.name + carModel.name, which only exist after
+  // the brand/carModel lookups below. So the search match can't happen here;
+  // it's applied later as `searchMatch`, once "title" has been computed.
+  let searchMatch = null;
   if (search) {
-    matchStage.title = { $regex: search, $options: "i" };
+    const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const words = search.trim().split(/\s+/).filter(Boolean).map(escapeRegex);
+    if (words.length) {
+      searchMatch = {
+        $and: words.map((word) => ({
+          title: { $regex: word, $options: "i" },
+        })),
+      };
+    }
   }
 
   const skip = (Number(page) - 1) * Number(limit);
 
-  const [listings, total] = await Promise.all([
-    listingModel.aggregate([
-      { $match: matchStage },
+  const pipeline = [
+    { $match: matchStage },
 
-      // Join seller info
-      {
-        $lookup: {
-          from: "users",
-          localField: "seller",
-          foreignField: "_id",
-          as: "seller",
+    // Join seller info
+    {
+      $lookup: {
+        from: "users",
+        localField: "seller",
+        foreignField: "_id",
+        as: "seller",
+      },
+    },
+    { $unwind: "$seller" },
+
+    // Join brand
+    {
+      $lookup: {
+        from: "brands",
+        localField: "brand",
+        foreignField: "_id",
+        as: "brand",
+      },
+    },
+    { $unwind: "$brand" },
+
+    // Join carModel
+    {
+      $lookup: {
+        from: "car_models",
+        localField: "carModel",
+        foreignField: "_id",
+        as: "carModel",
+      },
+    },
+    { $unwind: "$carModel" },
+
+    // Derive the display/search title now that brand.name and carModel.name
+    // are actually available.
+    {
+      $addFields: {
+        title: {
+          $concat: [{ $toString: "$year" }, " ", "$brand.name", " ", "$carModel.name"],
         },
       },
-      { $unwind: "$seller" },
+    },
+  ];
 
-      // Join brand
-      {
-        $lookup: {
-          from: "brands",
-          localField: "brand",
-          foreignField: "_id",
-          as: "brand",
-        },
-      },
-      { $unwind: "$brand" },
+  if (searchMatch) pipeline.push({ $match: searchMatch });
 
-      // Join carModel
-      {
-        $lookup: {
-          from: "car_models",
-          localField: "carModel",
-          foreignField: "_id",
-          as: "carModel",
-        },
-      },
-      { $unwind: "$carModel" },
-
-      // Latest non-cancelled inspection — the UI uses this to hide Reject
-      // once the inspection is IN_PROGRESS or COMPLETED.
-      {
-        $lookup: {
-          from: "inspections",
-          let: { listingId: "$_id" },
-          pipeline: [
-            {
-              $match: {
-                $expr: { $eq: ["$listing", "$$listingId"] },
-                status: { $ne: "CANCELLED" },
-              },
+  pipeline.push(
+    // Latest non-cancelled inspection — the UI uses this to hide Reject
+    // once the inspection is IN_PROGRESS or COMPLETED.
+    {
+      $lookup: {
+        from: "inspections",
+        let: { listingId: "$_id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $eq: ["$listing", "$$listingId"] },
+              status: { $ne: "CANCELLED" },
             },
-            { $sort: { createdAt: -1 } },
-            { $limit: 1 },
-            { $project: { status: 1 } },
-          ],
-          as: "activeInspection",
-        },
+          },
+          { $sort: { createdAt: -1 } },
+          { $limit: 1 },
+          { $project: { status: 1 } },
+        ],
+        as: "activeInspection",
       },
+    },
 
-      { $sort: { createdAt: -1 } },
-      { $skip: skip },
-      { $limit: Number(limit) },
+    { $sort: { createdAt: -1 } },
 
-      {
-        $project: {
-          _id: 1,
-          title: 1,
-          price: 1,
-          year: 1,
-          status: 1,
-          removedBy: 1,
-          saleMode: 1,
-          isFeatured: 1,
-          createdAt: 1,
-          inspectionStatus: { $arrayElemAt: ["$activeInspection.status", 0] },
-          "seller._id": 1,
-          "seller.username": 1,
-          "seller.email": 1,
-          "brand._id": 1,
-          "brand.name": 1,
-          "carModel._id": 1,
-          "carModel.name": 1,
-        },
+    // Filtering now depends on the joined brand/carModel data, so the total
+    // count has to come from this same pipeline rather than a separate
+    // listingModel.countDocuments(matchStage) call — that would ignore search.
+    {
+      $facet: {
+        data: [
+          { $skip: skip },
+          { $limit: Number(limit) },
+          {
+            $project: {
+              _id: 1,
+              title: 1,
+              price: 1,
+              year: 1,
+              status: 1,
+              removedBy: 1,
+              saleMode: 1,
+              isFeatured: 1,
+              createdAt: 1,
+              inspectionStatus: { $arrayElemAt: ["$activeInspection.status", 0] },
+              "seller._id": 1,
+              "seller.username": 1,
+              "seller.email": 1,
+              "brand._id": 1,
+              "brand.name": 1,
+              "carModel._id": 1,
+              "carModel.name": 1,
+            },
+          },
+        ],
+        totalCount: [{ $count: "count" }],
       },
-    ]),
+    }
+  );
 
-    listingModel.countDocuments(matchStage),
-  ]);
+  const [result] = await listingModel.aggregate(pipeline);
+  const listings = result?.data ?? [];
+  const total = result?.totalCount?.[0]?.count ?? 0;
 
   return {
     listings,

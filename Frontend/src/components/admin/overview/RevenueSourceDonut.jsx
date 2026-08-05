@@ -21,7 +21,7 @@ export default function RevenueSourceDonut({ data }) {
   return (
     <div className="bg-white rounded-xl p-5" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
       <p className="text-sm font-semibold text-brand-dark mb-0.5">Revenue by source</p>
-      <p className="text-xs text-brand-muted mb-4">Inspections vs featured vs commissions</p>
+      <p className="text-xs text-brand-muted mb-4">Inspections vs featured vs Agreement-Break</p>
 
       <div className="flex items-center gap-4">
         <div className="relative shrink-0" style={{ width: 120, height: 120 }}>
