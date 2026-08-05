@@ -86,7 +86,6 @@ const ListingRow = memo(function ListingRow({ listing, onApprove, onReject, onRe
         <div className="flex items-center gap-2">
           <div>
             <p className="font-medium text-brand-dark text-sm leading-tight">{listing.title}</p>
-            <p className="text-xs text-brand-muted">{listing.brand?.name} {listing.carModel?.name} · {listing.year}</p>
           </div>
           {listing.isFeatured && <Star size={12} className="shrink-0" style={{ color: "#ea6d00" }} />}
         </div>
@@ -121,7 +120,6 @@ const ListingCard = memo(function ListingCard({ listing, onApprove, onReject, on
             <p className="font-semibold text-sm text-brand-dark truncate">{listing.title}</p>
             {listing.isFeatured && <Star size={12} style={{ color: "#ea6d00" }} className="shrink-0" />}
           </div>
-          <p className="text-xs text-brand-muted mt-0.5">{listing.brand?.name} {listing.carModel?.name} · {listing.year}</p>
         </div>
         <StatusBadge status={listing.status} removedBy={listing.removedBy} />
       </div>

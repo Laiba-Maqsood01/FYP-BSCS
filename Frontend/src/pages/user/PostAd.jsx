@@ -197,7 +197,7 @@ function SaleModeStep({ selected, onChange, onContinue }) {
               Let our experts handle everything. Free inspection, featured ad, and a dedicated sales agent to get you the best deal.
             </p>
             <ul className="space-y-1.5">
-              {["Free Car Inspection", "Featured Ad Included", "Dedicated Sales Agent", "Best Price Guarantee"].map(f => (
+              {["Car Inspection", "Dedicated Sales Agent", "Best Price Guarantee"].map(f => (
                 <li key={f} className="flex items-center gap-2 text-sm text-brand-dark2">
                   <Check size={14} style={{ color: "#ea6d00", flexShrink: 0 }} strokeWidth={3} />
                   {f}
