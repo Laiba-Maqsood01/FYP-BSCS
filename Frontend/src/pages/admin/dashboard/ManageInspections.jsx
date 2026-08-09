@@ -155,7 +155,7 @@ function TypeBadge({ type, inspectionBy }) {
     <div className="flex flex-col gap-0.5">
       <span className={`text-[11px] font-medium px-2 py-0.5 rounded border w-fit
         ${isManaged ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-sky-50 text-sky-700 border-sky-200"}`}>
-        {isManaged ? "Managed" : "Standard"}
+        {isManaged ? "Managed" : "General"}
       </span>
       {inspectionBy && (
         <span className="text-[11px] text-brand-muted">{inspectionBy === "OWNER" ? "Owner" : "Buyer"}</span>
@@ -752,7 +752,7 @@ export default function ManageInspections() {
             onChange={val => handleFilterChange(setTypeFilter)(val)}
             options={[
               { label: "All Types", value: "" },
-              { label: "Standard", value: "STANDARD" },
+              { label: "General", value: "GENERAL" },
               { label: "Managed", value: "MANAGED" },
             ]}
           />
