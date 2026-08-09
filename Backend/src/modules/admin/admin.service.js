@@ -852,7 +852,6 @@ export async function getInspections(query) {
   const matchStage = {};
 
   if (status) matchStage.status = status;
-  if (type) matchStage.type = type;
   if (inspectionBy) matchStage.inspectionBy = inspectionBy;
   if (refundStatus) matchStage.refundStatus = refundStatus;
   if (refundRequired !== undefined) {
@@ -867,100 +866,126 @@ export async function getInspections(query) {
 
   const skip = (Number(page) - 1) * Number(limit);
 
-  const [inspections, total] = await Promise.all([
-    inspectionModel.aggregate([
-      { $match: matchStage },
+  const pipeline = [
+    { $match: matchStage },
 
-      // Join listing (external inspections have none — keep them in)
-      {
-        $lookup: {
-          from: "listings",
-          localField: "listing",
-          foreignField: "_id",
-          as: "listing",
-        },
+    // Join listing (external inspections have none — keep them in)
+    {
+      $lookup: {
+        from: "listings",
+        localField: "listing",
+        foreignField: "_id",
+        as: "listing",
       },
-      { $unwind: { path: "$listing", preserveNullAndEmptyArrays: true } },
+    },
+    { $unwind: { path: "$listing", preserveNullAndEmptyArrays: true } },
 
-      // Join brand + carModel (for the listing name in the admin table)
-      {
-        $lookup: {
-          from: "brands",
-          localField: "listing.brand",
-          foreignField: "_id",
-          as: "listing.brand",
-        },
+    // Join brand + carModel (for the listing name in the admin table)
+    {
+      $lookup: {
+        from: "brands",
+        localField: "listing.brand",
+        foreignField: "_id",
+        as: "listing.brand",
       },
-      { $unwind: { path: "$listing.brand", preserveNullAndEmptyArrays: true } },
-      {
-        $lookup: {
-          from: "car_models",
-          localField: "listing.carModel",
-          foreignField: "_id",
-          as: "listing.carModel",
-        },
+    },
+    { $unwind: { path: "$listing.brand", preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: "car_models",
+        localField: "listing.carModel",
+        foreignField: "_id",
+        as: "listing.carModel",
       },
-      { $unwind: { path: "$listing.carModel", preserveNullAndEmptyArrays: true } },
+    },
+    { $unwind: { path: "$listing.carModel", preserveNullAndEmptyArrays: true } },
 
-      // Join requestedBy user
-      {
-        $lookup: {
-          from: "users",
-          localField: "requestedBy",
-          foreignField: "_id",
-          as: "requestedBy",
-        },
+    // Type shown/filtered on must reflect the listing's CURRENT saleMode.
+    // The inspection's own `type` field holds INSPECTION/RE_INSPECTION
+    // (the inspection's purpose) — it never holds GENERAL/MANAGED, so it
+    // must not be used as a fallback here. External inspections have no
+    // listing at all, so there's no sale mode to report for them.
+    {
+      $addFields: {
+        resolvedType: { $ifNull: ["$listing.saleMode", "EXTERNAL"] },
       },
-      { $unwind: "$requestedBy" },
+    },
+  ];
 
-      // Join the PUBLISHED inspection report (if any) for the Report column
-      {
-        $lookup: {
-          from: "inspection_reports",
-          let: { inspId: "$_id" },
-          pipeline: [
-            { $match: { $expr: { $eq: ["$inspection", "$$inspId"] }, status: "PUBLISHED" } },
-            { $project: { verifyToken: 1 } },
-          ],
-          as: "publishedReport",
-        },
+  if (type) pipeline.push({ $match: { resolvedType: type } });
+
+  pipeline.push(
+    // Join requestedBy user
+    {
+      $lookup: {
+        from: "users",
+        localField: "requestedBy",
+        foreignField: "_id",
+        as: "requestedBy",
       },
+    },
+    { $unwind: "$requestedBy" },
 
-      { $sort: { createdAt: -1 } },
-      { $skip: skip },
-      { $limit: Number(limit) },
-
-      {
-        $project: {
-          _id: 1,
-          type: 1,
-          inspectionBy: 1,
-          status: 1,
-          cancelReason: 1,
-          externalCar: 1,
-          assignedInspector: 1,
-          refundRequired: 1,
-          refundStatus: 1,
-          inspectionAddress: 1,
-          scheduledDate: 1,
-          timeSlot: 1,
-          reportToken: { $arrayElemAt: ["$publishedReport.verifyToken", 0] },
-          createdAt: 1,
-          "listing._id": 1,
-          "listing.year": 1,
-          "listing.saleMode": 1,
-          "listing.status": 1,
-          "listing.brand.name": 1,
-          "listing.carModel.name": 1,
-          "requestedBy._id": 1,
-          "requestedBy.username": 1,
-          "requestedBy.email": 1,
-        },
+    // Join the PUBLISHED inspection report (if any) for the Report column
+    {
+      $lookup: {
+        from: "inspection_reports",
+        let: { inspId: "$_id" },
+        pipeline: [
+          { $match: { $expr: { $eq: ["$inspection", "$$inspId"] }, status: "PUBLISHED" } },
+          { $project: { verifyToken: 1 } },
+        ],
+        as: "publishedReport",
       },
-    ]),
+    },
 
-    inspectionModel.countDocuments(matchStage),
-  ]);
+    { $sort: { createdAt: -1 } },
+
+    // Filtering now depends on the joined listing.saleMode, so the total
+    // count has to come from this same pipeline instead of a separate
+    // inspectionModel.countDocuments(matchStage) call — that would ignore
+    // the type filter entirely.
+    {
+      $facet: {
+        data: [
+          { $skip: skip },
+          { $limit: Number(limit) },
+          {
+            $project: {
+              _id: 1,
+              type: "$resolvedType",
+              inspectionBy: 1,
+              status: 1,
+              cancelReason: 1,
+              externalCar: 1,
+              assignedInspector: 1,
+              refundRequired: 1,
+              refundStatus: 1,
+              inspectionAddress: 1,
+              scheduledDate: 1,
+              timeSlot: 1,
+              reportToken: { $arrayElemAt: ["$publishedReport.verifyToken", 0] },
+              createdAt: 1,
+              "listing._id": 1,
+              "listing.year": 1,
+              "listing.saleMode": 1,
+              "listing.status": 1,
+              "listing.brand.name": 1,
+              "listing.carModel.name": 1,
+              "requestedBy._id": 1,
+              "requestedBy.username": 1,
+              "requestedBy.email": 1,
+            },
+          },
+        ],
+        totalCount: [{ $count: "count" }],
+      },
+    }
+  );
+
+  const [result] = await inspectionModel.aggregate(pipeline);
+  const inspections = result?.data ?? [];
+  const total = result?.totalCount?.[0]?.count ?? 0;
 
   return {
     inspections,
@@ -972,7 +997,6 @@ export async function getInspections(query) {
     },
   };
 }
-
 
 export async function assignInspector(inspectionId, assignedInspector) {
   const inspection = await inspectionModel.findById(inspectionId);
