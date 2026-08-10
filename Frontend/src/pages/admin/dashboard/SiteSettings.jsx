@@ -358,7 +358,7 @@ export default function SiteSettings() {
             {[
               { key: "standard",     label: "Standard",     hint: "Cars ≤ 1000cc" },
               { key: "managed",      label: "Managed",      hint: "Cars ≤ 2000cc / default" },
-              { key: "premium",      label: "Premium",      hint: "SUV / 4x4 / Jeep / Luxury" },
+              { key: "premium",      label: "Premium",      hint: "SUV / 4x4 / Jeep / Luxury / Electric" },
             ].map(({ key, label, hint }) => (
               <div key={key}>
                 <label className="block text-xs font-semibold text-brand-muted uppercase tracking-wide mb-1.5">

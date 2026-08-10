@@ -793,7 +793,8 @@ export default function BrowseCars() {
                   className="bg-white/70 border border-black/10 rounded-lg px-4 py-2 text-[0.88rem] font-semibold text-brand-dark hover:bg-[#f1f5f9] transition disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {/* ← Prev */}
-                  <ArrowLeft/> Prev
+                  {/* <ArrowLeft/>  */}
+                  Prev
                 </button>
 
                 {Array.from({ length: totalPages }, (_, i) => i + 1)
@@ -828,7 +829,8 @@ export default function BrowseCars() {
                   className="bg-white/70 border border-black/10 rounded-lg px-4 py-2 text-[0.88rem] font-semibold text-brand-dark hover:bg-[#f1f5f9] transition disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {/* Next → */}
-                  Next <ArrowRight/>
+                  Next 
+                  {/* <ArrowRight/> */}
                 </button>
               </div>
             )}
